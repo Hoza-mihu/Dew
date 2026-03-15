@@ -1,0 +1,1968 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DEW · Eco Warden · Garden Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Allow scripts from self and CDNs; unsafe-eval needed by some SDKs (Supabase/Firebase). Remove unsafe-eval if you lock down CSP. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https: wss:;" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="petal-layer" id="petalLayer"></div>
+    <div class="app">
+      <aside class="sidebar">
+        <div>
+          <div class="logo-row">
+            <div class="logo-mark"><i class="ri-leaf-fill"></i></div>
+            <div class="logo-text">
+              <span>DEW · WARDEN 2.1</span>
+              <span>Eco Garden</span>
+            </div>
+          </div>
+          <div class="warden-pill">
+            <span class="dot"></span><span>Gentle AI Guardian active</span>
+          </div>
+        </div>
+        <div>
+          <div class="nav-section-title">Overview</div>
+          <ul class="nav-list">
+            <li class="nav-item active" data-view="dashboard">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-dashboard-3-line"></i></div>
+                <span>Dashboard</span>
+              </div>
+              <span class="nav-badge" id="navPlantsCount">0</span>
+            </li>
+            <li class="nav-item" data-view="analytics">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-bar-chart-2-line"></i></div>
+                <span>Analytics</span>
+              </div>
+            </li>
+            <li class="nav-item" data-view="plants">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-leaf-line"></i></div>
+                <span>Plants</span>
+              </div>
+            </li>
+            <li class="nav-item" data-view="myplants">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-plant-line"></i></div>
+                <span>My Plants</span>
+              </div>
+            </li>
+            <li class="nav-item">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-cpu-line"></i></div>
+                <span>Devices</span>
+              </div>
+              <span class="nav-badge" id="navDevicesCount">0</span>
+            </li>
+            <li class="nav-item">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-cloud-line"></i></div>
+                <span>Sync Data</span>
+              </div>
+            </li>
+            <li class="nav-item" data-view="alerts">
+              <div class="nav-item-left">
+                <div class="nav-icon">
+                  <i class="ri-alarm-warning-line"></i>
+                </div>
+                <span>Alerts</span>
+              </div>
+              <span class="nav-badge" id="navAlertsCount">0</span>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <div class="nav-section-title">About</div>
+          <ul class="nav-list">
+            <li class="nav-item" data-view="about">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-information-line"></i></div>
+                <span>About Us</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <div class="nav-section-title">System</div>
+          <ul class="nav-list">
+            <li class="nav-item" data-view="profile">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-user-3-line"></i></div>
+                <span>Profile</span>
+              </div>
+            </li>
+            <li class="nav-item" data-view="community">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-group-line"></i></div>
+                <span>Community</span>
+              </div>
+            </li>
+            <li class="nav-item" data-view="settings">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-settings-3-line"></i></div>
+                <span>Settings</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="nav-foot">
+          <div class="signout" id="btnSignOut">
+            <i class="ri-logout-circle-r-line"></i><span>Sign Out</span>
+          </div>
+        </div>
+      </aside>
+      <main class="main">
+        <div class="main-inner" id="dashboardView">
+          <section class="top-bar">
+            <div class="top-left">
+              <h1>
+                Garden Overview
+                <span class="accent"
+                  ><i class="ri-sparkling-line"></i>
+                  <span id="plantsOnline">0</span> plants online</span
+                >
+              </h1>
+              <p>DEW watches over your plants 24/7.</p>
+            </div>
+            <div class="top-right">
+              <div class="chip">
+                <span class="chip-dot"></span
+                ><span
+                  >Last sync: <span id="lastSyncLabel">Just now</span></span
+                >
+              </div>
+              <button class="btn btn-ghost" id="btnRefresh">
+                <i class="ri-refresh-line"></i> Refresh
+              </button>
+              <button class="btn btn-primary">
+                <i class="ri-base-station-line"></i> Sync IoT
+              </button>
+            </div>
+          </section>
+          <section class="dashboard-weather-hero" id="dashboardWeatherHero" data-weather="sunny" data-temp="moderate" data-windy="false" style="display: none;" aria-hidden="true">
+            <div class="weather-hero-scene">
+              <div class="weather-hero-sunny"><div class="weather-hero-sun"></div><div class="weather-hero-sun-rays"></div><div class="weather-hero-sun-particles" id="weatherHeroSunParticles"></div></div>
+              <div class="weather-hero-cloudy"><div class="weather-hero-cloud-layer weather-hero-cloud-layer--back"></div><div class="weather-hero-cloud-layer weather-hero-cloud-layer--mid"></div><div class="weather-hero-cloud-layer weather-hero-cloud-layer--front"></div></div>
+              <div class="weather-hero-rainy" id="weatherHeroRain"><div class="weather-hero-rain" id="weatherHeroRainContainer"></div><div class="weather-hero-rain-ripples"></div></div>
+              <div class="weather-hero-snowy" id="weatherHeroSnow"><div class="weather-hero-snow" id="weatherHeroSnowContainer"></div></div>
+              <div class="weather-hero-thunderstorm"><div class="weather-hero-lightning"></div><div class="weather-hero-rain weather-hero-rain--dark"><div id="weatherHeroStormRainContainer"></div></div></div>
+              <div class="weather-hero-windy" id="weatherHeroWindy"><div class="weather-hero-wind-particles" id="weatherHeroWindParticles"></div></div>
+            </div>
+            <div class="weather-hero-frost" aria-hidden="true"></div>
+            <div class="weather-hero-heat" aria-hidden="true"></div>
+            <div class="weather-hero-content">
+              <div class="weather-hero-head">
+                <div class="weather-hero-temp-wrap">
+                  <span class="weather-hero-icon" id="weatherHeroIcon" aria-hidden="true"><i class="ri-sun-line" id="weatherHeroIconI"></i></span>
+                  <div class="weather-hero-temp" id="weatherHeroTemp">—</div>
+                </div>
+              </div>
+              <h2 class="weather-hero-title">Weather in <span id="weatherHeroLocation">—</span></h2>
+              <div class="weather-hero-condition" id="weatherHeroCondition">—</div>
+              <div class="weather-hero-meta">
+                <span><i class="ri-drop-line"></i> <span id="weatherHeroHumidity">—</span></span>
+                <span><i class="ri-windy-line"></i> <span id="weatherHeroWind">—</span></span>
+              </div>
+            </div>
+          </section>
+          <section
+            class="dashboard-weather-wrap"
+            id="dashboardWeatherWrap"
+            style="display: none"
+          >
+            <div class="card dashboard-weather-card">
+              <div class="card-header">
+                <h2><i class="ri-cloudy-line"></i> Local weather</h2>
+                <span
+                  class="dashboard-weather-location"
+                  id="dashboardWeatherLocation"
+                  >—</span
+                >
+              </div>
+              <div class="dashboard-weather-body" id="dashboardWeatherBody">
+                <div class="dashboard-weather-main">
+                  <span class="dashboard-weather-temp" id="dashboardWeatherTemp"
+                    >—</span
+                  >
+                  <span
+                    class="dashboard-weather-condition"
+                    id="dashboardWeatherCondition"
+                    >—</span
+                  >
+                </div>
+                <div class="dashboard-weather-details">
+                  <span
+                    ><i class="ri-drop-line"></i>
+                    <span id="dashboardWeatherHumidity">—</span></span
+                  >
+                  <span
+                    ><i class="ri-windy-line"></i>
+                    <span id="dashboardWeatherWind">—</span></span
+                  >
+                </div>
+              </div>
+            </div>
+          </section>
+          <section
+            class="dashboard-weather-empty card"
+            id="dashboardWeatherEmpty"
+            style="display: none"
+          >
+            <p class="dashboard-weather-empty-text">
+              <i class="ri-map-pin-line"></i> Weather data unavailable. Please set your location in
+              <a href="#" data-view="settings">Settings</a> to see local weather.
+            </p>
+          </section>
+          <section class="metrics-row" id="metricsRow"></section>
+          <section class="middle-row">
+            <div class="card">
+              <div class="card-header">
+                <h2><i class="ri-timeline-view"></i> Sensor Timeline</h2>
+                <div class="tab-row" id="sensorTabs">
+                  <div class="tab active" data-metric="moisture">Moisture</div>
+                  <div class="tab" data-metric="temperature">Temp</div>
+                  <div class="tab" data-metric="light">Light</div>
+                </div>
+              </div>
+              <div class="chart-wrapper">
+                <canvas id="sensorChart"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h2><i class="ri-notification-3-line"></i> Activity</h2>
+                <div class="tab-row">
+                  <div class="tab active">All</div>
+                  <div class="tab">Alerts</div>
+                </div>
+              </div>
+              <ul class="activity-list" id="activityList"></ul>
+            </div>
+          </section>
+          <section class="bottom-row">
+            <div class="card">
+              <div class="card-header">
+                <h2><i class="ri-plant-line"></i> Plant Fleet</h2>
+                <button
+                  class="btn btn-ghost"
+                  style="padding-inline: 10px; font-size: 11px"
+                >
+                  View all
+                </button>
+              </div>
+              <div style="overflow: auto">
+                <table class="plant-table">
+                  <thead>
+                    <tr>
+                      <th>Plant</th>
+                      <th>Status</th>
+                      <th>Moisture</th>
+                      <th>Temp</th>
+                      <th>Lux</th>
+                      <th>Zone</th>
+                    </tr>
+                  </thead>
+                  <tbody id="plantTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h2><i class="ri-robot-2-line"></i> Desk Bot</h2>
+                <div class="chip"><i class="ri-wifi-line"></i> Linked</div>
+              </div>
+              <div class="deskbot-layout">
+                <div
+                  class="deskbot-preview-card"
+                  id="deskbotPreview"
+                  data-weather="sunny"
+                >
+                  <div
+                    class="deskbot-weather"
+                    id="deskbotWeather"
+                    aria-hidden="true"
+                  >
+                    <div class="weather-scene weather-sunny">
+                      <div class="weather-sun"></div>
+                      <div class="weather-sun-rays"></div>
+                    </div>
+                    <div class="weather-scene weather-cloudy">
+                      <div class="weather-cloud"></div>
+                      <div class="weather-cloud weather-cloud-2"></div>
+                      <div class="weather-cloud weather-cloud-3"></div>
+                    </div>
+                    <div
+                      class="weather-scene weather-rainy"
+                      id="weatherRainScene"
+                    >
+                      <div class="weather-rain" id="weatherRainContainer"></div>
+                    </div>
+                    <div
+                      class="weather-scene weather-snowy"
+                      id="weatherSnowScene"
+                    >
+                      <div class="weather-snow" id="weatherSnowContainer"></div>
+                    </div>
+                    <div
+                      class="weather-scene weather-clear-night"
+                      id="weatherStarsScene"
+                    >
+                      <div
+                        class="weather-stars"
+                        id="weatherStarsContainer"
+                      ></div>
+                    </div>
+                  </div>
+                  <div class="deskbot-eyes">
+                    <div class="deskbot-eye"></div>
+                    <div class="deskbot-eye"></div>
+                  </div>
+                  <div class="deskbot-body">
+                    <div class="deskbot-body-inner">
+                      <div class="deskbot-plant-chibi">
+                        <div class="deskbot-plant-chibi-face">
+                          <div class="deskbot-plant-cheek"></div>
+                          <div class="deskbot-plant-mouth"></div>
+                          <div class="deskbot-plant-cheek"></div>
+                        </div>
+                      </div>
+                      <div class="deskbot-text">
+                        <span class="title" id="deskbotTitle"
+                          >WARDEN DESK · CH. 01</span
+                        >
+                        <span class="line" id="deskbotLine">—</span>
+                        <span class="meta" id="deskbotMeta"
+                          >Anime theme · Soft mint glow</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="deskbot-settings">
+                  <div class="field">
+                    <label for="deskbotFocus">Focus Plant</label
+                    ><select id="deskbotFocus"></select>
+                  </div>
+                  <div class="field">
+                    <label>Theme</label>
+                    <div class="field-row" id="themeSwatches">
+                      <div
+                        class="theme-swatch active"
+                        data-theme="mint"
+                        style="
+                          background: linear-gradient(130deg, #75ffd3, #2abc86);
+                        "
+                      ></div>
+                      <div
+                        class="theme-swatch"
+                        data-theme="sakura"
+                        style="
+                          background: linear-gradient(130deg, #ffd4f1, #ff74a4);
+                        "
+                      ></div>
+                      <div
+                        class="theme-swatch"
+                        data-theme="midnight"
+                        style="
+                          background: linear-gradient(130deg, #2b3565, #44d2ff);
+                        "
+                      ></div>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="deskbotLineInput">Status Line</label
+                    ><input
+                      id="deskbotLineInput"
+                      placeholder="e.g. Sakura 72% hydrated 🌸"
+                    />
+                  </div>
+                  <div class="field">
+                    <label>Dials</label>
+                    <div class="field-row">
+                      <label
+                        style="
+                          font-size: 11px;
+                          display: flex;
+                          align-items: center;
+                          gap: 4px;
+                        "
+                        ><input type="checkbox" id="toggleMoisture" checked />
+                        Moisture</label
+                      >
+                      <label
+                        style="
+                          font-size: 11px;
+                          display: flex;
+                          align-items: center;
+                          gap: 4px;
+                        "
+                        ><input type="checkbox" id="toggleTemp" checked />
+                        Temp</label
+                      >
+                      <label
+                        style="
+                          font-size: 11px;
+                          display: flex;
+                          align-items: center;
+                          gap: 4px;
+                        "
+                        ><input type="checkbox" id="toggleLight" checked />
+                        Light</label
+                      >
+                    </div>
+                  </div>
+                  <div class="save-row">
+                    <span id="deskbotStatus">—</span
+                    ><button class="btn btn-primary" id="btnSaveDeskbot">
+                      <i class="ri-send-plane-2-line"></i> Push to Desk Bot
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <div id="createCommunityModal" class="modal community-create-modal" aria-hidden="true" style="display: none">
+            <div class="modal-backdrop" id="createCommunityModalBackdrop"></div>
+            <div class="modal-content community-create-modal-content community-create-wizard">
+              <div class="community-create-modal-header">
+                <h2 id="createCommunityWizardTitle"><i class="ri-add-circle-line"></i> What will your community be about?</h2>
+                <button type="button" class="modal-close" id="createCommunityModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+              </div>
+              <p class="community-create-wizard-subtitle" id="createCommunityWizardSubtitle">Choose a topic to help people discover your community.</p>
+              <form id="createCommunityForm" class="community-create-form">
+                <div class="community-create-step" id="createCommunityStep1">
+                  <div class="community-topic-grid" id="createCommunityTopicGrid">
+                    <button type="button" class="community-topic-chip" data-topic="Anime & Cosplay">Anime &amp; Cosplay</button>
+                    <button type="button" class="community-topic-chip" data-topic="Art">Art</button>
+                    <button type="button" class="community-topic-chip" data-topic="Business & Finance">Business &amp; Finance</button>
+                    <button type="button" class="community-topic-chip" data-topic="Collectibles & Hobbies">Collectibles &amp; Hobbies</button>
+                    <button type="button" class="community-topic-chip" data-topic="Education & Career">Education &amp; Career</button>
+                    <button type="button" class="community-topic-chip" data-topic="Fashion & Beauty">Fashion &amp; Beauty</button>
+                    <button type="button" class="community-topic-chip" data-topic="Food & Drinks">Food &amp; Drinks</button>
+                    <button type="button" class="community-topic-chip" data-topic="Games">Games</button>
+                    <button type="button" class="community-topic-chip" data-topic="Health">Health</button>
+                    <button type="button" class="community-topic-chip" data-topic="Home & Garden">Home &amp; Garden</button>
+                    <button type="button" class="community-topic-chip" data-topic="Humanities & Law">Humanities &amp; Law</button>
+                    <button type="button" class="community-topic-chip" data-topic="Identity & Relationships">Identity &amp; Relationships</button>
+                    <button type="button" class="community-topic-chip" data-topic="Internet Culture">Internet Culture</button>
+                    <button type="button" class="community-topic-chip" data-topic="Movies & TV">Movies &amp; TV</button>
+                    <button type="button" class="community-topic-chip" data-topic="Music">Music</button>
+                    <button type="button" class="community-topic-chip" data-topic="Nature & Outdoors">Nature &amp; Outdoors</button>
+                    <button type="button" class="community-topic-chip" data-topic="News & Politics">News &amp; Politics</button>
+                    <button type="button" class="community-topic-chip" data-topic="Places & Travel">Places &amp; Travel</button>
+                    <button type="button" class="community-topic-chip" data-topic="Pop Culture">Pop Culture</button>
+                    <button type="button" class="community-topic-chip" data-topic="Q&As & Stories">Q&amp;As &amp; Stories</button>
+                    <button type="button" class="community-topic-chip" data-topic="Reading & Writing">Reading &amp; Writing</button>
+                    <button type="button" class="community-topic-chip" data-topic="Sciences">Sciences</button>
+                    <button type="button" class="community-topic-chip" data-topic="Sports">Sports</button>
+                    <button type="button" class="community-topic-chip" data-topic="Technology">Technology</button>
+                    <button type="button" class="community-topic-chip" data-topic="Vehicles">Vehicles</button>
+                    <button type="button" class="community-topic-chip" data-topic="Wellness">Wellness</button>
+                    <button type="button" class="community-topic-chip" data-topic="Sustainable Living">Sustainable Living</button>
+                    <button type="button" class="community-topic-chip" data-topic="Indoor Plants">Indoor Plants</button>
+                    <button type="button" class="community-topic-chip" data-topic="Plant Care Help">Plant Care Help</button>
+                    <button type="button" class="community-topic-chip" data-topic="Smart Plant Tech">Smart Plant Tech</button>
+                    <button type="button" class="community-topic-chip" data-topic="Other">Other</button>
+                  </div>
+                </div>
+
+                <div class="community-create-step" id="createCommunityStep2" style="display:none">
+                  <div class="community-type-list">
+                    <label class="community-type-item">
+                      <input type="radio" name="createCommunityType" value="public" checked />
+                      <span><strong>Public</strong><small>Anyone can view, post, and comment.</small></span>
+                    </label>
+                    <label class="community-type-item">
+                      <input type="radio" name="createCommunityType" value="restricted" />
+                      <span><strong>Restricted</strong><small>Anyone can view, approved users can post.</small></span>
+                    </label>
+                    <label class="community-type-item">
+                      <input type="radio" name="createCommunityType" value="private" />
+                      <span><strong>Private</strong><small>Only approved users can view and contribute.</small></span>
+                    </label>
+                    <label class="community-mature-toggle">
+                      <span><strong>Mature (18+)</strong><small>Users must be 18+ to view and contribute.</small></span>
+                      <input id="createCommunityMature" type="checkbox" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="community-create-step" id="createCommunityStep3" style="display:none">
+                  <div class="community-create-step-grid">
+                    <div>
+                      <label class="community-field">
+                        <span class="label">Community name</span>
+                        <input id="createCommunityName" class="community-input" type="text" placeholder="e.g. Indoor Plant Lovers" required />
+                      </label>
+                      <label class="community-field">
+                        <span class="label">Community slug</span>
+                        <input id="createCommunitySlug" class="community-input" type="text" placeholder="e.g. indoor-plant-lovers" required />
+                      </label>
+                      <label class="community-field">
+                        <span class="label">Description</span>
+                        <textarea id="createCommunityDescription" class="community-textarea" rows="5" placeholder="What is this community about?"></textarea>
+                      </label>
+                      <label class="community-field">
+                        <span class="label">Banner image (optional)</span>
+                        <input id="createCommunityBanner" class="community-input" type="file" accept="image/*" aria-label="Banner image" />
+                      </label>
+                      <label class="community-field">
+                        <span class="label">Logo image (optional)</span>
+                        <input id="createCommunityLogo" class="community-input" type="file" accept="image/*" aria-label="Logo image" />
+                      </label>
+                    </div>
+                    <aside class="community-preview-card">
+                      <div class="community-preview-badge">r/</div>
+                      <h3 id="createCommunityPreviewName">communityname</h3>
+                      <p id="createCommunityPreviewMeta">0 weekly visitor · 0 weekly contributor</p>
+                      <p id="createCommunityPreviewDesc">Your community description</p>
+                    </aside>
+                  </div>
+                </div>
+
+                <div class="community-create-wizard-dots">
+                  <span class="dot active" data-step-dot="1"></span>
+                  <span class="dot" data-step-dot="2"></span>
+                  <span class="dot" data-step-dot="3"></span>
+                </div>
+                <div class="community-create-modal-actions">
+                  <button type="button" class="btn btn-ghost" id="createCommunityCancel">Cancel</button>
+                  <button type="button" class="btn btn-ghost" id="createCommunityBack" style="display:none">Back</button>
+                  <button type="button" class="btn btn-primary" id="createCommunityNext">Next</button>
+                  <button type="submit" class="btn btn-primary" id="createCommunitySubmit" style="display:none"><i class="ri-add-line"></i> Create Community</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div id="editCommunityModal" class="modal community-create-modal" aria-hidden="true" style="display: none">
+            <div class="modal-backdrop" id="editCommunityModalBackdrop"></div>
+            <div class="modal-content community-create-modal-content">
+              <div class="community-create-modal-header">
+                <h2>Edit community</h2>
+                <button type="button" class="modal-close" id="editCommunityModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+              </div>
+              <p class="community-create-wizard-subtitle">Only the community creator can change the banner, logo, and description.</p>
+              <form id="editCommunityForm" class="community-create-form">
+                <label class="community-field">
+                  <span class="label">Description</span>
+                  <textarea id="editCommunityDescription" class="community-textarea" rows="4" placeholder="Community description"></textarea>
+                </label>
+                <label class="community-field">
+                  <span class="label">Banner image (optional)</span>
+                  <input id="editCommunityBanner" type="file" accept="image/*" aria-label="Banner image" />
+                </label>
+                <label class="community-field">
+                  <span class="label">Logo image (optional)</span>
+                  <input id="editCommunityLogo" type="file" accept="image/*" aria-label="Logo image" />
+                </label>
+                <div class="community-create-modal-actions">
+                  <button type="button" class="btn btn-ghost" id="editCommunityCancel">Cancel</button>
+                  <button type="submit" class="btn btn-primary"><i class="ri-save-line"></i> Save</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="analytics-view" id="analyticsView" style="display: none">
+          <section class="top-bar">
+            <div class="top-left">
+              <h1><i class="ri-bar-chart-2-line"></i> Plant Analytics</h1>
+              <p>Sensor insights for plants with connected IoT devices.</p>
+            </div>
+            <div class="top-right">
+              <button type="button" class="btn btn-ghost" id="btnRefreshAnalytics"><i class="ri-refresh-line"></i> Refresh</button>
+            </div>
+          </section>
+          <section class="analytics-plant-list card">
+            <div class="card-header">
+              <h2><i class="ri-plant-line"></i> Plants with devices</h2>
+              <span class="analytics-subtitle">ESP32 sensor hubs</span>
+            </div>
+            <div class="analytics-cards" id="analyticsPlantCards"></div>
+            <div class="analytics-empty" id="analyticsEmpty" style="display: none">
+              <div class="alerts-empty-icon"><i class="ri-leaf-line"></i></div>
+              <p>No plants with connected devices yet.</p>
+              <span>Connect an ESP32 sensor to a plant via the dashboard or Sync IoT to see analytics here.</span>
+            </div>
+          </section>
+        </div>
+        <div id="analyticsDetailModal" class="modal analytics-modal" aria-hidden="true" style="display: none">
+          <div class="modal-backdrop" id="analyticsModalBackdrop"></div>
+          <div class="modal-content analytics-modal-content">
+            <div class="analytics-modal-header">
+              <h2 id="analyticsDetailPlantName">—</h2>
+              <p class="analytics-modal-device" id="analyticsDetailDevice">Device: ESP32 Sensor Hub</p>
+              <button type="button" class="modal-close" id="analyticsModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="analytics-modal-body">
+              <div class="analytics-live-bar" id="analyticsLiveBar" style="display: none;">
+                <span class="analytics-live-dot"></span>
+                <span>Live</span> — updates every 1 hour
+              </div>
+              <div class="analytics-summary" id="analyticsSummary"></div>
+              <div class="analytics-time-tabs tab-row" id="analyticsTimeTabs">
+                <div class="tab active" data-hours="24">Last 24 hours</div>
+                <div class="tab" data-hours="168">Last 7 days</div>
+                <div class="tab" data-hours="720">Last 30 days</div>
+                <div class="tab" data-hours="all">All time</div>
+              </div>
+              <div class="analytics-sensor-sections" id="analyticsSensorSections"></div>
+              <div class="analytics-timeline-section">
+                <h3>Recent readings</h3>
+                <ul class="analytics-timeline" id="analyticsTimeline"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="profile-view" id="profileView" style="display: none">
+          <section class="profile-header">
+            <div class="profile-header-top">
+              <div class="profile-avatar-wrap">
+                <img
+                  id="profilePhoto"
+                  class="profile-avatar"
+                  src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%2363d9a0'/%3E%3Ctext x='50' y='58' font-size='40' fill='white' text-anchor='middle' font-family='sans-serif'%3EW%3C/text%3E%3C/svg%3E"
+                  alt="Profile"
+                />
+                <button
+                  type="button"
+                  class="profile-avatar-edit"
+                  id="btnEditPhoto"
+                  title="Change photo"
+                >
+                  <i class="ri-camera-line"></i>
+                </button>
+                <input
+                  type="file"
+                  id="photoInput"
+                  accept="image/*"
+                  style="display: none"
+                />
+              </div>
+              <div class="profile-meta">
+                <h1 class="profile-name" id="profileDisplayName">Warden</h1>
+                <p class="profile-email" id="profileEmail">—</p>
+                <div class="profile-stats" aria-label="Profile stats">
+                  <div class="profile-stat">
+                    <span class="profile-stat-num" id="profilePlantsCount"
+                      >0</span
+                    ><span class="profile-stat-label">Plants</span>
+                  </div>
+                  <div class="profile-stat">
+                    <span class="profile-stat-num" id="profileFollowersCount"
+                      >0</span
+                    ><span class="profile-stat-label">Followers</span>
+                  </div>
+                  <div class="profile-stat">
+                    <span class="profile-stat-num" id="profileFollowingCount"
+                      >0</span
+                    ><span class="profile-stat-label">Following</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-ghost profile-edit-btn"
+                  id="btnEditProfileHeader"
+                >
+                  Edit profile
+                </button>
+              </div>
+            </div>
+          </section>
+          <section class="profile-privacy-banner" id="profilePrivacyBanner">
+            Your profile is currently private in DEW Community. Only you can see
+            your full details, achievements, and favourites.
+          </section>
+          <section class="profile-card">
+            <div class="profile-card-header">
+              <h2><i class="ri-user-settings-line"></i> Edit Profile</h2>
+              <button type="button" class="btn btn-ghost" id="btnEditProfile">
+                Edit
+              </button>
+            </div>
+            <form class="profile-form" id="profileForm">
+              <div class="profile-field">
+                <label for="profileDisplayNameInput">Display name</label>
+                <input
+                  type="text"
+                  id="profileDisplayNameInput"
+                  placeholder="Your name"
+                  disabled
+                />
+              </div>
+              <div class="profile-field">
+                <label>Email</label>
+                <input type="text" id="profileEmailDisplay" disabled readonly />
+              </div>
+              <div
+                class="profile-actions"
+                id="profileActions"
+                style="display: none"
+              >
+                <button type="button" class="btn btn-ghost" id="btnCancelEdit">
+                  Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  <i class="ri-save-line"></i> Save changes
+                </button>
+              </div>
+            </form>
+          </section>
+          <section class="profile-card">
+            <div class="profile-card-header">
+              <h2><i class="ri-heart-line"></i> Favourite plants</h2>
+              <span class="profile-favourites-hint">Visible to others</span>
+            </div>
+            <p class="profile-favourites-intro">
+              Indoor plants you love, from your garden data.
+            </p>
+            <div class="profile-favourites-actions">
+              <select
+                id="favouritePlantSelect"
+                class="profile-favourite-select"
+              >
+                <option value="">Add an indoor plant…</option>
+              </select>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                id="btnAddFavourite"
+              >
+                <i class="ri-add-line"></i> Add
+              </button>
+            </div>
+            <ul class="profile-favourites-list" id="profileFavouritesList"></ul>
+          </section>
+        </div>
+        <div class="alerts-view" id="alertsView" style="display: none">
+          <section class="top-bar">
+            <div class="top-left">
+              <h1><i class="ri-alarm-warning-line"></i> Sensor Alerts</h1>
+              <p>Alerts sent by your ESP32 sensors to the web app.</p>
+            </div>
+            <div class="top-right">
+              <button type="button" class="btn btn-ghost" id="btnRefreshAlerts">
+                <i class="ri-refresh-line"></i> Refresh
+              </button>
+            </div>
+          </section>
+          <section class="alerts-card card">
+            <div class="card-header">
+              <h2><i class="ri-notification-3-line"></i> Alert feed</h2>
+              <span class="alerts-subtitle">From IoT devices</span>
+            </div>
+            <div class="alerts-filters tab-row" id="alertsFilters">
+              <div class="tab active" data-filter="active">Active</div>
+              <div class="tab" data-filter="resolved">Resolved</div>
+              <div class="tab" data-filter="snoozed">For later</div>
+              <div class="tab" data-filter="all">All</div>
+            </div>
+            <ul class="alerts-list" id="alertsList"></ul>
+            <div class="alerts-empty" id="alertsEmpty" style="display: none">
+              <div class="alerts-empty-icon"><i class="ri-leaf-line"></i></div>
+              <p>No sensor alerts yet.</p>
+              <span
+                >Alerts will appear here when your ESP32 devices send them via
+                POST to <code>/api/alerts</code>.</span
+              >
+            </div>
+          </section>
+        </div>
+        <div class="settings-view" id="settingsView" style="display: none">
+          <section class="top-bar">
+            <div class="top-left">
+              <h1><i class="ri-settings-3-line"></i> Settings</h1>
+              <p>Adjust how your DEW Eco Warden app behaves.</p>
+            </div>
+          </section>
+          <section class="settings-card card">
+            <div class="card-header">
+              <h2><i class="ri-sliders-line"></i> App preferences</h2>
+            </div>
+            <div class="settings-layout">
+              <div class="settings-body">
+                <div class="settings-group">
+                  <div class="settings-group-header">
+                    <div class="settings-group-title">Theme</div>
+                    <div class="settings-group-subtitle">
+                      Choose how the interface looks.
+                    </div>
+                  </div>
+                  <div class="settings-theme-options">
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm settings-theme-button settings-theme-button--active"
+                      id="settingsThemeDark"
+                    >
+                      Dark
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm settings-theme-button"
+                      id="settingsThemeLight"
+                    >
+                      Light
+                    </button>
+                  </div>
+                </div>
+                <div class="settings-group settings-group--bordered">
+                  <div class="settings-group-header">
+                    <div class="settings-group-title">Notifications</div>
+                    <div class="settings-group-subtitle">
+                      Control which updates DEW sends you.
+                    </div>
+                  </div>
+                  <div class="settings-notify-options">
+                    <label class="settings-checkbox">
+                      <input type="checkbox" id="settingsNotifyAlerts" />
+                      <span>Sensor alerts</span>
+                    </label>
+                    <label class="settings-checkbox">
+                      <input type="checkbox" id="settingsNotifyTips" />
+                      <span>Plant tips</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="settings-group settings-group--bordered">
+                  <div class="settings-group-header">
+                    <div class="settings-group-title">Plants view</div>
+                    <div class="settings-group-subtitle">
+                      Choose the default filters for the Plants catalog.
+                    </div>
+                  </div>
+                  <div class="settings-plants-options">
+                    <div class="settings-field">
+                      <span class="settings-field-label">Show</span>
+                      <select id="settingsPlantsFilter">
+                        <option value="indoor">Indoor plants</option>
+                        <option value="all">All plants</option>
+                      </select>
+                    </div>
+                    <div class="settings-field">
+                      <span class="settings-field-label">Light</span>
+                      <select id="settingsLightFilter">
+                        <option value="all">All light levels</option>
+                        <option value="low">Low light</option>
+                        <option value="medium">Medium light</option>
+                        <option value="bright">Bright light</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-group settings-group--bordered">
+                  <div class="settings-group-header">
+                    <div class="settings-group-title">Animations</div>
+                    <div class="settings-group-subtitle">
+                      Reduce floating petals and motion for a calmer dashboard.
+                    </div>
+                  </div>
+                  <label class="settings-checkbox">
+                    <input type="checkbox" id="settingsReduceMotion" />
+                    <span>Reduce background animation</span>
+                  </label>
+                </div>
+                <p class="settings-note">
+                  These controls are designed for your project report. The theme
+                  and plants filters are wired into the app; other toggles can
+                  be connected to backend settings later.
+                </p>
+              </div>
+              <div class="settings-illustration" aria-hidden="true">
+                <img src="/images/anime%20icons/settings.png" alt="" />
+              </div>
+            </div>
+          </section>
+          <section class="settings-location-card card">
+            <div class="card-header">
+              <h2><i class="ri-map-pin-line"></i> Location Settings</h2>
+              <p class="card-subtitle">
+                Set your location for local weather on the dashboard.
+              </p>
+              <p class="location-settings-note">
+                This location is used for the <strong>plant bot</strong> and not
+                <strong>desk bot</strong>. For the best weather and environment
+                data, use your device when you update your location—ideally when
+                you’re near your plant or plant bot.
+              </p>
+            </div>
+            <div class="location-settings-body">
+              <div
+                class="location-current card location-current-card"
+                id="locationCurrentCard"
+              >
+                <div class="location-current-header">
+                  <span class="location-current-label">Current location</span>
+                  <span
+                    class="location-current-value"
+                    id="locationCurrentDisplay"
+                    >Not set</span
+                  >
+                </div>
+                <p class="location-current-meta" id="locationCurrentMeta">
+                  Add a location to see weather on your dashboard.
+                </p>
+              </div>
+              <div class="location-actions">
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  id="locationBtnDetect"
+                >
+                  <i class="ri-gps-line"></i> Detect location automatically
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  id="locationBtnManual"
+                >
+                  <i class="ri-edit-line"></i> Set location manually
+                </button>
+              </div>
+              <div
+                class="location-manual-form"
+                id="locationManualForm"
+                style="display: none"
+              >
+                <div class="location-form-row">
+                  <div class="field">
+                    <label for="locationInputCity">City</label>
+                    <input
+                      type="text"
+                      id="locationInputCity"
+                      placeholder="e.g. Bangalore"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="locationInputCountry">Country</label>
+                    <input
+                      type="text"
+                      id="locationInputCountry"
+                      placeholder="e.g. India"
+                    />
+                  </div>
+                </div>
+                <div class="location-form-row">
+                  <div class="field">
+                    <label for="locationInputPostal"
+                      >ZIP / Postal code
+                      <span class="optional">(optional)</span></label
+                    >
+                    <input
+                      type="text"
+                      id="locationInputPostal"
+                      placeholder="e.g. 560001"
+                    />
+                  </div>
+                </div>
+                <div class="location-form-actions">
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    id="locationBtnCancelManual"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="locationBtnSaveManual"
+                  >
+                    <i class="ri-save-line"></i> Save location
+                  </button>
+                </div>
+              </div>
+              <div class="location-toggle-row">
+                <div class="settings-list-text">
+                  <div class="settings-list-label">Use device location</div>
+                  <div class="settings-list-desc">
+                    Allow DEW to use your device location for weather when
+                    possible.
+                  </div>
+                </div>
+                <label class="settings-switch">
+                  <input type="checkbox" id="locationUseDevice" />
+                  <span class="settings-switch-slider"></span>
+                </label>
+              </div>
+              <div
+                class="location-message"
+                id="locationMessage"
+                role="status"
+                aria-live="polite"
+                style="display: none"
+              ></div>
+            </div>
+          </section>
+          <section class="settings-list card">
+            <div class="settings-list-header">
+              <h2>Sensor and data settings</h2>
+              <p>Fine-tune how DEW handles your readings and history.</p>
+            </div>
+            <div class="settings-list-columns">
+              <div class="settings-list-column">
+                <div class="settings-list-section">
+                  <h3>Sensor behaviour</h3>
+                  <div class="settings-list-row">
+                    <div class="settings-list-text">
+                      <div class="settings-list-label">Auto-sync sensors</div>
+                      <div class="settings-list-desc">
+                        Allow DEW to poll connected ESP32 nodes in the
+                        background.
+                      </div>
+                    </div>
+                    <label class="settings-switch">
+                      <input type="checkbox" id="settingsAutoSync" checked />
+                      <span class="settings-switch-slider"></span>
+                    </label>
+                  </div>
+                  <div class="settings-list-row">
+                    <div class="settings-list-text">
+                      <div class="settings-list-label">
+                        Show demo plants when offline
+                      </div>
+                      <div class="settings-list-desc">
+                        Keep sample plants visible if no physical sensors are
+                        linked yet.
+                      </div>
+                    </div>
+                    <label class="settings-switch">
+                      <input type="checkbox" id="settingsDemoPlants" checked />
+                      <span class="settings-switch-slider"></span>
+                    </label>
+                  </div>
+                </div>
+                <div class="settings-list-section">
+                  <h3>Data history</h3>
+                  <div class="settings-list-row">
+                    <div class="settings-list-text">
+                      <div class="settings-list-label">Keep telemetry for</div>
+                      <div class="settings-list-desc">
+                        Controls how long moisture / temperature history is
+                        stored locally.
+                      </div>
+                    </div>
+                    <div class="settings-field">
+                      <select id="settingsHistoryWindow">
+                        <option value="7">7 days</option>
+                        <option value="30" selected>30 days</option>
+                        <option value="90">90 days</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="settings-list-row">
+                    <div class="settings-list-text">
+                      <div class="settings-list-label">
+                        Anonymise dashboard demo data
+                      </div>
+                      <div class="settings-list-desc">
+                        Hide email and UID when sharing screenshots for
+                        documentation.
+                      </div>
+                    </div>
+                    <label class="settings-switch">
+                      <input type="checkbox" id="settingsAnonymise" />
+                      <span class="settings-switch-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-list-column settings-list-column--profile">
+                <div class="settings-list-section">
+                  <h3>Profile &amp; community visibility</h3>
+                  <div class="settings-list-row">
+                    <div class="settings-list-text">
+                      <div class="settings-list-label">Profile visibility</div>
+                      <div class="settings-list-desc">
+                        Choose whether your DEW Community profile appears as
+                        public or private.
+                      </div>
+                    </div>
+                    <div class="settings-privacy-mode">
+                      <button
+                        type="button"
+                        class="settings-privacy-pill"
+                        id="settingsProfilePublic"
+                      >
+                        Public
+                      </button>
+                      <button
+                        type="button"
+                        class="settings-privacy-pill"
+                        id="settingsProfilePrivate"
+                      >
+                        Private
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    class="settings-profile-options"
+                    id="settingsProfileOptions"
+                  >
+                    <div class="settings-list-row">
+                      <div class="settings-list-text">
+                        <div class="settings-list-label">Contact details</div>
+                        <div class="settings-list-desc">
+                          Show your email or contact info on your public DEW
+                          profile.
+                        </div>
+                      </div>
+                      <label class="settings-switch">
+                        <input type="checkbox" id="settingsShowContact" />
+                        <span class="settings-switch-slider"></span>
+                      </label>
+                    </div>
+                    <div class="settings-list-row">
+                      <div class="settings-list-text">
+                        <div class="settings-list-label">
+                          Messages from others
+                        </div>
+                        <div class="settings-list-desc">
+                          Allow other wardens to send you direct messages.
+                        </div>
+                      </div>
+                      <label class="settings-switch">
+                        <input type="checkbox" id="settingsAllowMessages" />
+                        <span class="settings-switch-slider"></span>
+                      </label>
+                    </div>
+                    <div class="settings-list-row">
+                      <div class="settings-list-text">
+                        <div class="settings-list-label">DEW achievements</div>
+                        <div class="settings-list-desc">
+                          Show badges and milestones earned in DEW Community.
+                        </div>
+                      </div>
+                      <label class="settings-switch">
+                        <input type="checkbox" id="settingsShowAchievements" />
+                        <span class="settings-switch-slider"></span>
+                      </label>
+                    </div>
+                    <div class="settings-list-row">
+                      <div class="settings-list-text">
+                        <div class="settings-list-label">Top posts</div>
+                        <div class="settings-list-desc">
+                          Highlight your most helpful posts for other users.
+                        </div>
+                      </div>
+                      <label class="settings-switch">
+                        <input type="checkbox" id="settingsShowTopPosts" />
+                        <span class="settings-switch-slider"></span>
+                      </label>
+                    </div>
+                    <div class="settings-list-row">
+                      <div class="settings-list-text">
+                        <div class="settings-list-label">Favourite plants</div>
+                        <div class="settings-list-desc">
+                          Show your saved favourite plants on your public
+                          profile.
+                        </div>
+                      </div>
+                      <label class="settings-switch">
+                        <input type="checkbox" id="settingsShowFavourites" />
+                        <span class="settings-switch-slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="community-view" id="communityView" style="display: none">
+          <nav class="community-top-nav" aria-label="Community navigation">
+            <a href="#" class="community-nav-link" id="communityNavHome" data-view="community" data-community-home="true"><i class="ri-home-5-line"></i> Home</a>
+            <a href="#" class="community-nav-link community-nav-link--active" data-view="community"><i class="ri-group-line"></i> Community</a>
+            <a href="#" class="community-nav-link" data-view="dashboard"><i class="ri-dashboard-3-line"></i> Dashboard</a>
+          </nav>
+          <section class="community-layout">
+            <aside class="community-sidebar-left">
+              <div class="card community-sidebar-card">
+                <h2 class="community-sidebar-title"><i class="ri-home-4-line"></i> Home</h2>
+                <p class="community-sidebar-desc">Main feed</p>
+              </div>
+              <div class="card community-sidebar-card">
+                <h2 class="community-sidebar-title"><i class="ri-team-line"></i> Your Communities</h2>
+                <ul id="communityYourList" class="community-community-list">
+                  <li class="community-list-loading">Loading…</li>
+                </ul>
+              </div>
+              <div class="card community-sidebar-card">
+                <h2 class="community-sidebar-title"><i class="ri-line-chart-line"></i> Popular Communities</h2>
+                <ul id="communityPopularList" class="community-community-list">
+                  <li class="community-list-loading">Loading…</li>
+                </ul>
+              </div>
+              <button type="button" class="btn btn-primary community-btn-start" id="communityStartCommunityBtn">
+                <i class="ri-add-line"></i> Start a community
+              </button>
+            </aside>
+            <div class="community-main">
+              <div class="community-main-header">
+                <div class="community-search-row">
+                  <input type="search" id="communitySearch" class="community-search-input" placeholder="Search posts or communities…" aria-label="Search posts or communities" />
+                  <button type="button" class="btn btn-primary" id="communitySearchBtn"><i class="ri-search-line"></i> Search</button>
+                </div>
+                <div class="community-sort-row">
+                  <div class="tab-row" id="communitySortTabs">
+                    <div class="tab" data-sort="best"><i class="ri-line-chart-line"></i> Best</div>
+                    <div class="tab" data-sort="hot"><i class="ri-fire-line"></i> Hot</div>
+                    <div class="tab active" data-sort="new"><i class="ri-time-line"></i> New</div>
+                    <div class="tab" data-sort="top"><i class="ri-trophy-line"></i> Top</div>
+                    <div class="tab" data-sort="controversial"><i class="ri-bubble-chart-line"></i> Controversial</div>
+                    <div class="tab" data-sort="old"><i class="ri-calendar-line"></i> Old</div>
+                    <div class="tab" data-sort="qa"><i class="ri-question-answer-line"></i> Q&amp;A</div>
+                  </div>
+                  <select id="communityCategoryFilter" class="community-category-select" aria-label="Category">
+                    <option value="all">All Categories</option>
+                  </select>
+                  <button type="button" class="btn btn-primary" id="communityCreatePostBtn"><i class="ri-add-line"></i> Create Post</button>
+                </div>
+              </div>
+              <section id="communityDetailCard" class="card community-detail-card" style="display: none">
+                <div class="community-detail-banner" id="communityDetailBanner"></div>
+                <div class="community-detail-head">
+                  <div class="community-detail-identity">
+                    <div class="community-detail-logo" id="communityDetailLogo">r</div>
+                    <div>
+                      <h2 id="communityDetailTitle">r/community</h2>
+                      <p id="communityDetailDesc">Community description</p>
+                      <div class="community-detail-meta" id="communityDetailMeta"></div>
+                    </div>
+                  </div>
+                  <div class="community-detail-actions">
+                    <button type="button" class="btn btn-ghost" id="communityEditBtn" style="display: none" title="Edit banner, logo, description"><i class="ri-settings-3-line"></i> Edit</button>
+                    <button type="button" class="btn btn-ghost" id="communityJoinBtn">Join</button>
+                    <button type="button" class="btn btn-primary" id="communityCreatePostQuickBtn"><i class="ri-add-line"></i> Create Post</button>
+                    <button type="button" class="btn btn-ghost" id="communityNotifyBtn"><i class="ri-notification-3-line"></i></button>
+                    <button type="button" class="btn btn-ghost" id="communityMuteBtn"><i class="ri-volume-mute-line"></i></button>
+                  </div>
+                </div>
+                <div class="community-highlights" id="communityHighlights">
+                  <div class="community-highlight-col">
+                    <h3>Latest Posts</h3>
+                    <ul id="communityLatestList"></ul>
+                  </div>
+                  <div class="community-highlight-col">
+                    <h3>Top Posts</h3>
+                    <ul id="communityTopList"></ul>
+                  </div>
+                </div>
+              </section>
+              <div class="community-create card" id="communityCreateBlock" style="display: none">
+                <div class="community-create-header">
+                  <h2><i class="ri-edit-2-line"></i> Create post</h2>
+                </div>
+                <form id="communityCreateForm" class="community-create-form">
+                  <div class="community-create-row">
+                    <input id="communityPostTitle" class="community-input" type="text" placeholder="Post title…" required />
+                  </div>
+                  <div class="community-create-row">
+                    <textarea id="communityPostBody" class="community-textarea" rows="3" placeholder="Add details, question, or plant update…" required></textarea>
+                  </div>
+                  <div class="community-create-meta">
+                    <div class="community-create-meta-left">
+                      <label class="community-field">
+                        <span class="label">Community</span>
+                        <select id="communityCategory"></select>
+                      </label>
+                      <label class="community-field">
+                        <span class="label">Tags</span>
+                        <input id="communityTags" class="community-input" type="text" placeholder="#IndoorPlants #PlantCare" />
+                      </label>
+                    </div>
+                    <div class="community-create-meta-right">
+                      <label class="community-upload">
+                        <input id="communityImage" type="file" accept="image/*" />
+                        <span><i class="ri-image-add-line"></i> Add image</span>
+                      </label>
+                      <button type="submit" class="btn btn-primary btn-community-post"><i class="ri-send-plane-2-line"></i> Post</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+              <div id="communityFeed" class="community-feed"></div>
+              <div id="communityFeedEmpty" class="community-feed-empty" style="display: none">
+                <div class="icon"><i class="ri-leaf-line"></i></div>
+                <p>No posts yet.</p>
+                <span>Be the first to post or try another category.</span>
+              </div>
+            </div>
+            <aside class="community-sidebar-right">
+              <div class="card community-sidebar-card" id="communityInfoCard" style="display: none">
+                <h2 class="community-sidebar-title"><i class="ri-information-line"></i> Community Info</h2>
+                <div class="community-info-grid" id="communityInfoGrid"></div>
+                <h3 class="community-info-subtitle">Moderators</h3>
+                <ul id="communityModeratorsList" class="community-recent-list"></ul>
+              </div>
+              <div class="card community-sidebar-card">
+                <h2 class="community-sidebar-title"><i class="ri-star-line"></i> Recent Posts</h2>
+                <a href="#" class="community-sidebar-clear" id="communityRecentClear">Clear</a>
+                <ul id="communityRecentList" class="community-recent-list"></ul>
+              </div>
+              <div class="card community-sidebar-card">
+                <h2 class="community-sidebar-title">Your community stats</h2>
+                <div class="community-stats" id="communityStats">
+                  <div class="row"><span>Reputation</span><strong id="communityStatRep">0</strong></div>
+                  <div class="row"><span>Posts</span><strong id="communityStatPosts">0</strong></div>
+                  <div class="row"><span>Comments</span><strong id="communityStatComments">0</strong></div>
+                  <div class="row"><span>Badges</span><strong id="communityStatBadges">—</strong></div>
+                </div>
+              </div>
+            </aside>
+          </section>
+        </div>
+        <div
+          class="plants-list-view"
+          id="plantsCatalogView"
+          style="display: none"
+        >
+          <section class="top-bar">
+            <div class="top-left">
+              <h1><i class="ri-plant-line"></i> Explore plants</h1>
+              <p>
+                All indoor plants available in the app. Whatever your needs,
+                find the right plant for your space.
+              </p>
+            </div>
+          </section>
+          <section class="plants-list-section card">
+            <div class="plants-list-header">
+              <h2>Plants in the app</h2>
+              <div class="plants-list-filters tab-row" id="plantsListFilters">
+                <div class="tab active" data-filter="indoor">Indoor plants</div>
+                <div class="tab" data-filter="all">All</div>
+              </div>
+            </div>
+            <div class="plants-light-filters tab-row" id="plantsLightFilters">
+              <div class="tab active" data-light="all">All light</div>
+              <div class="tab" data-light="low">Low light</div>
+              <div class="tab" data-light="medium">Medium light</div>
+              <div class="tab" data-light="bright">Bright light</div>
+            </div>
+            <div
+              class="plants-favourites"
+              id="plantsFavouritesWrap"
+              style="display: none"
+            >
+              <div class="plants-favourites-header">
+                <h3><i class="ri-heart-3-line"></i> My favourites</h3>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  id="btnGoProfileFavourites"
+                >
+                  Manage
+                </button>
+              </div>
+              <div
+                class="plants-list-grid plants-favourites-grid"
+                id="plantsFavouritesGrid"
+              ></div>
+            </div>
+            <div class="plants-list-grid" id="plantsListGrid"></div>
+          </section>
+        </div>
+        <div class="plants-list-view" id="myPlantsView" style="display: none">
+          <section class="top-bar">
+            <div class="top-left">
+              <h1><i class="ri-plant-line"></i> My plants</h1>
+              <p>
+                Plants you’ve used in the app (from your activity and dashboard
+                usage).
+              </p>
+            </div>
+          </section>
+          <section class="plants-list-section card">
+            <div class="plants-list-header">
+              <h2>Your plants</h2>
+            </div>
+            <div class="plants-list-grid" id="myPlantsGrid"></div>
+            <p
+              class="plants-list-empty"
+              id="myPlantsEmpty"
+              style="display: none"
+            >
+              No plants used yet. Open the dashboard to start tracking your
+              garden.
+            </p>
+          </section>
+        </div>
+        <div
+          class="plant-detail-view"
+          id="plantDetailView"
+          style="display: none"
+        >
+          <header class="plant-detail-top">
+            <div class="plant-breadcrumbs" id="plantBreadcrumbs">
+              <button type="button" class="plant-back-btn" id="plantBackBtn">
+                <i class="ri-arrow-left-line"></i>
+              </button>
+              <span>Catalog</span>
+              <span class="sep">/</span>
+              <span>Plants</span>
+              <span class="sep">/</span>
+              <span id="plantCrumbName">—</span>
+            </div>
+          </header>
+          <section class="plant-detail-hero card">
+            <div class="plant-detail-media">
+              <div class="plant-detail-media-inner">
+                <img id="plantDetailImg" alt="" />
+                <button
+                  type="button"
+                  class="plant-detail-zoom-btn"
+                  id="plantDetailZoomBtn"
+                  aria-label="View full image"
+                >
+                  <i class="ri-zoom-in-line"></i>
+                </button>
+              </div>
+              <div class="plant-detail-benefits">
+                <h3>Benefits</h3>
+                <ul
+                  class="plant-detail-benefits-list"
+                  id="plantDetailBenefits"
+                ></ul>
+              </div>
+            </div>
+            <div class="plant-detail-info">
+              <h2 class="plant-detail-name" id="plantDetailName">—</h2>
+              <p class="plant-detail-species" id="plantDetailSpecies">—</p>
+              <p class="plant-detail-summary" id="plantDetailSummary">—</p>
+
+              <div class="plant-detail-meta">
+                <div
+                  class="plant-detail-ratings"
+                  id="plantDetailRatings"
+                  aria-label="Ratings"
+                ></div>
+                <div class="plant-detail-tox" id="plantDetailToxicity">—</div>
+              </div>
+
+              <div
+                class="plant-detail-conditions"
+                id="plantDetailConditions"
+              ></div>
+              <div class="plant-detail-facts">
+                <div class="plant-detail-facts-inner">
+                  <div class="plant-detail-facts-content">
+                    <h3>Special facts</h3>
+                    <ul
+                      class="plant-detail-facts-list"
+                      id="plantDetailFacts"
+                    ></ul>
+                  </div>
+                  <div
+                    class="plant-detail-facts-illustration"
+                    aria-hidden="true"
+                  >
+                    <img
+                      src="/images/anime%20icons/special%20facts.png"
+                      alt=""
+                    />
+                  </div>
+                </div>
+              </div>
+              <div class="plant-detail-actions">
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  id="btnAddToFavourites"
+                >
+                  <i class="ri-heart-add-line"></i> Add to favourites
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  id="btnOpenMyPlants"
+                >
+                  <i class="ri-plant-line"></i> Go to My Plants
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="plant-detail-bottom">
+            <div class="plant-detail-card card">
+              <div class="plant-detail-care">
+                <div class="plant-detail-care-content">
+                  <h3>Care tips & checklist</h3>
+                  <div class="plant-detail-tips" id="plantDetailTips"></div>
+                  <ul
+                    class="plant-detail-checklist"
+                    id="plantDetailChecklist"
+                  ></ul>
+                </div>
+                <div class="plant-detail-care-illustration" aria-hidden="true">
+                  <img
+                    src="/images/anime%20icons/care%20tips%20%26%20check%20list.png"
+                    alt=""
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="plant-detail-card card">
+              <div class="plant-detail-community">
+                <div class="plant-detail-community-content">
+                  <h3>Still doubtful?</h3>
+                  <p class="plant-detail-help">
+                    Join the DEW community to ask questions, share your plants,
+                    and get more detailed guidance.
+                  </p>
+                  <form class="plant-detail-form" onsubmit="return false;">
+                    <button
+                      type="button"
+                      class="btn btn-primary plant-detail-send"
+                    >
+                      Join DEW Community
+                    </button>
+                  </form>
+                </div>
+                <div
+                  class="plant-detail-community-illustration"
+                  aria-hidden="true"
+                >
+                  <img src="/images/anime%20icons/dew%20community.png" alt="" />
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="plant-detail-sensor card">
+            <h3>Sensor data</h3>
+            <div class="plant-detail-sensor-body" id="plantDetailSensor"></div>
+          </section>
+        </div>
+        <div class="about-view" id="aboutView" style="display: none">
+          <header class="about-nav">
+            <a
+              href="#"
+              class="about-nav-logo"
+              data-view="dashboard"
+              aria-label="DEW Home"
+              ><i class="ri-leaf-fill"></i> DEW</a
+            >
+            <nav class="about-nav-links">
+              <a href="#" class="about-nav-link" data-view="dashboard"
+                >Dashboard</a
+              >
+              <a href="#" class="about-nav-link" data-view="profile">Profile</a>
+              <a href="#" class="about-nav-link" data-view="community"
+                >Community</a
+              >
+            </nav>
+          </header>
+          <section class="about-hero">
+            <div class="about-hero-bg" aria-hidden="true"></div>
+            <div class="about-hero-content">
+              <h1 class="about-hero-title">Plants & Beyond</h1>
+              <p class="about-hero-tagline">The road to smarter plant care</p>
+              <p class="about-hero-sub">
+                IoT sensors, real-time alerts, and a dashboard that keeps every
+                indoor plant thriving.
+              </p>
+              <button
+                type="button"
+                class="btn btn-about-cta"
+                id="aboutCtaDashboard"
+              >
+                Explore dashboard <i class="ri-arrow-right-line"></i>
+              </button>
+            </div>
+          </section>
+          <section class="about-stats">
+            <div class="about-stats-inner">
+              <div class="about-stat">
+                <span class="about-stat-value" id="aboutStatPlants">5</span
+                ><span class="about-stat-label">Indoor plants</span>
+              </div>
+              <div class="about-stat">
+                <span class="about-stat-value">24/7</span
+                ><span class="about-stat-label">Monitoring</span>
+              </div>
+              <div class="about-stat">
+                <span class="about-stat-value">100%</span
+                ><span class="about-stat-label">Your data</span>
+              </div>
+            </div>
+          </section>
+          <section class="about-block about-block--dark about-split">
+            <div class="about-split-visual" aria-hidden="true"></div>
+            <div class="about-split-content">
+              <div class="about-block-inner">
+                <h2 class="about-block-title">The Platform</h2>
+                <p class="about-block-text">
+                  DEW (Digital Eco Warden) is an IoT-powered plant care
+                  platform. ESP32 sensors stream moisture, temperature, and
+                  light to a single dashboard. Smart alerts and a gentle AI
+                  guardian help you act before plants need help—so you can grow
+                  with confidence.
+                </p>
+              </div>
+            </div>
+          </section>
+          <section class="about-block about-split about-split--why">
+            <div class="about-split-visual" aria-hidden="true"></div>
+            <div class="about-split-content">
+              <div class="about-block-inner">
+                <h2 class="about-block-title">Why DEW?</h2>
+                <p class="about-block-text">
+                  Plant care should be accessible and stress-free. We give you
+                  the right data at the right time: moisture, light,
+                  temperature, and actionable alerts. Whether you’re a beginner
+                  or a green thumb, every plant can thrive with DEW.
+                </p>
+              </div>
+            </div>
+          </section>
+          <section
+            class="about-block about-block--dark about-block--vision about-split about-split--vision"
+          >
+            <div class="about-split-visual" aria-hidden="true"></div>
+            <div class="about-split-content">
+              <div class="about-block-inner">
+                <h2 class="about-block-title">Our Vision</h2>
+                <p class="about-block-text">
+                  A world where technology and nature work together. DEW is the
+                  bridge between your plants and you—with a growing community
+                  where wardens share tips, favourite plants, and support each
+                  other in building greener spaces.
+                </p>
+              </div>
+            </div>
+          </section>
+          <section
+            class="about-block about-block--dark about-block--interactive about-block--how"
+          >
+            <div class="about-block-inner about-spec-inner">
+              <h2 class="about-block-title">How It Works</h2>
+              <p class="about-block-text about-block-lead">
+                Sensors in your pots send data to the cloud. The dashboard shows
+                live readings, trends, and alerts. When moisture drops or
+                conditions change, you get notified.
+              </p>
+              <div class="about-spec-grid">
+                <article class="about-spec-card">
+                  <div
+                    class="about-spec-card-img"
+                    aria-hidden="true"
+                    data-component="data"
+                  >
+                    <img src="/images/about%20us/data.jpg" alt="" />
+                  </div>
+                  <div class="about-spec-card-body">
+                    <span class="about-spec-card-label">Telemetry</span>
+                    <h3 class="about-spec-card-title">Data</h3>
+                    <p class="about-spec-card-text">
+                      Moisture, temperature, light.
+                    </p>
+                  </div>
+                </article>
+                <article class="about-spec-card">
+                  <div
+                    class="about-spec-card-img"
+                    aria-hidden="true"
+                    data-component="hardware"
+                  >
+                    <img src="/images/about%20us/hardware.jpg" alt="" />
+                  </div>
+                  <div class="about-spec-card-body">
+                    <span class="about-spec-card-label">Devices</span>
+                    <h3 class="about-spec-card-title">Hardware</h3>
+                    <p class="about-spec-card-text">
+                      ESP32-compatible sensors.
+                    </p>
+                  </div>
+                </article>
+                <article class="about-spec-card">
+                  <div
+                    class="about-spec-card-img"
+                    aria-hidden="true"
+                    data-component="alerts"
+                  >
+                    <img src="/images/about%20us/alerts.jpg" alt="" />
+                  </div>
+                  <div class="about-spec-card-body">
+                    <span class="about-spec-card-label">Notifications</span>
+                    <h3 class="about-spec-card-title">Alerts</h3>
+                    <p class="about-spec-card-text">
+                      Threshold-based notifications.
+                    </p>
+                  </div>
+                </article>
+                <article class="about-spec-card">
+                  <div
+                    class="about-spec-card-img"
+                    aria-hidden="true"
+                    data-component="dashboard"
+                  >
+                    <img src="/images/about%20us/dashboard.jpg" alt="" />
+                  </div>
+                  <div class="about-spec-card-body">
+                    <span class="about-spec-card-label">Interface</span>
+                    <h3 class="about-spec-card-title">Dashboard</h3>
+                    <p class="about-spec-card-text">
+                      Real-time and historical views.
+                    </p>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+          <section
+            class="about-block about-block--dark about-block--interactive about-block--roadmap"
+          >
+            <div class="about-block-inner about-roadmap-inner">
+              <h2 class="about-block-title">Roadmap</h2>
+              <p class="about-block-text about-block-lead">
+                We’re building the future of plant care.
+              </p>
+              <div class="about-roadmap-grid">
+                <article class="about-roadmap-card">
+                  <div
+                    class="about-roadmap-card-img"
+                    aria-hidden="true"
+                    data-roadmap="community"
+                  >
+                    <img src="/images/about%20us/dew%20community.jpg" alt="" />
+                  </div>
+                  <div class="about-roadmap-card-body">
+                    <span class="about-roadmap-card-label">Coming soon</span>
+                    <h3 class="about-roadmap-card-title">DEW Community</h3>
+                    <p class="about-roadmap-card-text">
+                      Share ideas, favourite plants, connect with other wardens.
+                    </p>
+                  </div>
+                </article>
+                <article class="about-roadmap-card">
+                  <div
+                    class="about-roadmap-card-img"
+                    aria-hidden="true"
+                    data-roadmap="profiles"
+                  >
+                    <img
+                      src="/images/about%20us/more%20plant%20profiles.jpg"
+                      alt=""
+                    />
+                  </div>
+                  <div class="about-roadmap-card-body">
+                    <span class="about-roadmap-card-label">Coming soon</span>
+                    <h3 class="about-roadmap-card-title">
+                      More plant profiles
+                    </h3>
+                    <p class="about-roadmap-card-text">
+                      Care guides and tips per species.
+                    </p>
+                  </div>
+                </article>
+                <article class="about-roadmap-card">
+                  <div
+                    class="about-roadmap-card-img"
+                    aria-hidden="true"
+                    data-roadmap="recommendations"
+                  >
+                    <img
+                      src="/images/about%20us/smart%20recommendations.jpg"
+                      alt=""
+                    />
+                  </div>
+                  <div class="about-roadmap-card-body">
+                    <span class="about-roadmap-card-label">Coming soon</span>
+                    <h3 class="about-roadmap-card-title">
+                      Smart recommendations
+                    </h3>
+                    <p class="about-roadmap-card-text">
+                      AI-driven watering and light suggestions.
+                    </p>
+                  </div>
+                </article>
+                <article class="about-roadmap-card">
+                  <div
+                    class="about-roadmap-card-img"
+                    aria-hidden="true"
+                    data-roadmap="mobile"
+                  >
+                    <img src="/images/about%20us/mobile%20app.jpg" alt="" />
+                  </div>
+                  <div class="about-roadmap-card-body">
+                    <span class="about-roadmap-card-label">Coming soon</span>
+                    <h3 class="about-roadmap-card-title">Mobile app</h3>
+                    <p class="about-roadmap-card-text">
+                      Monitor your garden on the go.
+                    </p>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+          <section class="about-block about-facilities">
+            <div class="about-block-inner">
+              <h2 class="about-facilities-main-title">DEW Platform</h2>
+              <p class="about-facilities-lead">
+                Components and benefits of the Digital Eco Warden system.
+              </p>
+              <div class="about-facilities-grid">
+                <article class="about-facility-card">
+                  <div
+                    class="about-facility-img"
+                    aria-hidden="true"
+                    data-placeholder="components"
+                  >
+                    <img src="/images/about%20us/components.jpg" alt="" />
+                  </div>
+                  <div class="about-facility-body">
+                    <span class="about-facility-label">Hardware & data</span>
+                    <h3 class="about-facility-title">Components</h3>
+                    <p class="about-facility-text">
+                      DEW is built around ESP32-compatible sensors that measure
+                      soil moisture, ambient temperature, and light levels. Each
+                      sensor streams readings to a central backend via HTTP or
+                      MQTT. The server stores telemetry, merges it with plant
+                      profiles, and serves a REST API used by the dashboard and
+                      mobile clients. The dashboard is a single-page app that
+                      shows live metrics, historical charts, and configurable
+                      alerts. User data—favourites, plant usage, profile, and
+                      alerts—is persisted in JSON and can be backed by a
+                      database. This vertical integration—sensors, API, and
+                      frontend—delivers a single pipeline from your pots to your
+                      screen.
+                    </p>
+                  </div>
+                </article>
+                <article class="about-facility-card">
+                  <div
+                    class="about-facility-img"
+                    aria-hidden="true"
+                    data-placeholder="benefits"
+                  >
+                    <img
+                      src="/images/about%20us/project%20benefits.jpg"
+                      alt=""
+                    />
+                  </div>
+                  <div class="about-facility-body">
+                    <span class="about-facility-label">Impact</span>
+                    <h3 class="about-facility-title">Project benefits</h3>
+                    <p class="about-facility-text">
+                      The platform gives you real-time visibility into plant
+                      health so you can water and adjust conditions before
+                      plants suffer. Threshold-based alerts (e.g. moisture below
+                      40%) notify you via the app, reducing guesswork and
+                      overwatering. By tracking which plants you use in the
+                      dashboard and deskbot, DEW surfaces a meaningful “plants”
+                      count and encourages consistent care. Favourite plants and
+                      profile stats support a community layer where wardens
+                      share preferences and follow each other. Data stays under
+                      your control with optional cloud backup. The stack is
+                      designed to scale from a single pot to many zones and from
+                      hobby use to shared or educational deployments.
+                    </p>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+          <section class="about-block about-block--contact">
+            <div class="about-contact-bg" aria-hidden="true"></div>
+            <div class="about-block-inner about-contact-inner">
+              <h2 class="about-block-title">Contact</h2>
+              <p class="about-block-text about-contact-lead">
+                Get in touch. Follow us or drop an email.
+              </p>
+              <div class="about-contact-card">
+                <a
+                  href="mailto:hello@dew-warden.example"
+                  class="btn btn-about-contact"
+                  ><i class="ri-mail-line"></i> Contact us</a
+                >
+                <p class="about-contact-or">or find us here</p>
+                <div class="about-social-row">
+                  <a
+                    href="https://x.com"
+                    class="about-social-btn"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Twitter / X"
+                    ><i class="ri-twitter-x-fill"></i
+                  ></a>
+                  <a
+                    href="https://instagram.com"
+                    class="about-social-btn"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Instagram"
+                    ><i class="ri-instagram-line"></i
+                  ></a>
+                  <a
+                    href="https://github.com"
+                    class="about-social-btn"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="GitHub"
+                    ><i class="ri-github-fill"></i
+                  ></a>
+                  <a
+                    href="mailto:hello@dew-warden.example"
+                    class="about-social-btn"
+                    target="_blank"
+                    rel="noopener"
+                    title="Email"
+                    ><i class="ri-mail-line"></i
+                  ></a>
+                </div>
+              </div>
+            </div>
+          </section>
+          <footer class="about-footer">
+            <span class="about-footer-logo"
+              ><i class="ri-leaf-fill"></i> DEW</span
+            >
+            <span class="about-footer-copy"
+              >Digital Eco Warden · © 2024–2026</span
+            >
+          </footer>
+        </div>
+        <div
+          class="plant-image-lightbox"
+          id="plantImageLightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full plant image"
+          style="display: none"
+        >
+          <button
+            type="button"
+            class="plant-image-lightbox-close"
+            id="plantImageLightboxClose"
+            aria-label="Close"
+          >
+            <i class="ri-close-line"></i>
+          </button>
+          <div
+            class="plant-image-lightbox-backdrop"
+            id="plantImageLightboxBackdrop"
+          ></div>
+          <div class="plant-image-lightbox-content">
+            <img id="plantImageLightboxImg" src="" alt="" />
+          </div>
+        </div>
+      </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="/auth-guard.js"></script>
+    <script type="module" src="/profile.js?v=community-reddit-2"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

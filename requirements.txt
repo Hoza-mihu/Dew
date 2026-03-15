@@ -1,0 +1,20 @@
+# DEW Eco Warden - Python dependencies (use inside venv)
+# Install: pip install -r requirements.txt
+
+# HTTP & API
+requests>=2.31.0
+
+# IoT / MQTT (for ESP32 or broker integration)
+paho-mqtt>=2.1.0
+
+# Environment and config
+python-dotenv>=1.0.0
+
+# Data handling and analytics
+pandas>=2.1.0
+
+# Optional: lightweight REST API or worker scripts
+flask>=3.0.0
+
+# Optional: async HTTP if you build async workers
+# aiohttp>=3.9.0

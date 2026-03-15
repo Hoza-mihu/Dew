@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Create account · DEW Digital Eco Warden</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="auth-pages.css" />
+  <script>
+    window.dewTogglePassword = function(btn) {
+      if (!btn) return;
+      var wrap = btn.closest && btn.closest(".input-wrap");
+      var input = wrap && wrap.querySelector("input");
+      var icon = btn.querySelector && btn.querySelector("i");
+      if (!input || !icon) return;
+      var show = input.type === "password";
+      input.type = show ? "text" : "password";
+      icon.className = show ? "ri-eye-off-line" : "ri-eye-line";
+      btn.setAttribute("title", show ? "Hide password" : "Show password");
+      btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    };
+  </script>
+</head>
+<body class="login-split-body">
+  <div class="login-split">
+    <aside class="login-panel-left login-panel-visual">
+      <div class="login-float login-float-flower" aria-hidden="true"></div>
+      <div class="login-float login-float-flower" aria-hidden="true"></div>
+      <div class="login-float login-float-star" aria-hidden="true"></div>
+      <div class="login-float login-float-star" aria-hidden="true"></div>
+      <div class="login-float login-float-droplet" aria-hidden="true"></div>
+      <ul class="login-features login-features-stack">
+        <li class="login-feature-card">
+          <span class="login-feature-icon icon-yellow"><i class="ri-star-fill"></i></span>
+          <div>
+            <strong>Real-Time IoT Sync</strong>
+            <span>Live sensor data from all your plants</span>
+            <span class="login-feature-detail">ESP32 sensors stream moisture, temperature & light levels every few seconds.</span>
+          </div>
+          <img class="login-feature-img" src="/images/anime%20icons/real-time%20iot%20sync.png" alt="Real-Time IoT Sync" data-fallback="/images/anime%20icons/real-time%20iot%20sync.jpg" onerror="this.onerror=null;if(this.dataset.fallback){this.src=this.dataset.fallback}">
+        </li>
+        <li class="login-feature-card">
+          <span class="login-feature-icon icon-pink"><i class="ri-brain-line"></i></span>
+          <div>
+            <strong>AI Plant Intelligence</strong>
+            <span>Predictive health monitoring & alerts</span>
+            <span class="login-feature-detail">Get smart recommendations and early warnings before your plants wilt.</span>
+          </div>
+          <img class="login-feature-img" src="/images/anime%20icons/ai%20plant%20intelligence.png" alt="AI Plant Intelligence" data-fallback="/images/anime%20icons/ai%20plant%20intelligence.jpg" onerror="this.onerror=null;if(this.dataset.fallback){this.src=this.dataset.fallback}">
+        </li>
+        <li class="login-feature-card">
+          <span class="login-feature-icon icon-blue"><i class="ri-drop-line"></i></span>
+          <div>
+            <strong>Auto-Irrigation Control</strong>
+            <span>Smart watering based on soil moisture</span>
+            <span class="login-feature-detail">Pumps trigger automatically when soil gets dry—no more guessing.</span>
+          </div>
+          <img class="login-feature-img" src="/images/anime%20icons/auto%20irrigation%20control.png" alt="Auto-Irrigation Control" data-fallback="/images/anime%20icons/auto%20irrigation%20control.jpg" onerror="this.onerror=null;if(this.dataset.fallback){this.src=this.dataset.fallback}">
+        </li>
+        <li class="login-feature-card">
+          <span class="login-feature-icon icon-chart"><i class="ri-bar-chart-2-fill"></i></span>
+          <div>
+            <strong>Deep Analytics</strong>
+            <span>7-day trends, radar charts & health scores</span>
+            <span class="login-feature-detail">Track growth patterns, compare plants, and export reports.</span>
+          </div>
+          <img class="login-feature-img" src="/images/anime%20icons/deep-analytics.png" alt="Deep Analytics" data-fallback="/images/anime%20icons/deep-analytics.jpg" onerror="this.onerror=null;if(this.dataset.fallback){this.src=this.dataset.fallback}">
+        </li>
+      </ul>
+      <footer class="login-panel-footer">DEW v2.1.0 • © 2026 Digital Eco Warden</footer>
+    </aside>
+    <main class="login-panel-right">
+      <div class="login-form-outer">
+        <div class="login-brand login-brand-top">
+          <div class="login-brand-icon"><i class="ri-leaf-fill"></i></div>
+          <h1 class="login-brand-title">DEW</h1>
+          <p class="login-brand-subtitle">Digital Eco Warden • Plant Intelligence Platform</p>
+        </div>
+        <h2 class="login-welcome">Join as <span class="login-warden">Warden <i class="ri-plant-line"></i></span></h2>
+        <p class="login-welcome-sub">Create your account to access the garden control center and protect your plants.</p>
+        <div class="login-tabs">
+          <a href="login.html" class="login-tab">Sign In</a>
+          <a href="signup.html" class="login-tab active">Create Account</a>
+        </div>
+        <div class="login-error" id="signupError" role="alert"></div>
+        <form class="login-form login-form-split" id="signupForm">
+          <div class="field field-with-icon">
+            <label for="email">Email address</label>
+            <div class="input-icon-row">
+              <span class="input-icon input-icon-email"><i class="ri-mail-line"></i></span>
+              <input type="email" id="email" name="email" required placeholder="warden@dew.eco" autocomplete="email" />
+            </div>
+          </div>
+          <div class="field field-with-icon">
+            <label for="password">Password</label>
+            <div class="input-icon-row">
+              <span class="input-icon input-icon-key"><i class="ri-lock-line"></i></span>
+              <div class="input-wrap">
+                <input type="password" id="password" name="password" required placeholder="At least 6 characters" autocomplete="new-password" minlength="6" />
+                <button type="button" class="toggle-pwd" title="Show password" aria-label="Show password" onclick="window.dewTogglePassword(this); return false;">
+                  <i class="ri-eye-line" id="togglePwdIcon"></i>
+                </button>
+              </div>
+            </div>
+            <p class="password-rule" id="pwdRule">At least 6 characters</p>
+          </div>
+          <div class="field field-with-icon">
+            <label for="confirmPassword">Confirm password</label>
+            <div class="input-icon-row">
+              <span class="input-icon input-icon-key"><i class="ri-lock-line"></i></span>
+              <div class="input-wrap">
+                <input type="password" id="confirmPassword" name="confirmPassword" required placeholder="••••••••" autocomplete="new-password" minlength="6" />
+                <button type="button" class="toggle-pwd" title="Show password" aria-label="Show password" onclick="window.dewTogglePassword(this); return false;">
+                  <i class="ri-eye-line" id="toggleConfirmPwdIcon"></i>
+                </button>
+              </div>
+            </div>
+            <p class="password-rule" id="matchRule">Passwords must match</p>
+          </div>
+          <a href="#" id="resetForm" class="login-reset">Reset form</a>
+          <button type="submit" class="btn btn-primary btn-dashboard" id="btnSubmit">
+            <i class="ri-user-add-line"></i> Create account & enter dashboard
+          </button>
+        </form>
+        <p class="login-divider" style="margin-top: 20px;">or continue with</p>
+        <div class="login-social">
+          <button type="button" class="login-social-btn login-social-google" id="btnGoogle" title="Continue with Google"><i class="ri-google-fill"></i> Google</button>
+          <button type="button" class="login-social-btn login-social-github" id="btnGitHub" title="Continue with GitHub"><i class="ri-github-fill"></i> GitHub</button>
+        </div>
+        <p class="login-footer login-terms" style="margin-top: 16px;">Already have an account? <a href="login.html">Sign in</a></p>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="signup.js"></script>
+</body>
+</html>
