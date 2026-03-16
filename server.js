@@ -1787,11 +1787,15 @@ app.patch('/api/communities/:slug', upload.fields([{ name: 'banner', maxCount: 1
   res.json({ ok: true, slug, updates: Object.keys(updates) });
 });
 
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, uptime: process.uptime(), ts: new Date().toISOString() });
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`DEW Eco Warden server running at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`DEW Eco Warden server running at http://0.0.0.0:${PORT}`);
 });
