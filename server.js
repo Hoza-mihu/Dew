@@ -1677,21 +1677,27 @@ app.post('/api/communities', upload.fields([{ name: 'banner', maxCount: 1 }, { n
   const logoFile = req.files && req.files.logo && req.files.logo[0];
   if (bannerFile) {
     const fileExt = (ext(bannerFile.originalname) || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, 'jpg');
-    const storagePath = `${slug}/banner.${fileExt}`;
-    const { error: upErr } = await supabaseAdmin.storage.from('community-assets').upload(storagePath, bannerFile.buffer, { contentType: bannerFile.mimetype || 'image/jpeg', upsert: true });
-    if (!upErr) {
-      const { data: urlData } = supabaseAdmin.storage.from('community-assets').getPublicUrl(storagePath);
-      bannerUrl = urlData?.publicUrl || null;
+    const storagePath = `${slug}/banner-${Date.now()}.${fileExt}`;
+    const { error: upErr } = await supabaseAdmin.storage
+      .from('community-assets')
+      .upload(storagePath, bannerFile.buffer, { contentType: bannerFile.mimetype || 'image/jpeg', upsert: true, cacheControl: '0' });
+    if (upErr) {
+      return res.status(500).json({ error: `Banner upload failed: ${upErr.message || 'unknown error'}` });
     }
+    const { data: urlData } = supabaseAdmin.storage.from('community-assets').getPublicUrl(storagePath);
+    bannerUrl = urlData?.publicUrl || null;
   }
   if (logoFile) {
     const fileExt = (ext(logoFile.originalname) || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, 'jpg');
-    const storagePath = `${slug}/logo.${fileExt}`;
-    const { error: upErr } = await supabaseAdmin.storage.from('community-assets').upload(storagePath, logoFile.buffer, { contentType: logoFile.mimetype || 'image/jpeg', upsert: true });
-    if (!upErr) {
-      const { data: urlData } = supabaseAdmin.storage.from('community-assets').getPublicUrl(storagePath);
-      logoUrl = urlData?.publicUrl || null;
+    const storagePath = `${slug}/logo-${Date.now()}.${fileExt}`;
+    const { error: upErr } = await supabaseAdmin.storage
+      .from('community-assets')
+      .upload(storagePath, logoFile.buffer, { contentType: logoFile.mimetype || 'image/jpeg', upsert: true, cacheControl: '0' });
+    if (upErr) {
+      return res.status(500).json({ error: `Logo upload failed: ${upErr.message || 'unknown error'}` });
     }
+    const { data: urlData } = supabaseAdmin.storage.from('community-assets').getPublicUrl(storagePath);
+    logoUrl = urlData?.publicUrl || null;
   }
   const { data: inserted, error: insertErr } = await supabaseAdmin
     .from('communities')
@@ -1736,33 +1742,43 @@ app.patch('/api/communities/:slug', upload.fields([{ name: 'banner', maxCount: 1
   } catch (e) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
-  const { data: community, error: fetchErr } = await supabaseAdmin.from('communities').select('id, creator_firebase_uid, banner_url, logo_url').eq('slug', slug).single();
+  const { data: community, error: fetchErr } = await supabaseAdmin
+    .from('communities')
+    .select('id, creator_firebase_uid, banner_url, logo_url')
+    .eq('slug', slug)
+    .single();
   if (fetchErr || !community) return res.status(404).json({ error: 'Community not found' });
-  if (community.creator_firebase_uid !== uid) {
+  const communityCreatorUid = typeof community.creator_firebase_uid === 'string' ? community.creator_firebase_uid.trim() : '';
+  // Backward compatibility: legacy communities may have null creator_firebase_uid.
+  // In that case, allow this authenticated user to claim creator ownership.
+  if (communityCreatorUid && communityCreatorUid !== uid) {
     return res.status(403).json({ error: 'Only the community creator can update banner, logo, and description' });
   }
   const updates = {};
+  if (!communityCreatorUid) updates.creator_firebase_uid = uid;
   if (typeof req.body.description === 'string') updates.description = req.body.description.trim() || null;
   const bannerFile = req.files && req.files.banner && req.files.banner[0];
   const logoFile = req.files && req.files.logo && req.files.logo[0];
   const ext = (name) => (name && path.extname(name).slice(1)) || 'jpg';
   if (bannerFile) {
     const fileExt = ext(bannerFile.originalname).toLowerCase().replace(/[^a-z0-9]/g, 'jpg') || 'jpg';
-    const storagePath = `${slug}/banner.${fileExt}`;
-    const { error: upErr } = await supabaseAdmin.storage.from('community-assets').upload(storagePath, bannerFile.buffer, { contentType: bannerFile.mimetype || 'image/jpeg', upsert: true });
-    if (!upErr) {
-      const { data: urlData } = supabaseAdmin.storage.from('community-assets').getPublicUrl(storagePath);
-      updates.banner_url = urlData?.publicUrl || null;
-    }
+    const storagePath = `${slug}/banner-${Date.now()}.${fileExt}`;
+    const { error: upErr } = await supabaseAdmin.storage
+      .from('community-assets')
+      .upload(storagePath, bannerFile.buffer, { contentType: bannerFile.mimetype || 'image/jpeg', upsert: true, cacheControl: '0' });
+    if (upErr) return res.status(500).json({ error: `Banner upload failed: ${upErr.message || 'unknown error'}` });
+    const { data: urlData } = supabaseAdmin.storage.from('community-assets').getPublicUrl(storagePath);
+    updates.banner_url = urlData?.publicUrl || null;
   }
   if (logoFile) {
     const fileExt = ext(logoFile.originalname).toLowerCase().replace(/[^a-z0-9]/g, 'jpg') || 'jpg';
-    const storagePath = `${slug}/logo.${fileExt}`;
-    const { error: upErr } = await supabaseAdmin.storage.from('community-assets').upload(storagePath, logoFile.buffer, { contentType: logoFile.mimetype || 'image/jpeg', upsert: true });
-    if (!upErr) {
-      const { data: urlData } = supabaseAdmin.storage.from('community-assets').getPublicUrl(storagePath);
-      updates.logo_url = urlData?.publicUrl || null;
-    }
+    const storagePath = `${slug}/logo-${Date.now()}.${fileExt}`;
+    const { error: upErr } = await supabaseAdmin.storage
+      .from('community-assets')
+      .upload(storagePath, logoFile.buffer, { contentType: logoFile.mimetype || 'image/jpeg', upsert: true, cacheControl: '0' });
+    if (upErr) return res.status(500).json({ error: `Logo upload failed: ${upErr.message || 'unknown error'}` });
+    const { data: urlData } = supabaseAdmin.storage.from('community-assets').getPublicUrl(storagePath);
+    updates.logo_url = urlData?.publicUrl || null;
   }
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No updates provided' });
   updates.updated_at = new Date().toISOString();
