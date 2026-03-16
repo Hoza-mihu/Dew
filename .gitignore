@@ -4,11 +4,12 @@ venv/
 *.log
 .DS_Store
 data/
+dist/
 # Firebase service account key (never commit)
 dew-iot-7f89e-firebase-adminsdk-fbsvc-526cbf5f30.json
 *firebase*adminsdk*.json
 
-# Only README.md is committed; other .md docs stay local
+# Only root README.md is committed; other .md docs stay local
 *.md
-!README.md
+!/README.md
 docs/*.md

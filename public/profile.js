@@ -57,6 +57,44 @@ let lastPlantsSection = "plants";
 let currentPlantDetailId = null;
 let addFavouriteFromDetail = null;
 let suppressCommunityRoutePush = false;
+const LAST_VIEW_STORAGE_KEY = "dewLastView";
+const PERSISTED_VIEWS = new Set([
+  "dashboard",
+  "profile",
+  "alerts",
+  "analytics",
+  "settings",
+  "plants",
+  "myplants",
+  "about",
+  "community",
+]);
+
+function saveLastView(view) {
+  if (!PERSISTED_VIEWS.has(view)) return;
+  try {
+    window.localStorage.setItem(LAST_VIEW_STORAGE_KEY, view);
+  } catch (_) {}
+}
+
+function getLastView() {
+  try {
+    const v = window.localStorage.getItem(LAST_VIEW_STORAGE_KEY);
+    return PERSISTED_VIEWS.has(v) ? v : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function isReloadNavigation() {
+  try {
+    const navEntries = performance.getEntriesByType("navigation");
+    if (Array.isArray(navEntries) && navEntries[0]?.type) return navEntries[0].type === "reload";
+    // Fallback for older browsers.
+    if (performance && performance.navigation) return performance.navigation.type === 1;
+  } catch (_) {}
+  return false;
+}
 
 function showToast(message, type = "success") {
   const el = document.createElement("div");
@@ -155,6 +193,7 @@ function showView(view) {
   if (v === "myplants") loadMyPlantsUsed();
   if (v === "about") refreshAboutPlantTypesCount();
   if (v === "dashboard" && typeof window.refreshDashboardWeather === "function") window.refreshDashboardWeather();
+  saveLastView(v);
 }
 
 function refreshAboutPlantTypesCount() {
@@ -636,6 +675,20 @@ function initNav() {
   document.getElementById("editCommunityCancel")?.addEventListener("click", closeEditCommunityModal);
   document.getElementById("editCommunityModalBackdrop")?.addEventListener("click", closeEditCommunityModal);
   document.getElementById("editCommunityForm")?.addEventListener("submit", handleEditCommunitySubmit);
+  document.getElementById("editCommunityBannerPreviewBtn")?.addEventListener("click", () => {
+    document.getElementById("editCommunityBanner")?.click();
+  });
+  document.getElementById("editCommunityLogoPreviewBtn")?.addEventListener("click", () => {
+    document.getElementById("editCommunityLogo")?.click();
+  });
+  document.getElementById("editCommunityBanner")?.addEventListener("change", (e) => {
+    const modal = document.getElementById("editCommunityModal");
+    updateEditCommunityImagePreview("banner", e?.target?.files?.[0] || null, modal?.dataset?.bannerUrl || "", "");
+  });
+  document.getElementById("editCommunityLogo")?.addEventListener("change", (e) => {
+    const modal = document.getElementById("editCommunityModal");
+    updateEditCommunityImagePreview("logo", e?.target?.files?.[0] || null, modal?.dataset?.logoUrl || "", modal?.dataset?.logoLabel || "r");
+  });
   document.getElementById("createCommunityNext")?.addEventListener("click", () => {
     if (createCommunityWizard.step === 1 && !createCommunityWizard.topic) {
       showToast("Please choose a topic.", "error");
@@ -981,10 +1034,18 @@ function renderCommunityPanels(allPosts) {
   }
   if (notifyBtn) notifyBtn.title = "Notifications";
   const editBtn = document.getElementById("communityEditBtn");
-  const isCreator = !!(currentProfileUser?.uid && comm.creator_firebase_uid && currentProfileUser.uid === comm.creator_firebase_uid);
+  const bannerEditBtn = document.getElementById("communityBannerEditBtn");
+  const creatorUid = String(comm.creator_firebase_uid || "").trim();
+  // Legacy rows may not have creator_firebase_uid yet; allow signed-in user
+  // to open edit once and claim ownership server-side.
+  const isCreator = !!(currentProfileUser?.uid && (!creatorUid || currentProfileUser.uid === creatorUid));
   if (editBtn) {
     editBtn.style.display = isCreator ? "inline-flex" : "none";
     editBtn.onclick = () => openEditCommunityModal(slug, comm);
+  }
+  if (bannerEditBtn) {
+    bannerEditBtn.style.display = isCreator ? "inline-flex" : "none";
+    bannerEditBtn.onclick = () => openEditCommunityModal(slug, comm);
   }
   if (quickCreateBtn) quickCreateBtn.onclick = () => {
     const block = document.getElementById("communityCreateBlock");
@@ -1011,7 +1072,42 @@ function renderCommunityPanels(allPosts) {
       <div class="row"><span>Category</span><strong>${escapeHtml(comm.category || "Other")}</strong></div>
     `;
   }
-  if (modsEl) modsEl.innerHTML = "<li>u/admin — Admin</li><li>u/mod — Moderator</li>";
+  if (modsEl) {
+    const creatorUid = String(comm.creator_firebase_uid || "").trim();
+    const creatorIsCurrentUser = !!(creatorUid && currentProfileUser?.uid && creatorUid === currentProfileUser.uid);
+    const creatorLabel = creatorIsCurrentUser
+      ? `u/${escapeHtml(currentProfileUser?.displayName || "you")}`
+      : creatorUid
+      ? `u/${escapeHtml(creatorUid.slice(0, 10))}`
+      : "u/creator";
+    modsEl.innerHTML = `<li>${creatorLabel} — Admin</li>`;
+  }
+}
+
+function updateEditCommunityImagePreview(kind, file, fallbackUrl, fallbackLabel) {
+  const isBanner = kind === "banner";
+  const previewEl = document.getElementById(isBanner ? "editCommunityBannerPreview" : "editCommunityLogoPreview");
+  if (!previewEl) return;
+  const defaultLabel = fallbackLabel || "r";
+  if (previewEl.dataset.objectUrl) {
+    URL.revokeObjectURL(previewEl.dataset.objectUrl);
+    delete previewEl.dataset.objectUrl;
+  }
+  if (file) {
+    const objectUrl = URL.createObjectURL(file);
+    previewEl.dataset.objectUrl = objectUrl;
+    previewEl.style.backgroundImage = `url(${objectUrl.replace(/\)/g, "%29")})`;
+    previewEl.textContent = "";
+    return;
+  }
+  const src = String(fallbackUrl || "").trim();
+  if (src && /^https?:\/\//i.test(src)) {
+    previewEl.style.backgroundImage = `url(${src.replace(/\)/g, "%29")})`;
+    previewEl.textContent = "";
+  } else {
+    previewEl.style.backgroundImage = "";
+    previewEl.textContent = isBanner ? "" : defaultLabel.slice(0, 1).toLowerCase();
+  }
 }
 
 function openEditCommunityModal(slug, comm) {
@@ -1019,12 +1115,17 @@ function openEditCommunityModal(slug, comm) {
   if (!modal || !slug) return;
   if (modal.parentElement !== document.body) document.body.appendChild(modal);
   modal.dataset.editSlug = slug;
+  modal.dataset.bannerUrl = (comm?.banner_url || "").trim();
+  modal.dataset.logoUrl = (comm?.logo_url || "").trim();
+  modal.dataset.logoLabel = (comm?.slug || slug || "r").slice(0, 1).toLowerCase();
   const descEl = document.getElementById("editCommunityDescription");
   if (descEl) descEl.value = comm?.description || "";
   const bannerEl = document.getElementById("editCommunityBanner");
   const logoEl = document.getElementById("editCommunityLogo");
   if (bannerEl) bannerEl.value = "";
   if (logoEl) logoEl.value = "";
+  updateEditCommunityImagePreview("banner", null, comm?.banner_url || "", "");
+  updateEditCommunityImagePreview("logo", null, comm?.logo_url || "", modal.dataset.logoLabel || "r");
   modal.style.display = "flex";
   modal.setAttribute("aria-hidden", "false");
 }
@@ -1032,6 +1133,8 @@ function openEditCommunityModal(slug, comm) {
 function closeEditCommunityModal() {
   const modal = document.getElementById("editCommunityModal");
   if (!modal) return;
+  updateEditCommunityImagePreview("banner", null, "", "");
+  updateEditCommunityImagePreview("logo", null, "", "r");
   modal.style.display = "none";
   modal.setAttribute("aria-hidden", "true");
 }
@@ -2745,6 +2848,9 @@ authReady.then((auth) => {
     showView("community");
   } else if (window.location.pathname === "/community") {
     showView("community");
+  } else {
+    // New visit to root should open dashboard; reload restores last in-app view.
+    showView(isReloadNavigation() ? (getLastView() || "dashboard") : "dashboard");
   }
 
   onAuthStateChanged(auth, (user) => {

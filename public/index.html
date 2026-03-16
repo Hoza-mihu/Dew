@@ -556,17 +556,33 @@
               </div>
               <p class="community-create-wizard-subtitle">Only the community creator can change the banner, logo, and description.</p>
               <form id="editCommunityForm" class="community-create-form">
+                <div class="community-edit-media-grid">
+                  <div class="community-edit-banner-block">
+                    <div class="community-edit-media-label">Banner</div>
+                    <button type="button" class="community-edit-banner-preview" id="editCommunityBannerPreviewBtn">
+                      <span class="community-edit-banner-preview__img" id="editCommunityBannerPreview"></span>
+                      <span class="community-edit-banner-preview__hint"><i class="ri-image-edit-line"></i> Click to change banner</span>
+                    </button>
+                  </div>
+                  <div class="community-edit-logo-block">
+                    <div class="community-edit-media-label">Icon</div>
+                    <button type="button" class="community-edit-logo-preview" id="editCommunityLogoPreviewBtn">
+                      <span class="community-edit-logo-preview__img" id="editCommunityLogoPreview">r</span>
+                      <span class="community-edit-logo-preview__hint">Change</span>
+                    </button>
+                  </div>
+                </div>
                 <label class="community-field">
                   <span class="label">Description</span>
                   <textarea id="editCommunityDescription" class="community-textarea" rows="4" placeholder="Community description"></textarea>
                 </label>
-                <label class="community-field">
+                <label class="community-field community-edit-file-row">
                   <span class="label">Banner image (optional)</span>
-                  <input id="editCommunityBanner" type="file" accept="image/*" aria-label="Banner image" />
+                  <input id="editCommunityBanner" type="file" accept="image/*" aria-label="Banner image" class="community-edit-file-input" />
                 </label>
-                <label class="community-field">
+                <label class="community-field community-edit-file-row">
                   <span class="label">Logo image (optional)</span>
-                  <input id="editCommunityLogo" type="file" accept="image/*" aria-label="Logo image" />
+                  <input id="editCommunityLogo" type="file" accept="image/*" aria-label="Logo image" class="community-edit-file-input" />
                 </label>
                 <div class="community-create-modal-actions">
                   <button type="button" class="btn btn-ghost" id="editCommunityCancel">Cancel</button>
@@ -1232,7 +1248,9 @@
                 </div>
               </div>
               <section id="communityDetailCard" class="card community-detail-card" style="display: none">
-                <div class="community-detail-banner" id="communityDetailBanner"></div>
+                <div class="community-detail-banner" id="communityDetailBanner">
+                  <button type="button" class="btn btn-ghost community-banner-edit-btn" id="communityBannerEditBtn" style="display: none" title="Edit banner, logo, description"><i class="ri-image-edit-line"></i> Edit Banner</button>
+                </div>
                 <div class="community-detail-head">
                   <div class="community-detail-identity">
                     <div class="community-detail-logo" id="communityDetailLogo">r</div>
@@ -1963,6 +1981,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/profile.js?v=community-reddit-2"></script>
-    <script src="/app.js"></script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>
