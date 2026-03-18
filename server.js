@@ -1522,9 +1522,13 @@ app.post('/api/communities/:slug/leave', async (req, res) => {
   }
   db.run('DELETE FROM community_members WHERE community_slug = ? AND uid = ?', [slug, uid], (err) => {
     if (err) return res.status(500).json({ error: 'Failed to leave' });
-    db.get('SELECT COUNT(*) AS n FROM community_members WHERE community_slug = ?', [slug], (err2, row) => {
-      if (err2) return res.json({ ok: true, joined: false });
-      res.json({ ok: true, joined: false, members: (row && row.n) || 0 });
+    // If the user is also a moderator, remove them from moderator list too,
+    // so "joined" doesn't come back.
+    db.run('DELETE FROM community_moderators WHERE community_slug = ? AND uid = ?', [slug, uid], () => {
+      db.get('SELECT COUNT(*) AS n FROM community_members WHERE community_slug = ?', [slug], (err2, row) => {
+        if (err2) return res.json({ ok: true, joined: false });
+        res.json({ ok: true, joined: false, members: (row && row.n) || 0 });
+      });
     });
   });
 });
@@ -1587,7 +1591,16 @@ app.put('/api/communities/:slug/moderators', async (req, res) => {
       clean.forEach((u) => stmt.run(slug, u, 'moderator', now));
       stmt.finalize((insErr) => {
         if (insErr) return res.status(500).json({ error: 'Failed to update moderators' });
-        res.json({ ok: true, moderators: clean });
+        // Auto-join moderators as members unless they later "leave".
+        // (leave endpoint deletes both community_members + community_moderators)
+        const memStmt = db.prepare(
+          'INSERT OR IGNORE INTO community_members (community_slug, uid, joined_at) VALUES (?, ?, ?)'
+        );
+        clean.forEach((u) => memStmt.run(slug, u, now));
+        memStmt.finalize((memErr) => {
+          if (memErr) return res.status(500).json({ error: 'Failed to auto-join moderators' });
+          res.json({ ok: true, moderators: clean });
+        });
       });
     });
   });
@@ -1935,8 +1948,11 @@ app.get('/api/communities', async (req, res) => {
       const members = memberCountBySlug.has(slug) ? memberCountBySlug.get(slug) : (c.member_count ?? 0);
       const creatorUid = String(c.creator_firebase_uid || '').trim();
       const isCreator = !!(uid && creatorUid && uid === creatorUid);
-      // If the viewer is the creator, treat them as joined (and persist it).
-      if (isCreator && !joinedBySlug.get(slug)) {
+      const isModerator = !!(uid && (modsBySlug.get(slug) || []).includes(uid));
+
+      // Ensure there's a `community_members` record for creator/admins/moderators
+      // so "joined" is persisted in the DB.
+      if (uid && (isModerator || isCreator) && !joinedBySlug.get(slug)) {
         joinedBySlug.set(slug, true);
         db.run(
           'INSERT OR IGNORE INTO community_members (community_slug, uid, joined_at) VALUES (?, ?, ?)',
@@ -1948,7 +1964,9 @@ app.get('/api/communities', async (req, res) => {
         slug,
         logo_symbol: meta.logo_symbol || null,
         members_count: members,
-        joined: uid ? !!joinedBySlug.get(slug) : false,
+        // Joined is based on the member record. Moderators are auto-joined by being inserted
+        // into community_members when they are added as moderators.
+        joined: uid ? !!joinedBySlug.get(slug) || isModerator : false,
         moderators,
         notify_level: uid ? (notifyBySlug.get(slug) || 'all') : 'all',
         weekly_visitors: weeklyVisitorsBySlug.get(slug) || 0,

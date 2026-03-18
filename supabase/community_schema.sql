@@ -36,10 +36,10 @@ create table if not exists public.communities (
   creator_firebase_uid text
 );
 
-create index idx_communities_slug on public.communities(slug);
-create index idx_communities_creator_firebase_uid on public.communities(creator_firebase_uid) where creator_firebase_uid is not null;
-create index idx_communities_category on public.communities(category);
-create index idx_communities_post_count on public.communities(post_count desc);
+create index if not exists idx_communities_slug on public.communities(slug);
+create index if not exists idx_communities_creator_firebase_uid on public.communities(creator_firebase_uid) where creator_firebase_uid is not null;
+create index if not exists idx_communities_category on public.communities(category);
+create index if not exists idx_communities_post_count on public.communities(post_count desc);
 
 -- =============================================================================
 -- 3. COMMUNITY MEMBERS (join state, roles)
@@ -54,8 +54,8 @@ create table if not exists public.community_members (
   unique(community_id, user_id)
 );
 
-create index idx_community_members_community on public.community_members(community_id);
-create index idx_community_members_user on public.community_members(user_id);
+create index if not exists idx_community_members_community on public.community_members(community_id);
+create index if not exists idx_community_members_user on public.community_members(user_id);
 
 -- =============================================================================
 -- 4. POSTS (belong to a community)
@@ -68,6 +68,10 @@ create table if not exists public.posts (
   title text not null,
   body text,
   image_url text,
+  -- Multi-media support (Reddit-like): store ordered URLs + simple kind labels.
+  -- Example: media_types = ['image','video','image']
+  media_urls text[] default '{}'::text[],
+  media_types text[] default '{}'::text[],
   tags text[] default '{}',
   score int default 0,
   comment_count int default 0,
@@ -75,9 +79,9 @@ create table if not exists public.posts (
   updated_at timestamptz default now()
 );
 
-create index idx_posts_community on public.posts(community_id);
-create index idx_posts_created_at on public.posts(created_at desc);
-create index idx_posts_score on public.posts(score desc);
+create index if not exists idx_posts_community on public.posts(community_id);
+create index if not exists idx_posts_created_at on public.posts(created_at desc);
+create index if not exists idx_posts_score on public.posts(score desc);
 
 -- =============================================================================
 -- 5. COMMENTS
@@ -91,7 +95,7 @@ create table if not exists public.comments (
   created_at timestamptz default now()
 );
 
-create index idx_comments_post on public.comments(post_id);
+create index if not exists idx_comments_post on public.comments(post_id);
 
 -- =============================================================================
 -- 6. VOTES (one vote per user per post: 1 up, -1 down)
@@ -103,7 +107,7 @@ create table if not exists public.votes (
   primary key (post_id, user_id)
 );
 
-create index idx_votes_post on public.votes(post_id);
+create index if not exists idx_votes_post on public.votes(post_id);
 
 -- Trigger: keep posts.score in sync with votes
 create or replace function public.update_post_score()
@@ -166,7 +170,7 @@ create table if not exists public.community_stats (
   unique(community_id, week_start)
 );
 
-create index idx_community_stats_community_week on public.community_stats(community_id, week_start desc);
+create index if not exists idx_community_stats_community_week on public.community_stats(community_id, week_start desc);
 
 -- =============================================================================
 -- 9. ROW LEVEL SECURITY (RLS) – enable and basic policies
@@ -184,10 +188,15 @@ alter table public.user_achievements enable row level security;
 alter table public.community_stats enable row level security;
 
 -- Profiles: read public or own
+drop policy if exists "Profiles read" on public.profiles;
+drop policy if exists "Profiles update own" on public.profiles;
 create policy "Profiles read" on public.profiles for select using (not is_private or id = auth.uid());
 create policy "Profiles update own" on public.profiles for update using (id = auth.uid());
 
 -- Communities: read all public; members read private if member
+drop policy if exists "Communities read" on public.communities;
+drop policy if exists "Communities insert" on public.communities;
+drop policy if exists "Communities update" on public.communities;
 create policy "Communities read" on public.communities for select using (
   status = 'public' or exists (select 1 from public.community_members m where m.community_id = id and m.user_id = auth.uid())
 );
@@ -195,35 +204,95 @@ create policy "Communities insert" on public.communities for insert with check (
 create policy "Communities update" on public.communities for update using (created_by = auth.uid() or exists (select 1 from public.community_members m where m.community_id = communities.id and m.user_id = auth.uid() and m.role = 'admin'));
 
 -- Community members: read members of communities you're in or public communities
+drop policy if exists "Community members read" on public.community_members;
+drop policy if exists "Community members insert" on public.community_members;
+drop policy if exists "Community members update" on public.community_members;
 create policy "Community members read" on public.community_members for select using (true);
 create policy "Community members insert" on public.community_members for insert with check (user_id = auth.uid());
 create policy "Community members update" on public.community_members for update using (user_id = auth.uid());
 
 -- Posts: read if community is public or you're a member
+drop policy if exists "Posts read" on public.posts;
+drop policy if exists "Posts insert" on public.posts;
+drop policy if exists "Posts update" on public.posts;
 create policy "Posts read" on public.posts for select using (
   exists (select 1 from public.communities c where c.id = posts.community_id and (c.status = 'public' or exists (select 1 from public.community_members m where m.community_id = c.id and m.user_id = auth.uid())))
 );
+
+-- Posts: allow posting to public communities without requiring "Join".
+-- For restricted/private communities, require membership.
 create policy "Posts insert" on public.posts for insert with check (
-  exists (select 1 from public.community_members m where m.community_id = posts.community_id and m.user_id = auth.uid())
+  -- Allow anyone (including Supabase anon) to insert into public communities.
+  exists (
+    select 1
+    from public.communities c
+    where c.id = posts.community_id
+      and c.status = 'public'
+  )
+  or exists (
+    -- Restricted/private: must be a member (requires Supabase auth uid).
+    select 1
+    from public.community_members m
+    where m.community_id = posts.community_id
+      and m.user_id = auth.uid()
+  )
 );
 create policy "Posts update" on public.posts for update using (author_id = auth.uid());
 
+-- Posts: only the author OR an admin/moderator of the community can delete.
+drop policy if exists "Posts delete" on public.posts;
+create policy "Posts delete" on public.posts for delete using (
+  author_id = auth.uid()
+  or exists (
+    select 1
+    from public.community_members m
+    where m.community_id = posts.community_id
+      and m.user_id = auth.uid()
+      and m.role in ('admin', 'moderator')
+  )
+);
+
 -- Comments: read/write when post is readable
+drop policy if exists "Comments read" on public.comments;
+drop policy if exists "Comments insert" on public.comments;
 create policy "Comments read" on public.comments for select using (true);
 create policy "Comments insert" on public.comments for insert with check (author_id = auth.uid());
 
+-- Comments: only the comment author OR an admin/moderator of the post's community can delete.
+drop policy if exists "Comments delete" on public.comments;
+create policy "Comments delete" on public.comments for delete using (
+  author_id = auth.uid()
+  or exists (
+    select 1
+    from public.posts p
+    join public.community_members m
+      on m.community_id = p.community_id
+    where p.id = comments.post_id
+      and m.user_id = auth.uid()
+      and m.role in ('admin', 'moderator')
+  )
+);
+
 -- Votes: insert/update own
+drop policy if exists "Votes read" on public.votes;
+drop policy if exists "Votes insert" on public.votes;
+drop policy if exists "Votes update" on public.votes;
 create policy "Votes read" on public.votes for select using (true);
 create policy "Votes insert" on public.votes for insert with check (user_id = auth.uid());
 create policy "Votes update" on public.votes for update using (user_id = auth.uid());
 
 -- Badges / achievements: read only
+drop policy if exists "Badges read" on public.badges;
+drop policy if exists "Achievements read" on public.achievements;
+drop policy if exists "User badges read" on public.user_badges;
+drop policy if exists "User achievements read" on public.user_achievements;
 create policy "Badges read" on public.badges for select using (true);
 create policy "Achievements read" on public.achievements for select using (true);
 create policy "User badges read" on public.user_badges for select using (true);
 create policy "User achievements read" on public.user_achievements for select using (true);
 
 -- Community stats: read for all
+drop policy if exists "Community stats read" on public.community_stats;
 create policy "Community stats read" on public.community_stats for select using (true);
 
 -- =============================================================================

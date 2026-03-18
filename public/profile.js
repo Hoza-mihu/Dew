@@ -194,6 +194,179 @@ function bindPlantDetailStaticActions() {
   plantDetailImg?.addEventListener("click", () => openPlantImageLightboxWithListeners());
   lightboxClose?.addEventListener("click", closePlantImageLightbox);
   lightboxBackdrop?.addEventListener("click", closePlantImageLightbox);
+
+  // Community banner/logo click-to-view full image (Instagram/Facebook style).
+  const communityLightbox = document.getElementById("communityImageLightbox");
+  const communityLightboxImg = document.getElementById("communityImageLightboxImg");
+  const communityLightboxClose = document.getElementById("communityImageLightboxClose");
+  const communityLightboxBackdrop = document.getElementById("communityImageLightboxBackdrop");
+  const communityDetailLogo = document.getElementById("communityDetailLogo");
+  const communityDetailBanner = document.getElementById("communityDetailBanner");
+
+  function openCommunityImageLightbox(src, alt) {
+    if (!src || !communityLightbox || !communityLightboxImg) return;
+    communityLightboxImg.src = src;
+    communityLightboxImg.alt = alt || "Community image";
+    communityLightbox.style.display = "flex";
+    document.body.style.overflow = "hidden";
+    communityLightboxClose?.focus();
+    document.addEventListener("keydown", onCommunityLightboxKeydown);
+  }
+
+  function closeCommunityImageLightbox() {
+    if (!communityLightbox) return;
+    communityLightbox.style.display = "none";
+    document.body.style.overflow = "";
+    document.removeEventListener("keydown", onCommunityLightboxKeydown);
+  }
+
+  function onCommunityLightboxKeydown(e) {
+    if (e.key === "Escape") closeCommunityImageLightbox();
+  }
+
+  communityLightboxClose?.addEventListener("click", closeCommunityImageLightbox);
+  communityLightboxBackdrop?.addEventListener("click", closeCommunityImageLightbox);
+
+  communityDetailLogo?.addEventListener("click", (e) => {
+    if (e.target.closest("#communityLogoEditBtn") || e.target.closest(".community-logo-edit-btn")) return;
+    const src = (communityDetailLogo.dataset && communityDetailLogo.dataset.imageUrl) || "";
+    openCommunityImageLightbox(src, "Community logo");
+  });
+
+  communityDetailBanner?.addEventListener("click", (e) => {
+    if (e.target.closest("#communityBannerEditBtn") || e.target.closest(".community-banner-edit-btn")) return;
+    const src = (communityDetailBanner.dataset && communityDetailBanner.dataset.imageUrl) || "";
+    openCommunityImageLightbox(src, "Community banner");
+  });
+}
+
+function bindCommunityPostMediaLightbox() {
+  const lightbox = document.getElementById("communityPostMediaLightbox");
+  const lightboxImg = document.getElementById("communityPostMediaLightboxImg");
+  const lightboxVideo = document.getElementById("communityPostMediaLightboxVideo");
+  const lightboxClose = document.getElementById("communityPostMediaLightboxClose");
+  const lightboxBackdrop = document.getElementById("communityPostMediaLightboxBackdrop");
+  const thumbsWrap = document.getElementById("communityPostMediaLightboxThumbs");
+  const prevBtn = document.getElementById("communityPostMediaLightboxPrevBtn");
+  const nextBtn = document.getElementById("communityPostMediaLightboxNextBtn");
+
+  if (!lightbox || !lightboxImg || !lightboxVideo) return;
+
+  let mediaUrls = [];
+  let mediaTypes = [];
+  let activeIndex = 0;
+
+  function inferKind(url, explicitType) {
+    if (explicitType) return explicitType === "video" ? "video" : "image";
+    const u = String(url || "").toLowerCase();
+    return u.match(/\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/) ? "video" : "image";
+  }
+
+  function setMainByIndex(index) {
+    if (!mediaUrls.length) return;
+    activeIndex = Math.max(0, Math.min(index, mediaUrls.length - 1));
+    const url = mediaUrls[activeIndex];
+    const type = inferKind(url, mediaTypes[activeIndex]);
+    const isVideo = type === "video";
+
+    lightboxImg.style.display = isVideo ? "none" : "block";
+    lightboxVideo.style.display = isVideo ? "block" : "none";
+
+    if (isVideo) {
+      lightboxVideo.src = url;
+      lightboxVideo.load();
+    } else {
+      try { lightboxVideo.pause(); } catch (_) {}
+      lightboxVideo.removeAttribute("src");
+      lightboxImg.src = url;
+    }
+
+    if (thumbsWrap) {
+      thumbsWrap.querySelectorAll(".community-post-media-lightbox-thumb").forEach((btn) => {
+        const idx = Number(btn.dataset.index || "0");
+        btn.classList.toggle("community-post-media-lightbox-thumb--active", idx === activeIndex);
+      });
+    }
+  }
+
+  function renderThumbs() {
+    if (!thumbsWrap) return;
+    thumbsWrap.innerHTML = "";
+    mediaUrls.forEach((url, idx) => {
+      const type = inferKind(url, mediaTypes[idx]);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "community-post-media-lightbox-thumb";
+      btn.dataset.index = String(idx);
+      if (type === "image") {
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "Selected media thumbnail";
+        btn.appendChild(img);
+      } else {
+        const icon = document.createElement("i");
+        icon.className = "ri-play-line";
+        btn.appendChild(icon);
+      }
+      btn.addEventListener("click", () => setMainByIndex(idx));
+      thumbsWrap.appendChild(btn);
+    });
+
+    setMainByIndex(activeIndex);
+  }
+
+  function openWithData(urls, types, startIndex = 0) {
+    if (!Array.isArray(urls) || !urls.length) return;
+    mediaUrls = urls.filter(Boolean);
+    mediaTypes = Array.isArray(types) ? types : [];
+    activeIndex = startIndex || 0;
+    renderThumbs();
+    lightbox.style.display = "flex";
+    document.body.style.overflow = "hidden";
+    lightboxClose?.focus();
+  }
+
+  function close() {
+    if (!lightbox) return;
+    lightbox.style.display = "none";
+    document.body.style.overflow = "";
+    // Reset media to stop playback.
+    try { lightboxVideo.pause(); } catch (_) {}
+    lightboxVideo.src = "";
+    lightboxImg.src = "";
+  }
+
+  function onPostClick(e) {
+    const card = e.target.closest(".community-post");
+    if (!card) return;
+    const mediaUrlsRaw = card.dataset.mediaUrls || "";
+    const mediaTypesRaw = card.dataset.mediaTypes || "";
+    if (!mediaUrlsRaw) return;
+
+    let urls = [];
+    let types = [];
+    try {
+      urls = JSON.parse(mediaUrlsRaw);
+    } catch (_) {}
+    try {
+      types = JSON.parse(mediaTypesRaw);
+    } catch (_) {}
+    openWithData(urls, types, 0);
+  }
+
+  // One-time close bindings.
+  lightboxClose?.addEventListener("click", close);
+  lightboxBackdrop?.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && lightbox.style.display !== "none") close();
+  });
+
+  // Nav buttons.
+  prevBtn?.addEventListener("click", () => setMainByIndex(activeIndex - 1));
+  nextBtn?.addEventListener("click", () => setMainByIndex(activeIndex + 1));
+
+  // Event delegation from the community feed.
+  document.getElementById("communityFeed")?.addEventListener("click", onPostClick);
 }
 
 function showView(view) {
@@ -780,9 +953,616 @@ function initNav() {
   updateAlertsBadge();
   bindPlantDetailStaticActions();
   initSettingsPreferences();
+  bindCommunityPostMediaLightbox();
 
   const communityForm = document.getElementById("communityCreateForm");
   if (communityForm) communityForm.addEventListener("submit", handleCommunityPostSubmit);
+
+  // Media input used by the inline Create Post preview.
+  // (If this is missing, the whole initNav script crashes and buttons won't work.)
+  const imgInput = document.getElementById("communityImage");
+
+  // Community post media preview (inline carousel, Reddit-like).
+  // Keep this inline (not a full-screen modal) so "Post" stays clickable.
+  const previewWrap = document.getElementById("communityPostMediaPreview");
+  const previewPrevBtn = document.getElementById("communityPostMediaPrevBtn");
+  const previewNextBtn = document.getElementById("communityPostMediaNextBtn");
+  const mainImg = document.getElementById("communityPostMediaMainImg");
+  const mainVideo = document.getElementById("communityPostMediaMainVideo");
+  const mainAudio = document.getElementById("communityPostMediaMainAudio");
+  const thumbsWrap = document.getElementById("communityPostMediaThumbs");
+  const previewRemoveBtn = document.getElementById("communityPostMediaPreviewRemove");
+
+  let inlineCommunityPostMediaItems = [];
+  let inlineCommunityPostMediaActiveIndex = 0;
+  // Used by the submit handler (outside initNav scope) to upload selected media.
+  window.__dewCommunityInlineMediaItems = inlineCommunityPostMediaItems;
+
+  function inferInlineCommunityMediaKind(file) {
+    const type = String(file?.type || "");
+    if (type.startsWith("video/")) return "video";
+    if (type.startsWith("audio/")) return "audio";
+    return "image";
+  }
+
+  function revokeInlineCommunityPostMediaPreviewUrls() {
+    const previewUrlsRaw = imgInput?.dataset?.previewUrls || "";
+    let urls = [];
+    try {
+      if (previewUrlsRaw) urls = JSON.parse(previewUrlsRaw);
+    } catch (_) {}
+    urls.forEach((u) => {
+      try {
+        URL.revokeObjectURL(u);
+      } catch (_) {}
+    });
+    if (imgInput?.dataset) imgInput.dataset.previewUrls = "";
+  }
+
+  function setInlineMainByIndex(index) {
+    if (!inlineCommunityPostMediaItems.length) return;
+    inlineCommunityPostMediaActiveIndex = Math.max(0, Math.min(index, inlineCommunityPostMediaItems.length - 1));
+    const item = inlineCommunityPostMediaItems[inlineCommunityPostMediaActiveIndex] || inlineCommunityPostMediaItems[0];
+    if (!item) return;
+
+    const kind = item.kind;
+
+    if (mainImg) mainImg.style.display = kind === "image" ? "block" : "none";
+    if (mainVideo) mainVideo.style.display = kind === "video" ? "block" : "none";
+    if (mainAudio) mainAudio.style.display = kind === "audio" ? "block" : "none";
+
+    if (kind === "image") {
+      if (mainImg) mainImg.src = item.url || "";
+      if (mainVideo) {
+        mainVideo.pause();
+        mainVideo.removeAttribute("src");
+        mainVideo.load();
+      }
+      if (mainAudio) {
+        mainAudio.pause();
+        mainAudio.removeAttribute("src");
+        mainAudio.load();
+      }
+    } else if (kind === "video") {
+      if (mainVideo) mainVideo.src = item.url || "";
+      if (mainVideo) mainVideo.load();
+      if (mainImg) mainImg.src = "";
+      if (mainAudio) {
+        mainAudio.pause();
+        mainAudio.removeAttribute("src");
+        mainAudio.load();
+      }
+    } else if (kind === "audio") {
+      if (mainAudio) mainAudio.src = item.url || "";
+      if (mainAudio) mainAudio.load();
+      if (mainImg) mainImg.src = "";
+      if (mainVideo) {
+        mainVideo.pause();
+        mainVideo.removeAttribute("src");
+        mainVideo.load();
+      }
+    }
+
+    if (thumbsWrap) {
+      thumbsWrap.querySelectorAll(".community-post-media-thumb").forEach((el) => {
+        const idx = Number(el.dataset.index || "0");
+        el.classList.toggle("community-post-media-thumb--active", idx === inlineCommunityPostMediaActiveIndex);
+      });
+    }
+  }
+
+  function removeInlineMediaAtIndex(index) {
+    const item = inlineCommunityPostMediaItems[index];
+    if (!item) return;
+
+    try {
+      URL.revokeObjectURL(item.url);
+    } catch (_) {}
+
+    inlineCommunityPostMediaItems.splice(index, 1);
+    window.__dewCommunityInlineMediaItems = inlineCommunityPostMediaItems;
+
+    const urls = inlineCommunityPostMediaItems.map((m) => m.url);
+    if (imgInput?.dataset) imgInput.dataset.previewUrls = JSON.stringify(urls);
+
+    if (!inlineCommunityPostMediaItems.length) {
+      if (previewWrap) previewWrap.style.display = "none";
+      if (thumbsWrap) thumbsWrap.innerHTML = "";
+      if (mainImg) mainImg.src = "";
+      if (mainVideo) {
+        mainVideo.pause();
+        mainVideo.removeAttribute("src");
+        mainVideo.load();
+      }
+      if (mainAudio) {
+        mainAudio.pause();
+        mainAudio.removeAttribute("src");
+        mainAudio.load();
+      }
+      inlineCommunityPostMediaActiveIndex = 0;
+      return;
+    }
+
+    if (inlineCommunityPostMediaActiveIndex === index) {
+      inlineCommunityPostMediaActiveIndex = Math.min(index, inlineCommunityPostMediaItems.length - 1);
+    } else if (inlineCommunityPostMediaActiveIndex > index) {
+      inlineCommunityPostMediaActiveIndex -= 1;
+    }
+
+    renderInlineThumbs();
+    setInlineMainByIndex(inlineCommunityPostMediaActiveIndex);
+  }
+
+  function reorderInlineMedia(fromIndex, toIndex) {
+    if (fromIndex === toIndex) return;
+    const from = inlineCommunityPostMediaItems[fromIndex];
+    if (!from) return;
+
+    const activeUrl = inlineCommunityPostMediaItems[inlineCommunityPostMediaActiveIndex]?.url || null;
+
+    inlineCommunityPostMediaItems.splice(fromIndex, 1);
+    inlineCommunityPostMediaItems.splice(toIndex, 0, from);
+    window.__dewCommunityInlineMediaItems = inlineCommunityPostMediaItems;
+
+    const urls = inlineCommunityPostMediaItems.map((m) => m.url);
+    if (imgInput?.dataset) imgInput.dataset.previewUrls = JSON.stringify(urls);
+
+    if (activeUrl) {
+      const newIdx = inlineCommunityPostMediaItems.findIndex((m) => m.url === activeUrl);
+      if (newIdx >= 0) inlineCommunityPostMediaActiveIndex = newIdx;
+    }
+
+    renderInlineThumbs();
+    setInlineMainByIndex(inlineCommunityPostMediaActiveIndex);
+  }
+
+  function renderInlineThumbs() {
+    if (!thumbsWrap) return;
+    thumbsWrap.innerHTML = "";
+    inlineCommunityPostMediaItems.forEach((item, idx) => {
+      const thumb = document.createElement("div");
+      thumb.className = "community-post-media-thumb";
+      thumb.dataset.index = String(idx);
+      thumb.setAttribute("role", "button");
+      thumb.setAttribute("tabindex", "0");
+      thumb.draggable = true;
+
+      if (item.kind === "image") {
+        const im = document.createElement("img");
+        im.src = item.url;
+        im.alt = "Selected media thumbnail";
+        im.loading = "lazy";
+        thumb.appendChild(im);
+      } else if (item.kind === "video") {
+        const icon = document.createElement("i");
+        icon.className = "ri-play-line";
+        thumb.appendChild(icon);
+      } else {
+        const icon = document.createElement("i");
+        icon.className = "ri-music-2-line";
+        thumb.appendChild(icon);
+      }
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "community-post-media-thumb-remove";
+      removeBtn.setAttribute("aria-label", "Remove media");
+      removeBtn.innerHTML = '<i class="ri-close-line"></i>';
+      removeBtn.draggable = false;
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        removeInlineMediaAtIndex(idx);
+      });
+      thumb.appendChild(removeBtn);
+
+      thumb.addEventListener("click", () => setInlineMainByIndex(idx));
+      thumb.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") setInlineMainByIndex(idx);
+      });
+
+      thumb.addEventListener("dragstart", (e) => {
+        try {
+          e.dataTransfer.setData("text/plain", String(idx));
+          e.dataTransfer.effectAllowed = "move";
+        } catch (_) {}
+      });
+      thumb.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      });
+      thumb.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const fromRaw = e.dataTransfer.getData("text/plain");
+        const from = Number(fromRaw);
+        const to = idx;
+        if (Number.isFinite(from) && from >= 0) reorderInlineMedia(from, to);
+      });
+
+      thumbsWrap.appendChild(thumb);
+    });
+
+    setInlineMainByIndex(inlineCommunityPostMediaActiveIndex || 0);
+  }
+
+  function fileSignature(file) {
+    // Best-effort duplicate prevention across selections.
+    return `${String(file?.name || "")}|${file?.size || 0}|${file?.lastModified || 0}|${String(file?.type || "")}`;
+  }
+
+  function setInlinePreviewFromFiles(files) {
+    // "Accumulate" behavior: appends newly selected files instead of replacing.
+    const list = Array.isArray(files) ? files.filter(Boolean) : [];
+    if (!list.length) return;
+
+    const maxItems = 8;
+    const existingSigs = new Set(inlineCommunityPostMediaItems.map((m) => m.signature));
+    const beforeLen = inlineCommunityPostMediaItems.length;
+    const toAdd = [];
+
+    for (const file of list) {
+      if (inlineCommunityPostMediaItems.length + toAdd.length >= maxItems) break;
+      const sig = fileSignature(file);
+      if (existingSigs.has(sig)) continue;
+
+      const kind = inferInlineCommunityMediaKind(file);
+      const mime = String(file?.type || "");
+      const allowed =
+        kind === "image" || (kind === "video" && mime.startsWith("video/")) || (kind === "audio" && mime.startsWith("audio/"));
+
+      if (!allowed) {
+        showToast("Unsupported media type.", "error");
+        continue;
+      }
+
+      toAdd.push({
+        file,
+        kind,
+        signature: sig,
+        url: URL.createObjectURL(file),
+      });
+      existingSigs.add(sig);
+    }
+
+    if (!toAdd.length) return;
+
+    inlineCommunityPostMediaItems.push(...toAdd);
+    window.__dewCommunityInlineMediaItems = inlineCommunityPostMediaItems;
+
+    // Keep dataset in sync (cleanup + submit fallback).
+    const urls = inlineCommunityPostMediaItems.map((m) => m.url);
+    if (imgInput?.dataset) imgInput.dataset.previewUrls = JSON.stringify(urls);
+
+    if (previewWrap) previewWrap.style.display = "flex";
+    if (beforeLen === 0) inlineCommunityPostMediaActiveIndex = 0;
+    renderInlineThumbs();
+    setInlineMainByIndex(inlineCommunityPostMediaActiveIndex);
+  }
+
+  function clearInlinePreviewUI() {
+    revokeInlineCommunityPostMediaPreviewUrls();
+    inlineCommunityPostMediaItems.length = 0;
+    inlineCommunityPostMediaActiveIndex = 0;
+    if (imgInput) imgInput.value = "";
+    if (previewWrap) previewWrap.style.display = "none";
+    if (thumbsWrap) thumbsWrap.innerHTML = "";
+    if (mainImg) mainImg.src = "";
+    if (mainVideo) {
+      mainVideo.pause();
+      mainVideo.removeAttribute("src");
+      mainVideo.load();
+    }
+    if (mainAudio) {
+      mainAudio.pause();
+      mainAudio.removeAttribute("src");
+      mainAudio.load();
+    }
+  }
+
+  imgInput?.addEventListener("change", () => {
+    const files = Array.from(imgInput?.files || []);
+    setInlinePreviewFromFiles(files);
+    // Allows selecting the same file(s) again.
+    try {
+      if (imgInput) imgInput.value = "";
+    } catch (_) {}
+  });
+
+  previewRemoveBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    clearInlinePreviewUI();
+  });
+
+  previewPrevBtn?.addEventListener("click", () => {
+    if (!inlineCommunityPostMediaItems.length) return;
+    const nextIdx =
+      (inlineCommunityPostMediaActiveIndex - 1 + inlineCommunityPostMediaItems.length) % inlineCommunityPostMediaItems.length;
+    setInlineMainByIndex(nextIdx);
+  });
+  previewNextBtn?.addEventListener("click", () => {
+    if (!inlineCommunityPostMediaItems.length) return;
+    const nextIdx = (inlineCommunityPostMediaActiveIndex + 1) % inlineCommunityPostMediaItems.length;
+    setInlineMainByIndex(nextIdx);
+  });
+
+  // Post type tabs (Text / Images&Video / Link / Poll)
+  const postTabsWrap = document.getElementById("communityPostTypeTabs");
+  const postMediaInputWrap = document.getElementById("communityPostMediaInputWrap");
+  const postLinkFields = document.getElementById("communityPostLinkFields");
+  const postPollFields = document.getElementById("communityPostPollFields");
+
+  const postTitleInput = document.getElementById("communityPostTitle");
+  const postTitleCount = document.getElementById("communityPostTitleCount");
+  if (postTitleInput && postTitleCount) {
+    const updateTitleCounter = () => {
+      const len = (postTitleInput.value || "").length;
+      postTitleCount.textContent = `${len}/300`;
+    };
+    postTitleInput.addEventListener("input", updateTitleCounter);
+    updateTitleCounter();
+  }
+
+  function applyPostTypeUI(postType) {
+    const tabs = postTabsWrap?.querySelectorAll(".community-post-tab") || [];
+    tabs.forEach((t) => {
+      const active = t.dataset.postType === postType;
+      t.classList.toggle("active", active);
+      t.setAttribute("aria-selected", active ? "true" : "false");
+    });
+
+    const isMedia = postType === "media";
+    if (postMediaInputWrap) postMediaInputWrap.style.display = isMedia ? "inline-flex" : "none";
+    if (previewWrap) previewWrap.style.display = isMedia ? (inlineCommunityPostMediaItems.length ? "flex" : "none") : "none";
+
+    if (postLinkFields) postLinkFields.style.display = postType === "link" ? "block" : "none";
+    if (postPollFields) postPollFields.style.display = postType === "poll" ? "block" : "none";
+
+    // If the user leaves media tab, clear media selection to match UX expectations.
+    if (!isMedia) clearInlinePreviewUI();
+  }
+
+  postTabsWrap?.querySelectorAll(".community-post-tab").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
+      applyPostTypeUI(tabBtn.dataset.postType || "media");
+    });
+  });
+
+  // Default UI based on initial active tab.
+  const defaultType = postTabsWrap?.querySelector(".community-post-tab.active")?.dataset?.postType || "media";
+  applyPostTypeUI(defaultType);
+
+  // Modal actions
+  document.getElementById("communityPostCancelBtn")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    closeCommunityCreatePostModal();
+  });
+
+  document.getElementById("communityPostSaveDraftBtn")?.addEventListener("click", () => {
+    try {
+      const activeTab = postTabsWrap?.querySelector(".community-post-tab.active")?.dataset?.postType || "media";
+      const payload = {
+        postType: activeTab,
+        title: document.getElementById("communityPostTitle")?.value || "",
+        body: document.getElementById("communityPostBody")?.value || "",
+        tags: document.getElementById("communityTags")?.value || "",
+        linkUrl: document.getElementById("communityPostLinkUrl")?.value || "",
+        pollQuestion: document.getElementById("communityPostPollQuestion")?.value || "",
+        pollOption1: document.getElementById("communityPostPollOption1")?.value || "",
+        pollOption2: document.getElementById("communityPostPollOption2")?.value || "",
+        pollOption3: document.getElementById("communityPostPollOption3")?.value || "",
+      };
+      localStorage.setItem("dewCommunityCreatePostDraft", JSON.stringify(payload));
+      showToast("Draft saved.", "success");
+    } catch (_) {}
+    closeCommunityCreatePostModal();
+  });
+
+  // Community post media picker (Reddit-like pop-over).
+  // imgInput is already defined above for inline preview.
+
+  const pickerModal = document.getElementById("communityPostMediaPicker");
+  const pickerCloseBtn = document.getElementById("communityPostMediaPickerClose");
+  const pickerBackdrop = document.getElementById("communityPostMediaPickerBackdrop");
+
+  const pickerPrevBtn = document.getElementById("communityPostMediaPickerPrevBtn");
+  const pickerNextBtn = document.getElementById("communityPostMediaPickerNextBtn");
+  const pickerRemoveBtn = document.getElementById("communityPostMediaPickerRemove");
+
+  const pickerMainImg = document.getElementById("communityPostMediaPickerMainImg");
+  const pickerMainVideo = document.getElementById("communityPostMediaPickerMainVideo");
+  const pickerThumbsWrap = document.getElementById("communityPostMediaPickerThumbs");
+
+  const chipWrap = document.getElementById("communityPostMediaChip");
+  const chipImg = document.getElementById("communityPostMediaChipImg");
+  const chipIcon = document.getElementById("communityPostMediaChipIcon");
+  const chipText = document.getElementById("communityPostMediaChipText");
+  const chipPreviewBtn = document.getElementById("communityPostMediaChipPreviewBtn");
+  const chipRemoveBtn = document.getElementById("communityPostMediaChipRemove");
+
+  let communityPostMediaItems = [];
+  let communityPostMediaActiveIndex = 0;
+
+  function inferCommunityMediaKind(file) {
+    const type = String(file?.type || "");
+    if (type.startsWith("video/")) return "video";
+    return "image";
+  }
+
+  function revokeCommunityPostMediaPreviewUrls() {
+    // Safety: fetch input inside the function so this block can't crash
+    // if outer-scope variables differ across builds.
+    const mi = document.getElementById("communityImage");
+    const previewUrlsRaw = mi?.dataset?.previewUrls || "";
+    const urls = [];
+    try {
+      if (previewUrlsRaw) urls.push(...JSON.parse(previewUrlsRaw));
+    } catch (_) {}
+    urls.forEach((u) => {
+      try { URL.revokeObjectURL(u); } catch (_) {}
+    });
+    if (mi?.dataset) mi.dataset.previewUrls = "";
+  }
+
+  function updateChipUI() {
+    if (!chipWrap) return;
+    const count = communityPostMediaItems.length;
+    if (!count) {
+      chipWrap.style.display = "none";
+      return;
+    }
+    chipWrap.style.display = "flex";
+    if (chipText) chipText.textContent = `${count} media selected`;
+
+    const first = communityPostMediaItems[0];
+    if (!first) return;
+    if (first.kind === "image") {
+      if (chipIcon) chipIcon.style.display = "none";
+      if (chipImg) {
+        chipImg.style.display = "block";
+        chipImg.src = first.url;
+      }
+    } else {
+      if (chipIcon) chipIcon.style.display = "inline-flex";
+      if (chipImg) {
+        chipImg.style.display = "none";
+        chipImg.src = "";
+      }
+    }
+  }
+
+  function setPickerMainByIndex(index) {
+    if (!communityPostMediaItems.length) return;
+    communityPostMediaActiveIndex = Math.max(0, Math.min(index, communityPostMediaItems.length - 1));
+    const item = communityPostMediaItems[communityPostMediaActiveIndex];
+    if (!item) return;
+
+    const isImage = item.kind === "image";
+    if (pickerMainImg) pickerMainImg.style.display = isImage ? "block" : "none";
+    if (pickerMainVideo) pickerMainVideo.style.display = isImage ? "none" : "block";
+
+    if (isImage) {
+      if (pickerMainImg) pickerMainImg.src = item.url || "";
+      if (pickerMainVideo) {
+        pickerMainVideo.pause();
+        pickerMainVideo.removeAttribute("src");
+        pickerMainVideo.load();
+      }
+    } else {
+      if (pickerMainVideo) {
+        pickerMainVideo.src = item.url || "";
+        pickerMainVideo.load();
+      }
+      if (pickerMainImg) pickerMainImg.src = "";
+    }
+
+    if (pickerThumbsWrap) {
+      pickerThumbsWrap.querySelectorAll(".community-post-media-lightbox-thumb").forEach((el) => {
+        const idx = Number(el.dataset.index || "0");
+        el.classList.toggle("community-post-media-lightbox-thumb--active", idx === communityPostMediaActiveIndex);
+      });
+    }
+  }
+
+  function renderPickerThumbs() {
+    if (!pickerThumbsWrap) return;
+    pickerThumbsWrap.innerHTML = "";
+    communityPostMediaItems.forEach((item, idx) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "community-post-media-lightbox-thumb";
+      btn.dataset.index = String(idx);
+
+      if (item.kind === "image") {
+        const im = document.createElement("img");
+        im.src = item.url;
+        im.alt = "Selected media thumbnail";
+        btn.appendChild(im);
+      } else {
+        const icon = document.createElement("i");
+        icon.className = "ri-play-line";
+        btn.appendChild(icon);
+      }
+
+      btn.addEventListener("click", () => setPickerMainByIndex(idx));
+      pickerThumbsWrap.appendChild(btn);
+    });
+
+    setPickerMainByIndex(0);
+  }
+
+  function openPicker() {
+    if (!pickerModal) return;
+    pickerModal.style.display = "flex";
+    document.body.style.overflow = "hidden";
+  }
+
+  function closePicker() {
+    if (!pickerModal) return;
+    pickerModal.style.display = "none";
+    document.body.style.overflow = "";
+    if (pickerMainVideo) {
+      pickerMainVideo.pause();
+      pickerMainVideo.removeAttribute("src");
+      pickerMainVideo.load();
+    }
+    if (pickerMainImg) pickerMainImg.src = "";
+  }
+
+  function setCommunityPostMediaPickerFromFiles(files) {
+    // Disabled for now: we use inline preview (communityPostMediaPreview) so
+    // the user can always press "Post" like Reddit/Google UI.
+    // The modal picker is still present in HTML/CSS but not driven here.
+    return;
+  }
+
+  function clearCommunityPostMediaPickerUI() {
+    // Not used while modal picker is disabled.
+    // Kept for future re-enable.
+    try {
+      const mi = document.getElementById("communityImage");
+      if (mi) mi.value = "";
+    } catch (_) {}
+  }
+
+  const miForPicker = document.getElementById("communityImage");
+  if (miForPicker) {
+    miForPicker.addEventListener("change", () => {
+      const files = Array.from(miForPicker.files || []);
+      setCommunityPostMediaPickerFromFiles(files);
+    });
+  }
+
+  chipPreviewBtn?.addEventListener("click", () => {
+    if (!communityPostMediaItems.length) return;
+    // openPicker();
+  });
+  chipRemoveBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    clearCommunityPostMediaPickerUI();
+  });
+  pickerRemoveBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    clearCommunityPostMediaPickerUI();
+  });
+
+  pickerCloseBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    closePicker();
+  });
+  pickerBackdrop?.addEventListener("click", closePicker);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && pickerModal?.style.display !== "none") closePicker();
+  });
+
+  pickerPrevBtn?.addEventListener("click", () => {
+    if (!communityPostMediaItems.length) return;
+    setPickerMainByIndex(communityPostMediaActiveIndex - 1);
+  });
+  pickerNextBtn?.addEventListener("click", () => {
+    if (!communityPostMediaItems.length) return;
+    setPickerMainByIndex(communityPostMediaActiveIndex + 1);
+  });
 
   const sortTabs = document.getElementById("communitySortTabs");
   if (sortTabs) {
@@ -813,8 +1593,7 @@ function initNav() {
     }
   });
   document.getElementById("communityCreatePostBtn")?.addEventListener("click", () => {
-    const block = document.getElementById("communityCreateBlock");
-    if (block) block.style.display = block.style.display === "none" ? "block" : "none";
+    openCommunityCreatePostModal();
   });
   document.getElementById("communityStartCommunityBtn")?.addEventListener("click", () => {
     openCreateCommunityModal();
@@ -983,6 +1762,144 @@ let communitySelectedSlug = null;
 let communityJoinedSlugs = new Set();
 let communityMutedSlugs = new Set();
 let createCommunityWizard = { step: 1, topic: "Indoor Plants", type: "public", mature: false };
+
+function openCommunityCreatePostModal() {
+  const block = document.getElementById("communityCreateBlock");
+  const backdrop = document.getElementById("communityCreatePostBackdrop");
+  const closeBtn = document.getElementById("communityCreatePostModalClose");
+  if (!block) return;
+
+  // If we already know the current community, preselect it.
+  const sel = document.getElementById("communityCategory");
+  if (sel && communitySelectedSlug) sel.value = communitySelectedSlug;
+
+  block.style.display = "block";
+  block.setAttribute("aria-hidden", "false");
+  if (backdrop) {
+    backdrop.classList.add("is-open");
+    backdrop.style.display = "block";
+    backdrop.onclick = () => closeCommunityCreatePostModal();
+  }
+
+  // Next frame so transitions apply.
+  requestAnimationFrame(() => {
+    block.classList.add("is-open");
+  });
+
+  closeBtn?.addEventListener("click", closeCommunityCreatePostModal, { once: true });
+
+  // Close on Escape (attach once per open).
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "Escape") closeCommunityCreatePostModal();
+    },
+    { once: true }
+  );
+}
+
+function closeCommunityCreatePostModal() {
+  const block = document.getElementById("communityCreateBlock");
+  const backdrop = document.getElementById("communityCreatePostBackdrop");
+  if (!block) return;
+
+  block.classList.remove("is-open");
+  if (backdrop) backdrop.classList.remove("is-open");
+
+  // Reset form + media state so next open starts clean.
+  try {
+    const imgInput = document.getElementById("communityImage");
+    const previewWrap = document.getElementById("communityPostMediaPreview");
+    const previewThumbs = document.getElementById("communityPostMediaThumbs");
+    const previewMainImg = document.getElementById("communityPostMediaMainImg");
+    const previewMainVideo = document.getElementById("communityPostMediaMainVideo");
+    const previewMainAudio = document.getElementById("communityPostMediaMainAudio");
+
+    const titleEl = document.getElementById("communityPostTitle");
+    const bodyEl = document.getElementById("communityPostBody");
+    const tagsEl = document.getElementById("communityTags");
+
+    const linkUrlEl = document.getElementById("communityPostLinkUrl");
+    const pollQEl = document.getElementById("communityPostPollQuestion");
+    const pollOpt1El = document.getElementById("communityPostPollOption1");
+    const pollOpt2El = document.getElementById("communityPostPollOption2");
+    const pollOpt3El = document.getElementById("communityPostPollOption3");
+
+    const linkFields = document.getElementById("communityPostLinkFields");
+    const pollFields = document.getElementById("communityPostPollFields");
+    const mediaInputWrap = document.getElementById("communityPostMediaInputWrap");
+    const postTabsWrap = document.getElementById("communityPostTypeTabs");
+
+    if (imgInput?.dataset?.previewUrls) {
+      try {
+        const urls = JSON.parse(imgInput.dataset.previewUrls || "[]");
+        urls.forEach((u) => {
+          try {
+            URL.revokeObjectURL(u);
+          } catch (_) {}
+        });
+      } catch (_) {}
+    }
+    if (imgInput?.dataset) imgInput.dataset.previewUrls = "";
+    if (imgInput) imgInput.value = "";
+
+    if (previewWrap) previewWrap.style.display = "none";
+    if (previewThumbs) previewThumbs.innerHTML = "";
+
+    if (previewMainImg) {
+      previewMainImg.src = "";
+      previewMainImg.style.display = "none";
+    }
+    if (previewMainVideo) {
+      previewMainVideo.pause();
+      previewMainVideo.removeAttribute("src");
+      previewMainVideo.load();
+      previewMainVideo.style.display = "none";
+    }
+    if (previewMainAudio) {
+      previewMainAudio.pause();
+      previewMainAudio.removeAttribute("src");
+      previewMainAudio.load();
+      previewMainAudio.style.display = "none";
+    }
+
+    // Clear global media state used by submit.
+    try {
+      if (window.__dewCommunityInlineMediaItems) window.__dewCommunityInlineMediaItems.length = 0;
+    } catch (_) {}
+
+    // Reset inputs.
+    if (titleEl) titleEl.value = "";
+    if (bodyEl) bodyEl.value = "";
+    if (tagsEl) tagsEl.value = "";
+    const titleCountEl = document.getElementById("communityPostTitleCount");
+    if (titleCountEl) titleCountEl.textContent = "0/300";
+    if (linkUrlEl) linkUrlEl.value = "";
+    if (pollQEl) pollQEl.value = "";
+    if (pollOpt1El) pollOpt1El.value = "";
+    if (pollOpt2El) pollOpt2El.value = "";
+    if (pollOpt3El) pollOpt3El.value = "";
+
+    // Reset tabs to "media".
+    if (postTabsWrap) {
+      postTabsWrap.querySelectorAll(".community-post-tab").forEach((t) => {
+        const active = t.dataset.postType === "media";
+        t.classList.toggle("active", active);
+        t.setAttribute("aria-selected", active ? "true" : "false");
+      });
+    }
+    if (linkFields) linkFields.style.display = "none";
+    if (pollFields) pollFields.style.display = "none";
+    if (mediaInputWrap) mediaInputWrap.style.display = "inline-flex";
+  } catch (_) {}
+
+  // Wait for transition before hiding (avoid jank).
+  window.setTimeout(() => {
+    block.style.display = "none";
+    block.setAttribute("aria-hidden", "true");
+    if (backdrop) backdrop.style.display = "none";
+  }, 170);
+}
 
 try {
   const joinedRaw = localStorage.getItem("communityJoinedSlugs");
@@ -1199,9 +2116,13 @@ function renderCommunityPanels(allPosts) {
       logoEl.style.backgroundSize = "cover";
       logoEl.style.backgroundPosition = "center";
       logoEl.style.backgroundRepeat = "no-repeat";
+      logoEl.dataset.imageUrl = logoUrl;
+      logoEl.style.cursor = "pointer";
     } else {
       logoEl.style.backgroundImage = "";
       logoEl.textContent = (comm.slug || slug || "r").slice(0, 1).toLowerCase();
+      logoEl.dataset.imageUrl = "";
+      logoEl.style.cursor = "";
     }
   }
   if (bannerEl) {
@@ -1212,9 +2133,13 @@ function renderCommunityPanels(allPosts) {
       bannerEl.style.backgroundPosition = "center";
       bannerEl.style.backgroundRepeat = "no-repeat";
       bannerEl.style.backgroundColor = "rgba(0,0,0,0.2)";
+      bannerEl.dataset.imageUrl = bannerUrl;
+      bannerEl.style.cursor = "pointer";
     } else {
       bannerEl.style.backgroundImage = "";
       bannerEl.style.background = "linear-gradient(90deg, rgba(67, 199, 122, 0.9), rgba(51, 186, 179, 0.9))";
+      bannerEl.dataset.imageUrl = "";
+      bannerEl.style.cursor = "";
     }
   }
   if (metaEl) {
@@ -1229,7 +2154,13 @@ function renderCommunityPanels(allPosts) {
   if (symbolEl) symbolEl.textContent = currentSymbol || "";
 
   if (joinBtn) {
-    const joined = !!comm.joined;
+    const isModerator =
+      !!(
+        currentProfileUser?.uid &&
+        Array.isArray(comm.moderators) &&
+        comm.moderators.some((m) => String(m?.uid || "") === String(currentProfileUser.uid))
+      );
+    const joined = !!comm.joined || isModerator;
     joinBtn.textContent = joined ? "Joined" : "Join";
     joinBtn.classList.toggle("btn-primary", joined);
     joinBtn.classList.toggle("btn-ghost", !joined);
@@ -1349,10 +2280,9 @@ function renderCommunityPanels(allPosts) {
     );
   }
   if (quickCreateBtn) quickCreateBtn.onclick = () => {
-    const block = document.getElementById("communityCreateBlock");
-    if (block) block.style.display = "block";
     const sel = document.getElementById("communityCategory");
     if (sel && [...sel.options].some((o) => o.value === slug)) sel.value = slug;
+    openCommunityCreatePostModal();
   };
   const communityPosts = (allPosts || []).filter((p) => (p.category || "").toLowerCase() === slug);
   if (latestEl) {
@@ -1404,16 +2334,38 @@ function renderCommunityPanels(allPosts) {
     const createdAt = comm.created_at ? new Date(comm.created_at) : null;
     const ageDays = createdAt ? Math.floor((Date.now() - createdAt.getTime()) / 86400000) : 0;
     const achievements = [
+      // Weekly contributor streaks
       { id: "rising_star", icon: "ri-star-line", title: "Rising Star", desc: "New community that’s getting active.", earned: (comm.weekly_contributors ?? 0) >= 2 },
       { id: "repeat_contributor", icon: "ri-refresh-line", title: "Repeat Contributor", desc: "5+ weekly contributors.", earned: (comm.weekly_contributors ?? 0) >= 5 },
       { id: "super_contributor", icon: "ri-flashlight-line", title: "Super Contributor", desc: "10+ weekly contributors.", earned: (comm.weekly_contributors ?? 0) >= 10 },
-      { id: "content_connoisseur", icon: "ri-file-list-3-line", title: "Content Connoisseur", desc: "10+ total posts in the community.", earned: (comm.post_count ?? 0) >= 10 },
-      { id: "elder", icon: "ri-user-star-line", title: "Elder", desc: "Community is 30+ days old.", earned: ageDays >= 30 },
+      { id: "legendary_contributor", icon: "ri-trophy-line", title: "Legendary Contributor", desc: "20+ weekly contributors.", earned: (comm.weekly_contributors ?? 0) >= 20 },
+
+      // Visitors / traffic
       { id: "popular_hub", icon: "ri-group-line", title: "Popular Hub", desc: "25+ weekly visitors.", earned: (comm.weekly_visitors ?? 0) >= 25 },
+      { id: "thriving_hub", icon: "ri-rocket-line", title: "Thriving Hub", desc: "60+ weekly visitors.", earned: (comm.weekly_visitors ?? 0) >= 60 },
+      { id: "buzzing_community", icon: "ri-sparkling-fill", title: "Buzzing Community", desc: "120+ weekly visitors.", earned: (comm.weekly_visitors ?? 0) >= 120 },
+
+      // Posts / content volume
+      { id: "new_posts", icon: "ri-file-add-line", title: "New Posts", desc: "1+ community post.", earned: (comm.post_count ?? 0) >= 1 },
+      { id: "content_connoisseur", icon: "ri-file-list-3-line", title: "Content Connoisseur", desc: "10+ total posts in the community.", earned: (comm.post_count ?? 0) >= 10 },
+      { id: "active_discussion", icon: "ri-message-2-line", title: "Active Discussion", desc: "25+ total posts in the community.", earned: (comm.post_count ?? 0) >= 25 },
+      { id: "mega_archive", icon: "ri-archive-line", title: "Mega Archive", desc: "50+ total posts in the community.", earned: (comm.post_count ?? 0) >= 50 },
+
+      // Community age
+      { id: "elder", icon: "ri-user-star-line", title: "Elder", desc: "Community is 30+ days old.", earned: ageDays >= 30 },
+      { id: "veteran", icon: "ri-award-line", title: "Veteran", desc: "Community is 90+ days old.", earned: ageDays >= 90 },
+      { id: "legend", icon: "ri-medal-line", title: "Legend", desc: "Community is 180+ days old.", earned: ageDays >= 180 },
     ];
+
+    const toggleBtn = document.getElementById("communityAchievementsToggle");
+    const maxCollapsed = 4;
+    const hasAnyEarned = achievements.some((a) => a.earned);
+    let expanded = false;
+
+    // Render all achievements once; visibility is controlled below.
     achList.innerHTML = achievements
       .map((a) => {
-        return `<li class="community-achievement ${a.earned ? "" : "locked"}">
+        return `<li class="community-achievement ${a.earned ? "" : "locked"}" data-achievement-id="${escapeHtml(a.id)}">
           <div class="community-achievement-icon"><i class="${a.icon}"></i></div>
           <div>
             <div class="community-achievement-title">${escapeHtml(a.title)}</div>
@@ -1422,6 +2374,48 @@ function renderCommunityPanels(allPosts) {
         </li>`;
       })
       .join("");
+
+    const applyVisibility = () => {
+      const items = Array.from(achList.querySelectorAll(".community-achievement"));
+      const emptyEl = achList.querySelector(".community-achievements-empty");
+
+      // Reset
+      if (emptyEl) emptyEl.remove();
+      achList.classList.toggle("is-expanded", expanded);
+
+      const setShown = (el, idx) => {
+        const show =
+          expanded ||
+          (hasAnyEarned ? idx < maxCollapsed : false);
+        el.style.display = show ? "" : "none";
+      };
+
+      items.forEach(setShown);
+
+      // Reddit-style behavior: if nothing earned, show an empty hint until "View All".
+      if (!expanded && !hasAnyEarned) {
+        const li = document.createElement("li");
+        li.className = "community-achievements-empty";
+        li.textContent = 'No achievements unlocked yet. Click "View All" to see available badges.';
+        achList.prepend(li);
+      }
+
+      if (toggleBtn) {
+        toggleBtn.textContent = expanded ? "Show less" : "View All";
+        toggleBtn.setAttribute("aria-expanded", String(expanded));
+      }
+    };
+
+    // Default: collapsed.
+    applyVisibility();
+
+    // Wire up show less / more toggle.
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        expanded = !expanded;
+        applyVisibility();
+      });
+    }
   }
 
   // Message admin/mods box recipient options
@@ -1973,16 +2967,50 @@ async function loadCommunityView() {
   try {
     const supabase = await getSupabaseClient();
     let posts = [];
-    const { data: postsData, error: postsError } = await supabase
-      .from("posts")
-      .select("id,title,body,created_at,author_username,community_id,image_url,tags,score,comment_count")
-      .limit(100);
+    const selectBase = "id,title,body,created_at,author_username,community_id,image_url,tags,score,comment_count";
+    const selectWithMedia = "id,title,body,created_at,author_username,community_id,image_url,media_urls,media_types,tags,score,comment_count";
+    let postsData = [];
+    let postsError = null;
+    const trySelect = async (sel) => {
+      const { data, error } = await supabase.from("posts").select(sel).limit(100);
+      return { data, error };
+    };
+
+    const attemptWithMedia = await trySelect(selectWithMedia);
+    if (attemptWithMedia.error) {
+      const msg = String(attemptWithMedia.error?.message || "").toLowerCase();
+      if (msg.includes("media_urls") || msg.includes("media_types") || msg.includes("column")) {
+        const attemptBase = await trySelect(selectBase);
+        postsData = attemptBase.data || [];
+        postsError = attemptBase.error || null;
+      } else {
+        postsData = [];
+        postsError = attemptWithMedia.error;
+      }
+    } else {
+      postsData = attemptWithMedia.data || [];
+      postsError = null;
+    }
+
     if (!postsError && Array.isArray(postsData) && postsData.length > 0) {
-      posts = postsData.map((p) => ({
-        ...p,
-        category: communityList.find((c) => c.id === p.community_id)?.slug || p.community_id,
-        plant_image_url: p.image_url,
-      }));
+      posts = postsData.map((p) => {
+        const mediaUrls = Array.isArray(p.media_urls) ? p.media_urls : p.image_url ? [p.image_url] : [];
+        const mediaTypes = Array.isArray(p.media_types) ? p.media_types : [];
+        const mediaCount = mediaUrls.length || 0;
+        const primary_media_url = mediaUrls[0] || null;
+        const primary_media_type = mediaTypes[0] || "image";
+
+        return {
+          ...p,
+          category: communityList.find((c) => c.id === p.community_id)?.slug || p.community_id,
+          plant_image_url: primary_media_type === "image" ? primary_media_url : null,
+          primary_media_url,
+          primary_media_type,
+          media_count: mediaCount,
+          media_urls: mediaUrls,
+          media_types: mediaTypes,
+        };
+      });
     }
     if (communityCategoryFilter && communityCategoryFilter !== "all") {
       posts = posts.filter((p) => (p.category || "").toLowerCase() === communityCategoryFilter.toLowerCase());
@@ -2028,7 +3056,11 @@ async function loadCommunityView() {
         const created = p.created_at ? new Date(p.created_at).toLocaleString() : "";
         const commName = p.community_name || p.category || "general";
         const commSlug = String(p.category || "general").toLowerCase();
-        return `<article class="community-post" data-post-id="${escapeHtml(p.id)}">
+        const mediaUrls = Array.isArray(p.media_urls) ? p.media_urls : (Array.isArray(p.media_urls) ? p.media_urls : []);
+        const mediaTypes = Array.isArray(p.media_types) ? p.media_types : [];
+        return `<article class="community-post" data-post-id="${escapeHtml(p.id)}" data-media-urls="${escapeHtml(
+          JSON.stringify(mediaUrls)
+        )}" data-media-types="${escapeHtml(JSON.stringify(mediaTypes))}">
           <div class="community-vote">
             <button type="button" data-vote="up"><i class="ri-arrow-up-s-line"></i></button>
             <div class="community-vote-score">${p.score ?? 0}</div>
@@ -2046,7 +3078,20 @@ async function loadCommunityView() {
                 </div>
               </div>
             </div>
-            ${p.plant_image_url || p.image_url ? `<div class="community-post-image"><img src="${escapeHtml(p.plant_image_url || p.image_url)}" alt="" loading="lazy" /></div>` : ""}
+            ${
+              p.primary_media_url
+                ? `<div class="community-post-image">
+                    ${
+                      p.primary_media_type === "video"
+                        ? `<video src="${escapeHtml(p.primary_media_url)}" controls preload="metadata"></video>`
+                        : p.primary_media_type === "audio"
+                          ? `<audio src="${escapeHtml(p.primary_media_url)}" controls preload="metadata"></audio>`
+                          : `<img src="${escapeHtml(p.primary_media_url)}" alt="" loading="lazy" />`
+                    }
+                    ${p.media_count && p.media_count > 1 ? `<div class="community-post-media-count">+${p.media_count - 1}</div>` : ""}
+                  </div>`
+                : ""
+            }
             <div class="community-post-body">${escapeHtml(p.body || "")}</div>
             ${tags.length ? `<div class="community-post-tags">${tags.map((t) => `<span class="community-post-tag">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
             <div class="community-post-footer">
@@ -2158,7 +3203,8 @@ async function handleCommunityPostSubmit(e) {
   if (!titleEl || !bodyEl || !catEl) return;
   const title = titleEl.value.trim();
   const body = bodyEl.value.trim();
-  if (!title || !body) return;
+  // Body/description is optional (match Reddit "post" feel).
+  if (!title) return;
   const category = (catEl && catEl.value) ? catEl.value : "";
   if (!category) {
     showToast("Create a community first, then choose it when posting.", "error");
@@ -2168,20 +3214,128 @@ async function handleCommunityPostSubmit(e) {
     tagsEl && tagsEl.value
       ? tagsEl.value.split(",").map((t) => t.trim()).filter(Boolean)
       : [];
-  const file = imgInput && imgInput.files && imgInput.files[0] ? imgInput.files[0] : null;
+
+  const postType = document.querySelector("#communityPostTypeTabs .community-post-tab.active")?.dataset?.postType || "media";
+  const mediaItems = (window.__dewCommunityInlineMediaItems || []).slice(0, 8);
+
+  const linkUrlEl = document.getElementById("communityPostLinkUrl");
+  const linkUrl = (linkUrlEl?.value || "").trim();
+
+  const pollQEl = document.getElementById("communityPostPollQuestion");
+  const pollQuestion = (pollQEl?.value || "").trim();
+  const pollOpt1 = (document.getElementById("communityPostPollOption1")?.value || "").trim();
+  const pollOpt2 = (document.getElementById("communityPostPollOption2")?.value || "").trim();
+  const pollOpt3 = (document.getElementById("communityPostPollOption3")?.value || "").trim();
+
+  let finalBody = body;
+  if (postType === "link") {
+    if (!linkUrl) {
+      showToast("Paste a link URL for Link posts.", "error");
+      return;
+    }
+    finalBody = `Link: ${linkUrl}${finalBody ? `\n\n${finalBody}` : ""}`;
+  } else if (postType === "poll") {
+    if (!pollOpt1 || !pollOpt2) {
+      showToast("Poll needs at least two options.", "error");
+      return;
+    }
+    const opts = [pollOpt1, pollOpt2, pollOpt3].filter(Boolean).map((o, i) => `Option ${i + 1}: ${o}`);
+    finalBody = `Poll${pollQuestion ? `: ${pollQuestion}` : ""}\n${opts.join("\n")}${finalBody ? `\n\n${finalBody}` : ""}`;
+  }
+
+  if (postType === "media") {
+    if (!mediaItems.length) {
+      showToast("Add at least one image, video, or audio to your post.", "error");
+      return;
+    }
+  }
+
+  const submitBtn = document.querySelector("#communityCreateForm .btn-community-post");
+  const originalSubmitHtml = submitBtn?.innerHTML;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="ri-loader-4-line"></i> Posting...';
+  }
 
   try {
     const supabase = await getSupabaseClient();
+    const mediaUrls = [];
+    const mediaTypes = []; // "image" | "video" | "audio"
     let imageUrl = null;
-    if (file) {
-      const path = `${category}/posts/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("community-posts")
-        .upload(path, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { data } = supabase.storage.from("community-posts").getPublicUrl(path);
-      imageUrl = data.publicUrl;
+
+    async function compressImageToWebp(file) {
+      const maxWidth = 1280;
+      const quality = 0.84;
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, maxWidth / Math.max(bitmap.width, 1));
+        const width = Math.max(1, Math.round(bitmap.width * scale));
+        const height = Math.max(1, Math.round(bitmap.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return file;
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+        return blob || file;
+      } catch (_) {
+        return file;
+      }
     }
+
+    const itemsToUpload = postType === "media" ? mediaItems : [];
+    for (const [idx, item] of itemsToUpload.entries()) {
+      const file = item?.file;
+      if (!file) continue;
+
+      const kind = item?.kind || (String(file?.type || "").startsWith("video/") ? "video" : String(file?.type || "").startsWith("audio/") ? "audio" : "image");
+      const mime = String(file?.type || "");
+      if (kind === "video" && !mime.startsWith("video/")) continue;
+      if (kind === "audio" && !mime.startsWith("audio/")) continue;
+      if (kind === "image" && !mime.startsWith("image/")) continue;
+
+      const baseName = String(file.name || "media");
+      const safeBase = baseName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-\.]/g, "");
+      const ext = kind === "image" ? "webp" : (safeBase.split(".").pop() || "bin");
+      const path = `${category}/posts/${Date.now()}_${idx}_${safeBase}.${ext}`;
+
+      let payload = file;
+      if (kind === "image") payload = await compressImageToWebp(file);
+
+      const bucketCandidates = ["community-posts", "community-assets"];
+      let uploadedUrl = null;
+      let lastUploadErr = null;
+
+      for (const bucket of bucketCandidates) {
+        try {
+          // We generate unique paths with Date.now(), so upsert isn't required.
+          // Avoiding upsert reduces the need for UPDATE permissions in Storage policies.
+          const { error: uploadError } = await supabase.storage.from(bucket).upload(path, payload, { upsert: false });
+          if (uploadError) {
+            lastUploadErr = uploadError;
+            continue;
+          }
+          const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+          uploadedUrl = data?.publicUrl || null;
+          if (uploadedUrl) break;
+        } catch (err) {
+          lastUploadErr = err;
+        }
+      }
+
+      if (!uploadedUrl) {
+        // Surface last error message to toast handler.
+        throw lastUploadErr || new Error("Storage upload failed for all buckets.");
+      }
+
+      mediaUrls.push(uploadedUrl);
+      mediaTypes.push(kind);
+      if (!imageUrl && kind === "image") imageUrl = uploadedUrl;
+    }
+
+    // Backward compatibility: keep `image_url` set to the first image (or first media item).
+    if (!imageUrl) imageUrl = mediaUrls[0] || null;
     const comm = communityList.find((c) => (c.slug || "").toLowerCase() === category.toLowerCase());
     const communityId = comm?.id;
     if (!communityId) {
@@ -2189,15 +3343,28 @@ async function handleCommunityPostSubmit(e) {
       return;
     }
     const author = currentProfileUser?.displayName || "Warden";
-    const { error } = await supabase.from("posts").insert({
+    const commonPayload = {
       community_id: communityId,
       title,
-      body,
+      body: finalBody || null,
       author_username: author,
       image_url: imageUrl,
       tags: tags.length ? tags : [],
-    });
-    if (error) throw error;
+    };
+
+    // If your DB schema supports it, store all media.
+    try {
+      const { error } = await supabase.from("posts").insert({
+        ...commonPayload,
+        media_urls: mediaUrls,
+        media_types: mediaTypes,
+      });
+      if (error) throw error;
+    } catch (err) {
+      // Fallback for older schema: store only `image_url`.
+      const { error } = await supabase.from("posts").insert(commonPayload);
+      if (error) throw error;
+    }
     // Record weekly contributor for this community (DB-backed).
     try {
       const auth = await authReady;
@@ -2213,9 +3380,85 @@ async function handleCommunityPostSubmit(e) {
     bodyEl.value = "";
     if (tagsEl) tagsEl.value = "";
     if (imgInput) imgInput.value = "";
+
+    // Clear preview + revoke object URL after submit.
+    try {
+      const previewUrlsRaw = imgInput?.dataset?.previewUrls || "";
+      let urls = [];
+      try {
+        if (previewUrlsRaw) urls = JSON.parse(previewUrlsRaw);
+      } catch (_) {}
+      urls.forEach((u) => {
+        try { URL.revokeObjectURL(u); } catch (_) {}
+      });
+      if (imgInput?.dataset) imgInput.dataset.previewUrls = "";
+
+      // Reset inline preview carousel UI (and stop any playing video).
+      const previewWrap = document.getElementById("communityPostMediaPreview");
+      const previewThumbs = document.getElementById("communityPostMediaThumbs");
+      const previewMainImg = document.getElementById("communityPostMediaMainImg");
+      const previewMainVideo = document.getElementById("communityPostMediaMainVideo");
+      const previewMainAudio = document.getElementById("communityPostMediaMainAudio");
+
+      if (previewWrap) previewWrap.style.display = "none";
+      if (previewThumbs) previewThumbs.innerHTML = "";
+      if (previewMainImg) {
+        previewMainImg.src = "";
+        previewMainImg.style.display = "none";
+      }
+      if (previewMainVideo) {
+        previewMainVideo.pause();
+        previewMainVideo.removeAttribute("src");
+        previewMainVideo.load();
+        previewMainVideo.style.display = "none";
+      }
+      if (previewMainAudio) {
+        previewMainAudio.pause();
+        previewMainAudio.removeAttribute("src");
+        previewMainAudio.load();
+        previewMainAudio.style.display = "none";
+      }
+
+      // Also hide the (unused) modal picker if it exists.
+      const pickerModal = document.getElementById("communityPostMediaPicker");
+      const pickerImg = document.getElementById("communityPostMediaPickerMainImg");
+      const pickerVideo = document.getElementById("communityPostMediaPickerMainVideo");
+      const pickerThumbs = document.getElementById("communityPostMediaPickerThumbs");
+      if (pickerModal) pickerModal.style.display = "none";
+      if (pickerImg) pickerImg.src = "";
+      if (pickerVideo) {
+        pickerVideo.pause();
+        pickerVideo.removeAttribute("src");
+        pickerVideo.load();
+      }
+      if (pickerThumbs) pickerThumbs.innerHTML = "";
+
+      // Clear submit media state array (keeps object URL revocation consistent).
+      try {
+        if (window.__dewCommunityInlineMediaItems) window.__dewCommunityInlineMediaItems.length = 0;
+      } catch (_) {}
+    } catch (_) {}
     loadCommunityView();
+    closeCommunityCreatePostModal();
   } catch (err) {
     console.error("Failed to create post", err);
+    // Surface the reason to user (helps with RLS / schema / upload problems).
+    const msg = err?.message ? String(err.message) : String(err);
+    const lower = msg.toLowerCase();
+    if (lower.includes("row-level security") || lower.includes("rls") || lower.includes("permission")) {
+      showToast("Couldn't post (permission denied). If the community is restricted/private, you must join.", "error");
+    } else if (lower.includes("storage") || lower.includes("upload") || lower.includes("community-posts") || lower.includes("bucket")) {
+      showToast("Couldn't post: media upload to storage failed. Check storage policies.", "error");
+    } else if (lower.includes("column") || lower.includes("media_urls") || lower.includes("media_types")) {
+      showToast("Couldn't post: database schema mismatch (media fields). Re-run SQL schema if needed.", "error");
+    } else {
+      showToast("Couldn't post. " + (msg.length > 120 ? msg.slice(0, 120) + "…" : msg), "error");
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      if (originalSubmitHtml !== undefined) submitBtn.innerHTML = originalSubmitHtml;
+    }
   }
 }
 

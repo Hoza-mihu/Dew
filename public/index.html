@@ -1206,7 +1206,7 @@
           <section class="community-layout">
             <aside class="community-sidebar-left">
               <div class="card community-sidebar-card community-nav-card">
-                <div class="community-nav-card-title"><i class="ri-leaf-line"></i> Eco-Eco</div>
+                <div class="community-nav-card-title"><i class="ri-leaf-line"></i> DEW</div>
                 <a href="#" class="community-nav-card-link" data-view="community" data-community-home="true"><i class="ri-home-4-line"></i> Home</a>
                 <a href="#" class="community-nav-card-link"><i class="ri-line-chart-line"></i> Popular</a>
                 <a href="#" class="community-nav-card-link"><i class="ri-sparkling-2-line"></i> All</a>
@@ -1320,14 +1320,89 @@
               <div class="community-create card" id="communityCreateBlock" style="display: none">
                 <div class="community-create-header">
                   <h2><i class="ri-edit-2-line"></i> Create post</h2>
+                  <button type="button" class="community-create-modal-close" id="communityCreatePostModalClose" aria-label="Close">
+                    <i class="ri-close-line"></i>
+                  </button>
                 </div>
                 <form id="communityCreateForm" class="community-create-form">
                   <div class="community-create-row">
-                    <input id="communityPostTitle" class="community-input" type="text" placeholder="Post title…" required />
+                    <div class="community-post-title-row">
+                      <input
+                        id="communityPostTitle"
+                        class="community-input"
+                        type="text"
+                        placeholder="Post title…"
+                        required
+                        maxlength="300"
+                      />
+                      <div class="community-post-title-counter" aria-live="polite">
+                        <span id="communityPostTitleCount">0/300</span>
+                      </div>
+                    </div>
                   </div>
                   <div class="community-create-row">
-                    <textarea id="communityPostBody" class="community-textarea" rows="3" placeholder="Add details, question, or plant update…" required></textarea>
+                    <textarea id="communityPostBody" class="community-textarea" rows="3" placeholder="Add details, question, or plant update…"></textarea>
                   </div>
+
+                  <div class="community-post-tabs" id="communityPostTypeTabs" role="tablist" aria-label="Post type tabs">
+                    <button type="button" class="community-post-tab" data-post-type="text" role="tab" aria-selected="false">Text</button>
+                    <button type="button" class="community-post-tab active" data-post-type="media" role="tab" aria-selected="true">Images &amp; Video</button>
+                    <button type="button" class="community-post-tab" data-post-type="link" role="tab" aria-selected="false">Link</button>
+                    <button type="button" class="community-post-tab" data-post-type="poll" role="tab" aria-selected="false">Poll</button>
+                  </div>
+
+                  <div id="communityPostLinkFields" class="community-post-tab-panel" style="display: none;">
+                    <div class="community-create-row">
+                      <input id="communityPostLinkUrl" class="community-input" type="url" placeholder="Paste a link URL" />
+                    </div>
+                  </div>
+
+                  <div id="communityPostPollFields" class="community-post-tab-panel" style="display: none;">
+                    <div class="community-create-row">
+                      <textarea id="communityPostPollQuestion" class="community-textarea" rows="2" placeholder="Poll question (optional)"></textarea>
+                    </div>
+                    <div class="community-create-row">
+                      <input id="communityPostPollOption1" class="community-input" type="text" placeholder="Option 1" />
+                    </div>
+                    <div class="community-create-row">
+                      <input id="communityPostPollOption2" class="community-input" type="text" placeholder="Option 2" />
+                    </div>
+                    <div class="community-create-row">
+                      <input id="communityPostPollOption3" class="community-input" type="text" placeholder="Option 3 (optional)" />
+                    </div>
+                  </div>
+
+                  <div class="community-create-row" style="display: flex; flex-direction: column; gap: 10px;">
+                    <div class="community-post-media-preview" id="communityPostMediaPreview" style="display: none">
+                      <div class="community-post-media-main">
+                        <button type="button" class="community-post-media-nav" id="communityPostMediaPrevBtn" aria-label="Previous media">
+                          <i class="ri-arrow-left-s-line"></i>
+                        </button>
+
+                        <div class="community-post-media-main-frame" id="communityPostMediaMainFrame">
+                          <img id="communityPostMediaMainImg" src="" alt="Selected media preview" style="display: none" />
+                          <video id="communityPostMediaMainVideo" controls style="display: none"></video>
+                          <audio id="communityPostMediaMainAudio" controls style="display: none"></audio>
+                        </div>
+
+                        <button type="button" class="community-post-media-nav" id="communityPostMediaNextBtn" aria-label="Next media">
+                          <i class="ri-arrow-right-s-line"></i>
+                        </button>
+                      </div>
+
+                      <div class="community-post-media-thumbs" id="communityPostMediaThumbs" aria-label="Selected media thumbnails"></div>
+
+                      <button
+                        type="button"
+                        class="community-post-media-preview-remove"
+                        id="communityPostMediaPreviewRemove"
+                        aria-label="Remove selected media"
+                      >
+                        <i class="ri-close-line"></i>
+                      </button>
+                    </div>
+                  </div>
+
                   <div class="community-create-meta">
                     <div class="community-create-meta-left">
                       <label class="community-field">
@@ -1340,15 +1415,21 @@
                       </label>
                     </div>
                     <div class="community-create-meta-right">
-                      <label class="community-upload">
-                        <input id="communityImage" type="file" accept="image/*" />
-                        <span><i class="ri-image-add-line"></i> Add image</span>
+                      <label class="community-upload" id="communityPostMediaInputWrap">
+                        <input id="communityImage" type="file" accept="image/*,video/*,audio/*" multiple />
+                        <span><i class="ri-image-add-line"></i> Add media</span>
                       </label>
-                      <button type="submit" class="btn btn-primary btn-community-post"><i class="ri-send-plane-2-line"></i> Post</button>
                     </div>
+                  </div>
+
+                  <div class="community-create-modal-actions">
+                    <button type="button" class="btn btn-ghost" id="communityPostCancelBtn">Cancel</button>
+                    <button type="button" class="btn btn-ghost" id="communityPostSaveDraftBtn">Save Draft</button>
+                    <button type="submit" class="btn btn-primary btn-community-post"><i class="ri-send-plane-2-line"></i> Post</button>
                   </div>
                 </form>
               </div>
+              <div class="community-create-post-backdrop" id="communityCreatePostBackdrop" aria-hidden="true"></div>
               <div id="communityFeed" class="community-feed"></div>
               <div id="communityFeedEmpty" class="community-feed-empty" style="display: none">
                 <div class="icon"><i class="ri-leaf-line"></i></div>
@@ -2066,6 +2147,118 @@
           ></div>
           <div class="plant-image-lightbox-content">
             <img id="plantImageLightboxImg" src="" alt="" />
+          </div>
+        </div>
+
+        <div
+          class="community-image-lightbox"
+          id="communityImageLightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full community image"
+          style="display: none"
+        >
+          <button
+            type="button"
+            class="community-image-lightbox-close"
+            id="communityImageLightboxClose"
+            aria-label="Close"
+          >
+            <i class="ri-close-line"></i>
+          </button>
+          <div
+            class="community-image-lightbox-backdrop"
+            id="communityImageLightboxBackdrop"
+          ></div>
+          <div class="community-image-lightbox-content">
+            <img id="communityImageLightboxImg" src="" alt="" />
+          </div>
+        </div>
+
+        <div
+          class="community-post-media-lightbox"
+          id="communityPostMediaLightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full community post media"
+          style="display: none"
+        >
+          <button
+            type="button"
+            class="community-post-media-lightbox-close"
+            id="communityPostMediaLightboxClose"
+            aria-label="Close"
+          >
+            <i class="ri-close-line"></i>
+          </button>
+          <div class="community-post-media-lightbox-backdrop" id="communityPostMediaLightboxBackdrop"></div>
+          <div class="community-post-media-lightbox-content">
+            <button type="button" class="community-post-media-lightbox-nav" id="communityPostMediaPrevBtn" aria-label="Previous media">
+              <i class="ri-arrow-left-s-line"></i>
+            </button>
+            <div class="community-post-media-lightbox-frame">
+              <img id="communityPostMediaLightboxImg" src="" alt="Selected media" style="display: none" />
+              <video id="communityPostMediaLightboxVideo" controls style="display: none"></video>
+            </div>
+            <button type="button" class="community-post-media-lightbox-nav" id="communityPostMediaNextBtn" aria-label="Next media">
+              <i class="ri-arrow-right-s-line"></i>
+            </button>
+          </div>
+          <div class="community-post-media-lightbox-thumbs" id="communityPostMediaLightboxThumbs"></div>
+        </div>
+
+        <div
+          class="community-post-media-picker"
+          id="communityPostMediaPicker"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Preview selected post media"
+          style="display: none"
+        >
+          <button
+            type="button"
+            class="community-post-media-picker-close"
+            id="communityPostMediaPickerClose"
+            aria-label="Close media picker"
+          >
+            <i class="ri-close-line"></i>
+          </button>
+
+          <div class="community-post-media-picker-backdrop" id="communityPostMediaPickerBackdrop"></div>
+
+          <div class="community-post-media-picker-content">
+            <div class="community-post-media-picker-main">
+              <button
+                type="button"
+                class="community-post-media-picker-nav"
+                id="communityPostMediaPickerPrevBtn"
+                aria-label="Previous media"
+              >
+                <i class="ri-arrow-left-s-line"></i>
+              </button>
+
+              <div class="community-post-media-picker-frame" id="communityPostMediaPickerMainFrame">
+                <img id="communityPostMediaPickerMainImg" src="" alt="" style="display: none" />
+                <video id="communityPostMediaPickerMainVideo" controls style="display: none"></video>
+              </div>
+
+              <button
+                type="button"
+                class="community-post-media-picker-nav"
+                id="communityPostMediaPickerNextBtn"
+                aria-label="Next media"
+              >
+                <i class="ri-arrow-right-s-line"></i>
+              </button>
+            </div>
+
+            <div class="community-post-media-picker-thumbs" id="communityPostMediaPickerThumbs"></div>
+
+            <div class="community-post-media-picker-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="communityPostMediaPickerRemove">
+                <i class="ri-delete-bin-line"></i> Remove
+              </button>
+            </div>
           </div>
         </div>
       </main>
