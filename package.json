@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "vite",
     "dev:api": "node --watch server.js",
-    "build": "vite build",
+    "build": "vite build && node scripts/copy-static-assets.mjs",
     "preview": "vite preview"
   },
   "keywords": [
