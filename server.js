@@ -72,6 +72,35 @@ function initDbAndMigrateFromJson() {
         status TEXT DEFAULT 'active'
       )`
     );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS user_plant_usage (
+        uid TEXT NOT NULL,
+        plant_id TEXT NOT NULL,
+        first_used_at TEXT NOT NULL,
+        last_used_at TEXT NOT NULL,
+        use_count INTEGER NOT NULL DEFAULT 1,
+        last_source TEXT,
+        PRIMARY KEY (uid, plant_id)
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS sensor_alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        plant_id TEXT NOT NULL,
+        plant_name TEXT,
+        alert_type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        severity TEXT DEFAULT 'warning',
+        created_at TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        snoozed_until TEXT
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_user_plant_usage_uid_last ON user_plant_usage(uid, last_used_at DESC)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_sensor_alerts_created ON sensor_alerts(created_at DESC)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_sensor_alerts_user_created ON sensor_alerts(user_id, created_at DESC)');
   });
 
   // Migration: add status column to weather_alerts if it doesn't exist (existing DBs)
@@ -92,6 +121,30 @@ function initDbAndMigrateFromJson() {
       if (!uid || !Array.isArray(plantIds)) return;
       const at = new Date().toISOString();
       plantIds.forEach((pid) => stmt.run(uid, pid, at));
+    });
+    stmt.finalize();
+  } catch (e) {
+    // Ignore migration failures; app will still work.
+  }
+
+  // One-time migration: move user plant usage history from JSON into SQLite.
+  try {
+    const legacy = loadUserData();
+    const usage = legacy.plantUsage && typeof legacy.plantUsage === 'object' ? legacy.plantUsage : {};
+    const now = new Date().toISOString();
+    const stmt = db.prepare(
+      `INSERT INTO user_plant_usage (uid, plant_id, first_used_at, last_used_at, use_count, last_source)
+       VALUES (?, ?, ?, ?, 1, 'legacy-json')
+       ON CONFLICT(uid, plant_id) DO UPDATE SET
+         last_used_at = excluded.last_used_at,
+         use_count = user_plant_usage.use_count + 1`
+    );
+    Object.entries(usage).forEach(([uid, plantIds]) => {
+      if (!uid || !Array.isArray(plantIds)) return;
+      plantIds.forEach((pid) => {
+        if (!pid) return;
+        stmt.run(uid, pid, now, now);
+      });
     });
     stmt.finalize();
   } catch (e) {
@@ -1149,6 +1202,112 @@ function decorateCatalogPlant(p) {
 
 let alertIdCounter = 1;
 const MAX_ALERTS = 200;
+const ALERT_RETENTION_LIMIT = 10;
+
+function pruneWeatherAlerts(uid) {
+  if (!uid) return;
+  db.run(
+    `DELETE FROM weather_alerts
+     WHERE user_id = ?
+       AND id NOT IN (
+         SELECT id FROM weather_alerts
+         WHERE user_id = ?
+         ORDER BY datetime(created_at) DESC, id DESC
+         LIMIT ?
+       )`,
+    [uid, uid, ALERT_RETENTION_LIMIT]
+  );
+}
+
+function pruneSensorAlerts(uid) {
+  if (uid) {
+    db.run(
+      `DELETE FROM sensor_alerts
+       WHERE user_id = ?
+         AND id NOT IN (
+           SELECT id FROM sensor_alerts
+           WHERE user_id = ?
+           ORDER BY datetime(created_at) DESC, id DESC
+           LIMIT ?
+         )`,
+      [uid, uid, ALERT_RETENTION_LIMIT]
+    );
+    return;
+  }
+  db.run(
+    `DELETE FROM sensor_alerts
+     WHERE user_id IS NULL
+       AND id NOT IN (
+         SELECT id FROM sensor_alerts
+         WHERE user_id IS NULL
+         ORDER BY datetime(created_at) DESC, id DESC
+         LIMIT ?
+       )`,
+    [ALERT_RETENTION_LIMIT]
+  );
+}
+
+function upsertUserPlantUsage(uid, plantIds, source = 'app-usage', done) {
+  if (!uid || !Array.isArray(plantIds) || plantIds.length === 0) {
+    if (typeof done === 'function') done(null);
+    return;
+  }
+  const unique = [...new Set(plantIds.filter(Boolean))];
+  if (!unique.length) {
+    if (typeof done === 'function') done(null);
+    return;
+  }
+  const now = new Date().toISOString();
+  db.serialize(() => {
+    const stmt = db.prepare(
+      `INSERT INTO user_plant_usage (uid, plant_id, first_used_at, last_used_at, use_count, last_source)
+       VALUES (?, ?, ?, ?, 1, ?)
+       ON CONFLICT(uid, plant_id) DO UPDATE SET
+         last_used_at = excluded.last_used_at,
+         use_count = user_plant_usage.use_count + 1,
+         last_source = excluded.last_source`
+    );
+    unique.forEach((plantId) => stmt.run(uid, plantId, now, now, source));
+    stmt.finalize((err) => {
+      if (!err) {
+        if (!store.plantUsage) store.plantUsage = {};
+        const set = new Set(store.plantUsage[uid] || []);
+        unique.forEach((id) => set.add(id));
+        store.plantUsage[uid] = [...set];
+      }
+      if (typeof done === 'function') done(err || null);
+    });
+  });
+}
+
+function insertSensorAlert(alert, done) {
+  const uid = alert.userId || null;
+  db.run(
+    `INSERT INTO sensor_alerts
+      (user_id, plant_id, plant_name, alert_type, message, severity, created_at, is_read, status, snoozed_until)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      uid,
+      alert.plantId || 'unknown',
+      alert.plantName || alert.plantId || 'Sensor',
+      alert.type || 'sensor',
+      alert.message || 'Sensor alert',
+      alert.severity || 'warning',
+      alert.at || new Date().toISOString(),
+      alert.read ? 1 : 0,
+      alert.resolved ? 'resolved' : 'active',
+      alert.snoozedUntil || null,
+    ],
+    function (err) {
+      if (err) {
+        if (typeof done === 'function') done(err);
+        return;
+      }
+      pruneSensorAlerts(uid);
+      if (typeof done === 'function') done(null, String(this.lastID));
+    }
+  );
+}
 
 app.use(cors());
 app.use(express.json());
@@ -1177,7 +1336,7 @@ app.get('/api/plants/catalog/:id', (req, res) => {
 
 // --- API: Telemetry (ESP32 Plant Bot POST) ---
 app.post('/api/telemetry', (req, res) => {
-  const { plantId, moisture, temp, lux, humidity, battery } = req.body;
+  const { plantId, moisture, temp, lux, humidity, battery, uid } = req.body;
   if (!plantId) return res.status(400).json({ error: 'plantId required' });
 
   const plant = store.plants.find(p => p.id === plantId);
@@ -1201,10 +1360,12 @@ app.post('/api/telemetry', (req, res) => {
   plant.lux = reading.lux;
   plant.updatedAt = reading.at;
   plant.status = reading.moisture < 40 ? 'Moisture low' : reading.moisture < 50 ? 'Drying' : 'Healthy';
+  if (uid) upsertUserPlantUsage(uid, [plantId], 'telemetry');
 
   if (reading.moisture < 40 && store.plants.find(p => p.id === plantId)) {
     const alert = {
       id: String(alertIdCounter++),
+      userId: uid || null,
       plantId,
       plantName: plant.name,
       type: 'moisture',
@@ -1215,9 +1376,7 @@ app.post('/api/telemetry', (req, res) => {
       resolved: false,
       snoozedUntil: null,
     };
-    if (!store.sensorAlerts) store.sensorAlerts = [];
-    store.sensorAlerts.push(alert);
-    if (store.sensorAlerts.length > MAX_ALERTS) store.sensorAlerts = store.sensorAlerts.slice(-MAX_ALERTS);
+    insertSensorAlert(alert);
   }
 
   res.json({ ok: true, plant });
@@ -1285,22 +1444,54 @@ const ALERT_DISPLAY_LIMIT = 10;
 app.get('/api/alerts', (req, res) => {
   const filter = req.query.filter || 'active';
   const unreadOnly = req.query.unread === 'true';
-  let list = store.sensorAlerts || [];
-  if (filter === 'active') list = list.filter(isAlertActive);
-  else if (filter === 'resolved') list = list.filter(a => a.resolved);
-  else if (filter === 'snoozed') list = list.filter(a => a.snoozedUntil && new Date(a.snoozedUntil) > new Date());
-  else if (filter === 'all') list = list;
-  if (unreadOnly) list = list.filter(a => !a.read);
-  list = list.slice().reverse().slice(0, ALERT_DISPLAY_LIMIT);
-  res.json(list);
+  const uid = typeof req.query.uid === 'string' && req.query.uid.trim() ? req.query.uid.trim() : null;
+  const where = [];
+  const params = [];
+  if (uid) {
+    where.push('(user_id = ?)');
+    params.push(uid);
+  } else {
+    where.push('(user_id IS NULL)');
+  }
+  if (filter === 'active') {
+    where.push("(status = 'active' OR status IS NULL)");
+    where.push('(snoozed_until IS NULL OR datetime(snoozed_until) <= datetime(\'now\'))');
+  } else if (filter === 'resolved') {
+    where.push("(status = 'resolved')");
+  } else if (filter === 'snoozed') {
+    where.push('(snoozed_until IS NOT NULL AND datetime(snoozed_until) > datetime(\'now\'))');
+  }
+  if (unreadOnly) where.push('(is_read = 0)');
+  const sql = `SELECT id, plant_id, plant_name, alert_type, message, severity, created_at, is_read, status, snoozed_until
+               FROM sensor_alerts
+               ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+               ORDER BY datetime(created_at) DESC, id DESC
+               LIMIT ?`;
+  db.all(sql, [...params, ALERT_DISPLAY_LIMIT], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'Failed to load alerts' });
+    const list = (rows || []).map((r) => ({
+      id: String(r.id),
+      plantId: r.plant_id,
+      plantName: r.plant_name,
+      type: r.alert_type,
+      message: r.message,
+      severity: r.severity || 'warning',
+      at: r.created_at,
+      read: !!r.is_read,
+      resolved: (r.status || 'active') === 'resolved',
+      snoozedUntil: r.snoozed_until || null,
+    }));
+    res.json(list);
+  });
 });
 
 app.post('/api/alerts', (req, res) => {
-  const { plantId, type, message, severity } = req.body;
+  const { plantId, type, message, severity, uid } = req.body;
   const plant = store.plants.find(p => p.id === plantId);
   const plantName = plant ? plant.name : plantId || 'Sensor';
   const alert = {
     id: String(alertIdCounter++),
+    userId: uid || null,
     plantId: plantId || 'unknown',
     plantName,
     type: type || 'sensor',
@@ -1311,26 +1502,76 @@ app.post('/api/alerts', (req, res) => {
     resolved: false,
     snoozedUntil: null,
   };
-  if (!store.sensorAlerts) store.sensorAlerts = [];
-  store.sensorAlerts.push(alert);
-  if (store.sensorAlerts.length > MAX_ALERTS) store.sensorAlerts = store.sensorAlerts.slice(-MAX_ALERTS);
-  res.status(201).json(alert);
+  insertSensorAlert(alert, (err, id) => {
+    if (err) return res.status(500).json({ error: 'Failed to create alert' });
+    res.status(201).json({ ...alert, id: String(id || alert.id) });
+  });
 });
 
 app.patch('/api/alerts/:id', (req, res) => {
-  const a = (store.sensorAlerts || []).find(x => x.id === req.params.id);
-  if (!a) return res.status(404).json({ error: 'Alert not found' });
-  if (req.body.read !== undefined) a.read = !!req.body.read;
-  if (req.body.resolved !== undefined) a.resolved = !!req.body.resolved;
-  if (req.body.snoozedUntil !== undefined) a.snoozedUntil = req.body.snoozedUntil || null;
-  res.json(a);
+  const id = req.params.id;
+  const changes = [];
+  const params = [];
+  if (req.body.read !== undefined) {
+    changes.push('is_read = ?');
+    params.push(req.body.read ? 1 : 0);
+  }
+  if (req.body.resolved !== undefined) {
+    changes.push('status = ?');
+    params.push(req.body.resolved ? 'resolved' : 'active');
+  }
+  if (req.body.snoozedUntil !== undefined) {
+    changes.push('snoozed_until = ?');
+    params.push(req.body.snoozedUntil || null);
+  }
+  if (!changes.length) return res.status(400).json({ error: 'No updates provided' });
+  params.push(id);
+  db.run(`UPDATE sensor_alerts SET ${changes.join(', ')} WHERE id = ?`, params, function (err) {
+    if (err) return res.status(500).json({ error: 'Failed to update alert' });
+    if (this.changes === 0) return res.status(404).json({ error: 'Alert not found' });
+    db.get(
+      'SELECT id, plant_id, plant_name, alert_type, message, severity, created_at, is_read, status, snoozed_until FROM sensor_alerts WHERE id = ?',
+      [id],
+      (fetchErr, row) => {
+        if (fetchErr || !row) return res.json({ ok: true });
+        res.json({
+          id: String(row.id),
+          plantId: row.plant_id,
+          plantName: row.plant_name,
+          type: row.alert_type,
+          message: row.message,
+          severity: row.severity || 'warning',
+          at: row.created_at,
+          read: !!row.is_read,
+          resolved: (row.status || 'active') === 'resolved',
+          snoozedUntil: row.snoozed_until || null,
+        });
+      }
+    );
+  });
 });
 
 app.get('/api/alerts/count', (req, res) => {
-  const all = store.sensorAlerts || [];
-  const active = all.filter(isAlertActive);
-  const unread = active.filter(a => !a.read).length;
-  res.json({ total: all.length, active: active.length, unread });
+  const uid = typeof req.query.uid === 'string' && req.query.uid.trim() ? req.query.uid.trim() : null;
+  const whereUid = uid ? 'user_id = ?' : 'user_id IS NULL';
+  const uidParams = uid ? [uid] : [];
+  const totalSql = `SELECT COUNT(*) AS n FROM sensor_alerts WHERE ${whereUid}`;
+  const activeSql = `SELECT COUNT(*) AS n FROM sensor_alerts WHERE ${whereUid} AND (status = 'active' OR status IS NULL) AND (snoozed_until IS NULL OR datetime(snoozed_until) <= datetime('now'))`;
+  const unreadSql = `SELECT COUNT(*) AS n FROM sensor_alerts WHERE ${whereUid} AND (status = 'active' OR status IS NULL) AND (snoozed_until IS NULL OR datetime(snoozed_until) <= datetime('now')) AND is_read = 0`;
+  db.get(totalSql, uidParams, (errTotal, totalRow) => {
+    if (errTotal) return res.status(500).json({ total: 0, active: 0, unread: 0 });
+    db.get(activeSql, uidParams, (errActive, activeRow) => {
+      if (errActive) return res.status(500).json({ total: 0, active: 0, unread: 0 });
+      db.get(unreadSql, uidParams, (errUnread, unreadRow) => {
+        if (errUnread) return res.status(500).json({ total: 0, active: 0, unread: 0 });
+        res.json({
+          total: (totalRow && totalRow.n) || 0,
+          active: (activeRow && activeRow.n) || 0,
+          unread: (unreadRow && unreadRow.n) || 0,
+        });
+      });
+    });
+  });
 });
 
 // --- API: Weather-based alerts (per user, stored in SQLite) ---
@@ -1377,10 +1618,16 @@ app.post('/api/users/:uid/weather-alerts', (req, res) => {
         if (err) return res.status(500).json({ error: 'Failed to check alert limit' });
         const todayCount = (row && row.n) || 0;
         const remaining = Math.max(0, WEATHER_ALERT_MAX_PER_DAY - todayCount);
-        if (remaining === 0) return res.json({ created: 0, alerts: [] });
+        if (remaining === 0) {
+          pruneWeatherAlerts(uid);
+          return res.json({ created: 0, alerts: [] });
+        }
 
         const runOne = (index) => {
-          if (index >= toCreate.length) return res.json({ created: created.length, alerts: created });
+          if (index >= toCreate.length) {
+            pruneWeatherAlerts(uid);
+            return res.json({ created: created.length, alerts: created });
+          }
           const one = toCreate[index];
           db.get(
             "SELECT id FROM weather_alerts WHERE user_id = ? AND alert_type = ? AND created_at > datetime('now', ?) LIMIT 1",
@@ -1388,7 +1635,10 @@ app.post('/api/users/:uid/weather-alerts', (req, res) => {
             (err2, existing) => {
               if (err2) return runOne(index + 1);
               if (existing) return runOne(index + 1);
-              if (created.length >= remaining) return res.json({ created: created.length, alerts: created });
+              if (created.length >= remaining) {
+                pruneWeatherAlerts(uid);
+                return res.json({ created: created.length, alerts: created });
+              }
               db.run(
                 'INSERT INTO weather_alerts (user_id, alert_type, alert_message, weather_condition, created_at, is_read) VALUES (?, ?, ?, ?, ?, 0)',
                 [uid, one.alert_type, one.alert_message, one.weather_condition, now],
@@ -1490,9 +1740,11 @@ app.put('/api/users/:uid/favourites', (req, res) => {
         if (insErr) return res.status(500).json({ error: 'Failed to update favourites' });
         // Keep JSON mirror updated (optional)
         store.favourites[uid] = plantIds;
-        mergePlantUsage(uid, plantIds);
-        saveUserData();
-        res.json(store.favourites[uid]);
+        upsertUserPlantUsage(uid, plantIds, 'favourites', (usageErr) => {
+          if (usageErr) return res.status(500).json({ error: 'Failed to update usage from favourites' });
+          saveUserData();
+          res.json(store.favourites[uid]);
+        });
       });
     });
   });
@@ -1511,30 +1763,76 @@ function mergePlantUsage(uid, plantIds) {
 app.post('/api/users/:uid/usage', (req, res) => {
   const uid = req.params.uid;
   const plantIds = Array.isArray(req.body.plantIds) ? req.body.plantIds : [];
-  mergePlantUsage(uid, plantIds);
-  saveUserData();
-  res.json({ ok: true, plantsCount: (store.plantUsage[uid] || []).length });
+  upsertUserPlantUsage(uid, plantIds, req.body.source || 'app-usage', (err) => {
+    if (err) return res.status(500).json({ error: 'Failed to record plant usage' });
+    saveUserData();
+    db.get('SELECT COUNT(*) AS n FROM user_plant_usage WHERE uid = ?', [uid], (countErr, row) => {
+      if (countErr) return res.status(500).json({ error: 'Failed to read plant usage count' });
+      res.json({ ok: true, plantsCount: (row && row.n) || 0 });
+    });
+  });
 });
 
 // --- API: Plants used by user (derived from usage + catalog) ---
 app.get('/api/users/:uid/used-plants', (req, res) => {
   const uid = req.params.uid;
-  const usedIds = Array.isArray(store.plantUsage?.[uid]) ? store.plantUsage[uid] : [];
-  const byId = new Map((store.plantCatalog || []).map(p => [p.id, p]));
-  const usedPlants = usedIds.map(id => byId.get(id)).filter(Boolean).map(decorateCatalogPlant);
-  res.json(usedPlants);
+  db.all(
+    'SELECT plant_id, first_used_at, last_used_at, use_count, last_source FROM user_plant_usage WHERE uid = ? ORDER BY datetime(last_used_at) DESC',
+    [uid],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: 'Failed to load used plants' });
+      const byId = new Map((store.plantCatalog || []).map(p => [p.id, p]));
+      const usedPlants = (rows || [])
+        .map((r) => {
+          const base = byId.get(r.plant_id);
+          if (!base) return null;
+          return {
+            ...decorateCatalogPlant(base),
+            usage: {
+              first_used_at: r.first_used_at,
+              last_used_at: r.last_used_at,
+              use_count: r.use_count || 0,
+              last_source: r.last_source || null,
+            },
+          };
+        })
+        .filter(Boolean);
+      res.json(usedPlants);
+    }
+  );
+});
+
+// --- API: Full usage history metadata for a user (past + present sensor-linked usage) ---
+app.get('/api/users/:uid/usage-history', (req, res) => {
+  const uid = req.params.uid;
+  db.all(
+    'SELECT plant_id, first_used_at, last_used_at, use_count, last_source FROM user_plant_usage WHERE uid = ? ORDER BY datetime(last_used_at) DESC',
+    [uid],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: 'Failed to load usage history' });
+      res.json((rows || []).map((r) => ({
+        plantId: r.plant_id,
+        firstUsedAt: r.first_used_at,
+        lastUsedAt: r.last_used_at,
+        useCount: r.use_count || 0,
+        lastSource: r.last_source || null,
+      })));
+    }
+  );
 });
 
 // --- API: User profile stats (plants = distinct plants used with app; followers/following) ---
 app.get('/api/users/:uid/stats', (req, res) => {
   const uid = req.params.uid;
-  const usedIds = Array.isArray(store.plantUsage?.[uid]) ? store.plantUsage[uid] : [];
-  const followersCount = (store.follows || []).filter(f => f.toUid === uid).length;
-  const followingCount = (store.follows || []).filter(f => f.fromUid === uid).length;
-  res.json({
-    plantsCount: usedIds.length,
-    followersCount,
-    followingCount,
+  db.get('SELECT COUNT(*) AS n FROM user_plant_usage WHERE uid = ?', [uid], (err, row) => {
+    if (err) return res.status(500).json({ error: 'Failed to load user stats' });
+    const followersCount = (store.follows || []).filter(f => f.toUid === uid).length;
+    const followingCount = (store.follows || []).filter(f => f.fromUid === uid).length;
+    res.json({
+      plantsCount: (row && row.n) || 0,
+      followersCount,
+      followingCount,
+    });
   });
 });
 
