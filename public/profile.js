@@ -220,7 +220,7 @@ function applyProfilePrivacyToView() {
 /** Plants catalog view: fetch /api/plants/catalog and render card grid (Explore Our Categories style). */
 let plantsListFilter = (dewSettings && dewSettings.defaultPlantsFilter) || "indoor";
 let plantsLightFilter = (dewSettings && dewSettings.defaultLightFilter) || "all";
-const PLANT_IMAGE_CACHE_BUST = "20260306b";
+const PLANT_IMAGE_CACHE_BUST = "20260306c";
 
 function buildPlantImageUrl(filename) {
   const trimmed = String(filename || "").trim();
@@ -535,6 +535,13 @@ function openPlantDetail(plantId) {
   currentPlantDetailId = plantId;
   showView("plant");
   animatePlantDetailEntry();
+  // Always open from the top of the page (header), not where the user last scrolled.
+  try {
+    const main = document.querySelector(".main");
+    if (main) main.scrollTop = 0;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    plantDetailView?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  } catch (_) {}
   loadPlantDetail(plantId);
 }
 
@@ -2955,15 +2962,16 @@ async function resizeImage(file, maxSize = 400) {
 authReady.then((auth) => {
   initNav();
   const initialSlug = parseCommunitySlugFromPath();
-  if (initialSlug) {
+  // Direct community links should still open community,
+  // but refresh should always land on dashboard otherwise.
+  if (window.location.pathname.startsWith("/community") && initialSlug) {
     communitySelectedSlug = initialSlug;
     communityCategoryFilter = initialSlug;
     showView("community");
   } else if (window.location.pathname === "/community") {
     showView("community");
   } else {
-    // New visit to root should open dashboard; reload restores last in-app view.
-    showView(isReloadNavigation() ? (getLastView() || "dashboard") : "dashboard");
+    showView("dashboard");
   }
 
   onAuthStateChanged(auth, (user) => {
