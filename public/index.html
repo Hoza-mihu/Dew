@@ -1228,7 +1228,7 @@
               </div>
             </aside>
             <div class="community-main">
-              <div class="community-main-header">
+              <div class="community-main-header" id="communityControls">
                 <div class="community-search-row">
                   <input type="search" id="communitySearch" class="community-search-input" placeholder="Search posts or communities…" aria-label="Search posts or communities" />
                   <button type="button" class="btn btn-primary" id="communitySearchBtn"><i class="ri-search-line"></i> Search</button>
@@ -1299,6 +1299,21 @@
                   <div class="community-highlight-col">
                     <h3>Top Posts</h3>
                     <ul id="communityTopList"></ul>
+                  </div>
+                </div>
+              </section>
+              <section class="card community-highlights-cards" id="communityHighlightsCards" style="display:none">
+                <div class="community-highlights-cards-header">
+                  <h3><i class="ri-sparkling-2-line"></i> Community highlights</h3>
+                </div>
+                <div class="community-highlights-cards-grid">
+                  <div class="community-highlight-card">
+                    <div class="community-highlight-card-title">Most popular</div>
+                    <ul id="communityHighlightsTop" class="community-highlight-list"></ul>
+                  </div>
+                  <div class="community-highlight-card">
+                    <div class="community-highlight-card-title">Trending now</div>
+                    <ul id="communityHighlightsRecent" class="community-highlight-list"></ul>
                   </div>
                 </div>
               </section>

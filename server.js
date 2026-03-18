@@ -186,6 +186,20 @@ function initDbAndMigrateFromJson() {
       )`
     );
     db.run('CREATE INDEX IF NOT EXISTS idx_community_messages_slug ON community_messages(community_slug, created_at DESC)');
+
+    // Community post engagement metrics (shares tracked here; score/comments mirrored from Supabase)
+    db.run(
+      `CREATE TABLE IF NOT EXISTS community_post_metrics (
+        post_id TEXT PRIMARY KEY,
+        community_slug TEXT NOT NULL,
+        share_count INTEGER NOT NULL DEFAULT 0,
+        last_seen_score INTEGER NOT NULL DEFAULT 0,
+        last_seen_comments INTEGER NOT NULL DEFAULT 0,
+        last_shared_at TEXT,
+        updated_at TEXT NOT NULL
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_post_metrics_slug ON community_post_metrics(community_slug)');
   });
 
   // Migration: add status column to weather_alerts if it doesn't exist (existing DBs)
@@ -1691,6 +1705,99 @@ app.post('/api/communities/:slug/messages', async (req, res) => {
       res.json({ ok: true, id: String(this.lastID) });
     }
   );
+});
+
+app.post('/api/posts/:id/share', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  const slug = String(req.body.communitySlug || '').trim().toLowerCase();
+  if (!postId || !slug) return res.status(400).json({ error: 'post id and communitySlug required' });
+  let uid;
+  try {
+    uid = await requireFirebaseUser(req);
+  } catch (e) {
+    return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO community_post_metrics (post_id, community_slug, share_count, updated_at, last_shared_at)
+     VALUES (?, ?, 1, ?, ?)
+     ON CONFLICT(post_id) DO UPDATE SET
+       share_count = community_post_metrics.share_count + 1,
+       updated_at = excluded.updated_at,
+       last_shared_at = excluded.last_shared_at`,
+    [postId, slug, now, now],
+    (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to record share' });
+      res.json({ ok: true });
+    }
+  );
+});
+
+app.post('/api/posts/:id/metrics', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  const slug = String(req.body.communitySlug || '').trim().toLowerCase();
+  const score = Number(req.body.score || 0);
+  const comments = Number(req.body.comments || 0);
+  if (!postId || !slug) return res.status(400).json({ error: 'post id and communitySlug required' });
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO community_post_metrics (post_id, community_slug, share_count, last_seen_score, last_seen_comments, updated_at)
+     VALUES (?, ?, 0, ?, ?, ?)
+     ON CONFLICT(post_id) DO UPDATE SET
+       community_slug = excluded.community_slug,
+       last_seen_score = excluded.last_seen_score,
+       last_seen_comments = excluded.last_seen_comments,
+       updated_at = excluded.updated_at`,
+    [postId, slug, Number.isFinite(score) ? score : 0, Number.isFinite(comments) ? comments : 0, now],
+    (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to update metrics' });
+      res.json({ ok: true });
+    }
+  );
+});
+
+app.get('/api/communities/:slug/highlights', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+  const { data: comm, error: commErr } = await supabaseAdmin
+    .from('communities')
+    .select('id, slug')
+    .eq('slug', slug)
+    .single();
+  if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
+  const { data: posts, error: postsErr } = await supabaseAdmin
+    .from('posts')
+    .select('id,title,created_at,author_username,score,comment_count,image_url')
+    .eq('community_id', comm.id)
+    .limit(200);
+  if (postsErr) return res.status(500).json({ error: 'Failed to load posts' });
+  const list = Array.isArray(posts) ? posts : [];
+  const ids = list.map((p) => String(p.id));
+  const sharesById = new Map();
+  if (ids.length) {
+    const ph = ids.map(() => '?').join(',');
+    await new Promise((resolve) => {
+      db.all(
+        `SELECT post_id, share_count FROM community_post_metrics WHERE post_id IN (${ph})`,
+        ids,
+        (e, rows) => {
+          (rows || []).forEach((r) => sharesById.set(String(r.post_id), r.share_count || 0));
+          resolve();
+        }
+      );
+    });
+  }
+  const scored = list.map((p) => {
+    const share = sharesById.get(String(p.id)) || 0;
+    const score = p.score ?? 0;
+    const comments = p.comment_count ?? 0;
+    const popularity = score + comments * 2 + share * 3;
+    return { ...p, share_count: share, popularity };
+  });
+  const top = scored.slice().sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0)).slice(0, 4);
+  const recent = scored.slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 4);
+  res.json({ top, recent });
 });
 
 app.get('/api/communities', async (req, res) => {

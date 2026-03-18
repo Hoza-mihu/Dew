@@ -1139,10 +1139,18 @@ function renderCommunityRecentList() {
 function renderCommunityPanels(allPosts) {
   const detailCard = document.getElementById("communityDetailCard");
   const infoCard = document.getElementById("communityInfoCard");
+  const controls = document.getElementById("communityControls");
+  const highlightsWrap = document.getElementById("communityHighlightsCards");
   if (!detailCard || !infoCard) return;
   if (!communitySelectedSlug) {
     detailCard.style.display = "none";
     infoCard.style.display = "none";
+    if (highlightsWrap) highlightsWrap.style.display = "none";
+    // keep controls at top when no community selected
+    if (controls && controls.parentElement?.firstElementChild !== controls) {
+      const main = document.querySelector(".community-main");
+      if (main) main.insertBefore(controls, main.firstElementChild);
+    }
     return;
   }
   const slug = communitySelectedSlug;
@@ -1160,6 +1168,13 @@ function renderCommunityPanels(allPosts) {
   }
   detailCard.style.display = "block";
   infoCard.style.display = "block";
+  // Move the search/sort controls below the header card (like your reference).
+  try {
+    if (controls && controls.parentElement && controls.parentElement !== detailCard.parentElement) {
+      // noop
+    }
+    if (controls) detailCard.insertAdjacentElement("afterend", controls);
+  } catch (_) {}
   const titleEl = document.getElementById("communityDetailTitle");
   const descEl = document.getElementById("communityDetailDesc");
   const logoEl = document.getElementById("communityDetailLogo");
@@ -1423,6 +1438,47 @@ function renderCommunityPanels(allPosts) {
     });
     msgTarget.innerHTML = opts.join("");
   }
+
+  // Load and render community highlights based on DB-backed popularity score (upvotes + comments + shares).
+  (async () => {
+    if (!highlightsWrap) return;
+    try {
+      const res = await fetch(`/api/communities/${encodeURIComponent(slug)}/highlights`);
+      if (!res.ok) throw new Error("not ok");
+      const data = await res.json();
+      const top = Array.isArray(data?.top) ? data.top : [];
+      const recent = Array.isArray(data?.recent) ? data.recent : [];
+      const topEl = document.getElementById("communityHighlightsTop");
+      const recEl = document.getElementById("communityHighlightsRecent");
+      if (topEl) {
+        topEl.innerHTML = top.length
+          ? top
+              .map(
+                (p) =>
+                  `<li><span>${escapeHtml((p.title || "").slice(0, 40))}${(p.title || "").length > 40 ? "…" : ""}</span><span class="meta">${escapeHtml(
+                    String(p.popularity ?? 0)
+                  )}</span></li>`
+              )
+              .join("")
+          : "<li><span>No posts yet</span><span class=\"meta\">—</span></li>";
+      }
+      if (recEl) {
+        recEl.innerHTML = recent.length
+          ? recent
+              .map(
+                (p) =>
+                  `<li><span>${escapeHtml((p.title || "").slice(0, 40))}${(p.title || "").length > 40 ? "…" : ""}</span><span class="meta">${escapeHtml(
+                    String(p.popularity ?? 0)
+                  )}</span></li>`
+              )
+              .join("")
+          : "<li><span>No posts yet</span><span class=\"meta\">—</span></li>";
+      }
+      highlightsWrap.style.display = "block";
+    } catch (_) {
+      highlightsWrap.style.display = "none";
+    }
+  })();
 }
 
 function openCommunitySymbolModal(slug, comm) {
@@ -2024,6 +2080,52 @@ async function loadCommunityView() {
           loadCommunityView();
         });
       });
+
+      // Track shares + mirror score/comment counts to backend for popularity scoring.
+      const shareBtn = card.querySelector('[data-action="share"]');
+      if (shareBtn) {
+        shareBtn.addEventListener("click", async () => {
+          try {
+            const slug = String(communitySelectedSlug || "").toLowerCase();
+            if (!slug) return;
+            const auth = await authReady;
+            const token = await auth.currentUser?.getIdToken?.();
+            if (!token) return;
+            await fetch(`/api/posts/${encodeURIComponent(postId)}/share`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ communitySlug: slug }),
+            });
+            // Basic share UX
+            try {
+              await navigator.clipboard?.writeText?.(window.location.href);
+            } catch (_) {}
+            showToast("Link copied. Shared!", "success");
+            loadCommunityView();
+          } catch (_) {
+            showToast("Could not share.", "error");
+          }
+        });
+      }
+
+      (async () => {
+        try {
+          const slug = String(communitySelectedSlug || "").toLowerCase();
+          if (!slug || !currentProfileUser?.uid) return;
+          const auth = await authReady;
+          const token = await auth.currentUser?.getIdToken?.();
+          if (!token) return;
+          const score = Number(card.querySelector(".community-vote-score")?.textContent || 0);
+          const comments = Number(
+            String(card.querySelector('[data-action="comments"]')?.textContent || "").match(/(\d+)/)?.[1] || 0
+          );
+          await fetch(`/api/posts/${encodeURIComponent(postId)}/metrics`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ communitySlug: slug, score, comments }),
+          });
+        } catch (_) {}
+      })();
     });
   } catch {
     if (feed) feed.innerHTML = "<p class=\"plants-list-empty\">Unable to load community posts. Check Supabase config and tables (posts).</p>";
