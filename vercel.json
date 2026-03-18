@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://dew-production-3a74.up.railway.app/api/:path*"
+      "destination": "https://dew.up.railway.app/api/:path*"
     }
   ]
 }
