@@ -4134,6 +4134,102 @@ body.reduce-motion .card:hover {
   box-shadow: 0 0 0 2px rgba(126, 242, 191, 0.18) inset;
 }
 
+/* In-card media gallery (full image/video + scrollable thumbnails) */
+.community-post-media-gallery {
+  width: 100%;
+  margin: 10px 0 14px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.20);
+}
+
+.community-post-media-scroller {
+  display: flex;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(0, 0, 0, 0.10);
+}
+
+.community-post-media-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+  height: min(65vh, 520px);
+}
+
+.community-post-media-slide img,
+.community-post-media-slide video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.community-post-media-slide--audio {
+  height: auto;
+  padding: 14px;
+}
+
+.community-post-media-slide--audio audio {
+  width: 100%;
+}
+
+.community-post-media-thumb-row {
+  padding: 10px 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.10);
+}
+
+.community-post-media-thumb-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 2px;
+}
+
+.community-post-media-thumb-btn {
+  flex: 0 0 auto;
+  width: 92px;
+  height: 62px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: start;
+  padding: 0;
+}
+
+.community-post-media-thumb-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.community-post-media-thumb-btn i {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.community-post-media-thumb-btn--active {
+  border-color: rgba(126, 242, 191, 0.55);
+  box-shadow: 0 0 0 2px rgba(126, 242, 191, 0.15) inset;
+}
+
 .community-post-media-preview-remove {
   position: absolute;
   top: 10px;

@@ -339,6 +339,11 @@ function bindCommunityPostMediaLightbox() {
   function onPostClick(e) {
     const card = e.target.closest(".community-post");
     if (!card) return;
+    // The post card now includes an in-place media gallery. Don't open the full lightbox
+    // when clicking media elements inside the gallery.
+    if (e.target.closest(".community-post-media-gallery")) return;
+    if (e.target.closest(".community-post-media-thumb-btn")) return;
+    if (e.target.closest("video") || e.target.closest("audio")) return;
     const mediaUrlsRaw = card.dataset.mediaUrls || "";
     const mediaTypesRaw = card.dataset.mediaTypes || "";
     if (!mediaUrlsRaw) return;
@@ -3078,20 +3083,66 @@ async function loadCommunityView() {
                 </div>
               </div>
             </div>
-            ${
-              p.primary_media_url
-                ? `<div class="community-post-image">
-                    ${
-                      p.primary_media_type === "video"
-                        ? `<video src="${escapeHtml(p.primary_media_url)}" controls preload="metadata"></video>`
-                        : p.primary_media_type === "audio"
-                          ? `<audio src="${escapeHtml(p.primary_media_url)}" controls preload="metadata"></audio>`
-                          : `<img src="${escapeHtml(p.primary_media_url)}" alt="" loading="lazy" />`
-                    }
-                    ${p.media_count && p.media_count > 1 ? `<div class="community-post-media-count">+${p.media_count - 1}</div>` : ""}
+            ${(() => {
+              const safeMediaUrls = (mediaUrls || []).filter((u) => !!u);
+              const safeMediaTypes = Array.isArray(mediaTypes) ? mediaTypes : [];
+              const hasMedia = safeMediaUrls.length > 0;
+              if (!hasMedia) return "";
+
+              const inferKind = (url, explicitType) => {
+                if (explicitType === "video" || explicitType === "audio") return explicitType;
+                const u = String(url || "").toLowerCase();
+                if (u.match(/\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/)) return "video";
+                if (u.match(/\.(mp3|wav|m4a|aac|flac|ogg)(\?.*)?$/)) return "audio";
+                return "image";
+              };
+
+              const slidesHtml = safeMediaUrls
+                .map((url, idx) => {
+                  const kind = inferKind(url, safeMediaTypes[idx]);
+                  if (kind === "video") {
+                    return `<div class="community-post-media-slide" data-slide-index="${idx}">
+                      <video src="${escapeHtml(url)}" controls preload="metadata" playsinline></video>
+                    </div>`;
+                  }
+                  if (kind === "audio") {
+                    return `<div class="community-post-media-slide community-post-media-slide--audio" data-slide-index="${idx}">
+                      <audio src="${escapeHtml(url)}" controls preload="metadata"></audio>
+                    </div>`;
+                  }
+                  return `<div class="community-post-media-slide" data-slide-index="${idx}">
+                    <img src="${escapeHtml(url)}" alt="Post media ${idx + 1}" loading="lazy" />
+                  </div>`;
+                })
+                .join("");
+
+              const showThumbs = safeMediaUrls.length > 1;
+              const thumbsHtml = showThumbs
+                ? `<div class="community-post-media-thumb-row">
+                    <div class="community-post-media-thumb-strip" role="tablist" aria-label="Post media thumbnails">
+                      ${safeMediaUrls
+                        .map((url, idx) => {
+                          const kind = inferKind(url, safeMediaTypes[idx]);
+                          const inner =
+                            kind === "image"
+                              ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" />`
+                              : `<i class="${kind === "video" ? "ri-play-line" : "ri-music-2-line"}"></i>`;
+                          return `<button type="button" class="community-post-media-thumb-btn" data-media-slide-index="${idx}">
+                            ${inner}
+                          </button>`;
+                        })
+                        .join("")}
+                    </div>
                   </div>`
-                : ""
-            }
+                : "";
+
+              return `<div class="community-post-media-gallery" aria-label="Post media gallery">
+                <div class="community-post-media-scroller" role="region" aria-label="Post media scroller">
+                  ${slidesHtml}
+                </div>
+                ${thumbsHtml}
+              </div>`;
+            })()}
             <div class="community-post-body">${escapeHtml(p.body || "")}</div>
             ${tags.length ? `<div class="community-post-tags">${tags.map((t) => `<span class="community-post-tag">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
             <div class="community-post-footer">
@@ -3125,6 +3176,32 @@ async function loadCommunityView() {
           loadCommunityView();
         });
       });
+
+      // In-card media gallery UX (thumb -> scroll)
+      const scroller = card.querySelector(".community-post-media-scroller");
+      const thumbBtns = Array.from(card.querySelectorAll(".community-post-media-thumb-btn"));
+      if (scroller && thumbBtns.length) {
+        const slides = Array.from(card.querySelectorAll(".community-post-media-slide"));
+        const updateActive = () => {
+          const idx = Math.round(scroller.scrollLeft / Math.max(1, scroller.clientWidth));
+          thumbBtns.forEach((b) => {
+            const bi = Number(b.dataset.mediaSlideIndex || "0");
+            b.classList.toggle("community-post-media-thumb-btn--active", bi === idx);
+          });
+        };
+        thumbBtns.forEach((btn) => {
+          btn.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            const idx = Number(btn.dataset.mediaSlideIndex || "0");
+            const slide = slides.find((s) => Number(s.dataset.slideIndex || "0") === idx);
+            slide?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+          });
+        });
+        scroller.addEventListener("scroll", () => {
+          window.requestAnimationFrame(updateActive);
+        });
+        updateActive();
+      }
 
       // Track shares + mirror score/comment counts to backend for popularity scoring.
       const shareBtn = card.querySelector('[data-action="share"]');
