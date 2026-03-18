@@ -2962,13 +2962,19 @@ async function resizeImage(file, maxSize = 400) {
 authReady.then((auth) => {
   initNav();
   const initialSlug = parseCommunitySlugFromPath();
-  // Direct community links should still open community,
-  // but refresh should always land on dashboard otherwise.
-  if (window.location.pathname.startsWith("/community") && initialSlug) {
+  // Always land on dashboard after refresh, even if user refreshed /community.
+  // (Direct community links will still work when navigating normally.)
+  if (isReloadNavigation() && window.location.pathname.startsWith("/community")) {
+    try {
+      history.replaceState({ view: "dashboard" }, "", "/");
+    } catch (_) {}
+    showView("dashboard");
+  } else if (window.location.pathname.startsWith("/community") && initialSlug) {
     communitySelectedSlug = initialSlug;
     communityCategoryFilter = initialSlug;
     showView("community");
   } else if (window.location.pathname === "/community") {
+    // Non-reload direct visit to /community
     showView("community");
   } else {
     showView("dashboard");

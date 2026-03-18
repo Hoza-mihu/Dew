@@ -376,7 +376,8 @@ const store = {
       name: 'ZZ Plant',
       species: 'Zamioculcas zamiifolia',
       indoor: true,
-      image: 'zz plant.jpg',
+      // IMPORTANT: file name is case-sensitive on Vercel/Linux
+      image: 'ZZ Plant.jpg',
       lightCategory: 'low',
       difficulty: 1,
       toxicity: 'Toxic to pets and humans if ingested.',
