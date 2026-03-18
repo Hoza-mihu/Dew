@@ -171,7 +171,10 @@ function showView(view) {
   }
   if (plantsCatalogView) plantsCatalogView.style.display = v === "plants" ? "block" : "none";
   if (myPlantsView) myPlantsView.style.display = v === "myplants" ? "block" : "none";
-  if (plantDetailView) plantDetailView.style.display = v === "plant" ? "block" : "none";
+  if (plantDetailView) {
+    plantDetailView.style.display = v === "plant" ? "block" : "none";
+    if (v !== "plant") plantDetailView.classList.remove("plant-detail-enter");
+  }
   if (aboutView) aboutView.style.display = v === "about" ? "block" : "none";
   if (communityView) communityView.style.display = v === "community" ? "block" : "none";
   document.body.classList.toggle("about-page", v === "about");
@@ -217,6 +220,109 @@ function applyProfilePrivacyToView() {
 /** Plants catalog view: fetch /api/plants/catalog and render card grid (Explore Our Categories style). */
 let plantsListFilter = (dewSettings && dewSettings.defaultPlantsFilter) || "indoor";
 let plantsLightFilter = (dewSettings && dewSettings.defaultLightFilter) || "all";
+const PLANT_IMAGE_CACHE_BUST = "20260306b";
+
+function buildPlantImageUrl(filename) {
+  const trimmed = String(filename || "").trim();
+  if (!trimmed) return "";
+  return `/images/plants/${encodeURIComponent(trimmed)}?v=${encodeURIComponent(PLANT_IMAGE_CACHE_BUST)}`;
+}
+
+function getPlantImageCandidates(imageName, plantId) {
+  const candidates = [];
+  const seen = new Set();
+  const add = (filename) => {
+    const src = buildPlantImageUrl(filename);
+    if (!src || seen.has(src)) return;
+    seen.add(src);
+    candidates.push(src);
+  };
+
+  const rawImage = String(imageName || "").trim();
+  const rawPlantId = String(plantId || "").trim();
+  const idAsFile = rawPlantId ? rawPlantId.replace(/-/g, " ") : "";
+
+  if (rawImage) add(rawImage);
+  if (rawImage && rawImage.toLowerCase() !== rawImage) add(rawImage.toLowerCase());
+
+  const dot = rawImage.lastIndexOf(".");
+  const stem = dot > 0 ? rawImage.slice(0, dot).trim() : rawImage;
+  const ext = dot > 0 ? rawImage.slice(dot).trim().toLowerCase() : ".jpg";
+
+  const stemCandidates = [stem, stem.toLowerCase(), idAsFile, idAsFile.toLowerCase()].filter(Boolean);
+  const extCandidates = [ext, ".jpg", ".jpeg", ".png", ".webp"];
+  stemCandidates.forEach((s) => {
+    extCandidates.forEach((e) => add(`${s}${e}`));
+  });
+
+  return candidates.slice(0, 10);
+}
+
+function bindPlantCardImageFallbacks(scopeEl) {
+  const scope = scopeEl || document;
+  scope.querySelectorAll("img.plant-card-img[data-image]").forEach((imgEl) => {
+    if (imgEl.dataset.fallbackBound === "1") return;
+    imgEl.dataset.fallbackBound = "1";
+    const fallbackInitial = imgEl.parentElement?.querySelector?.(".plant-card-initial");
+    const candidates = getPlantImageCandidates(imgEl.dataset.image || "", imgEl.dataset.plantId || "");
+    let idx = 0;
+
+    const tryNext = () => {
+      if (idx >= candidates.length) return false;
+      const next = candidates[idx];
+      idx += 1;
+      imgEl.src = next;
+      return true;
+    };
+
+    imgEl.addEventListener("load", () => {
+      imgEl.style.display = "block";
+      if (fallbackInitial) fallbackInitial.classList.remove("visible");
+    });
+    imgEl.addEventListener("error", () => {
+      if (tryNext()) return;
+      imgEl.style.display = "none";
+      if (fallbackInitial) fallbackInitial.classList.add("visible");
+    });
+
+    if (!imgEl.getAttribute("src")) {
+      if (!tryNext()) {
+        imgEl.style.display = "none";
+        if (fallbackInitial) fallbackInitial.classList.add("visible");
+      }
+    }
+  });
+}
+
+function setPlantDetailImageWithFallback(imgEl, imageName, plantId, altText) {
+  if (!imgEl) return;
+  const candidates = getPlantImageCandidates(imageName, plantId);
+  let idx = 0;
+
+  const tryNext = () => {
+    if (idx >= candidates.length) return false;
+    imgEl.src = candidates[idx];
+    idx += 1;
+    return true;
+  };
+
+  imgEl.alt = altText || "Plant image";
+  imgEl.onerror = () => {
+    if (tryNext()) return;
+    imgEl.onerror = null;
+  };
+
+  if (!tryNext()) imgEl.removeAttribute("src");
+}
+
+function animatePlantDetailEntry() {
+  if (!plantDetailView) return;
+  plantDetailView.classList.remove("plant-detail-enter");
+  // Force reflow so repeated opens re-run the entry animation.
+  void plantDetailView.offsetWidth;
+  plantDetailView.classList.add("plant-detail-enter");
+}
+
 function loadPlantsCatalog() {
   const grid = document.getElementById("plantsListGrid");
   const filtersEl = document.getElementById("plantsListFilters");
@@ -235,15 +341,16 @@ function loadPlantsCatalog() {
       if (plantsLightFilter !== "all") {
         list = list.filter((p) => (p.lightCategory || "medium") === plantsLightFilter);
       }
-      const baseUrl = "/images/plants/";
       grid.innerHTML = list
         .map((p) => {
-          const imgSrc = p.image ? baseUrl + encodeURIComponent(p.image) : "";
+          const imgSrc = getPlantImageCandidates(p.image, p.id)[0] || "";
           const name = escapeHtml(p.name || p.id);
           const species = escapeHtml(p.species || "");
           return `<article class="plant-card" data-plant-id="${escapeHtml(p.id)}">
             <div class="plant-card-img-wrap">
-              <img src="${imgSrc}" alt="${name}" class="plant-card-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.classList.add('visible'));" />
+              <img src="${imgSrc}" alt="${name}" class="plant-card-img" data-image="${escapeHtml(p.image || "")}" data-plant-id="${escapeHtml(
+                p.id || ""
+              )}" loading="lazy" />
               <span class="plant-card-initial" aria-hidden="true">${(p.name || p.id)[0]}</span>
             </div>
             <div class="plant-card-body">
@@ -273,6 +380,7 @@ function loadPlantsCatalog() {
           };
         });
       }
+      bindPlantCardImageFallbacks(grid);
 
       grid.querySelectorAll(".plant-card").forEach((card) => {
         card.addEventListener("click", (e) => {
@@ -303,15 +411,16 @@ function loadMyPlantsUsed() {
     .then((plants) => {
       const list = Array.isArray(plants) ? plants : [];
       if (empty) empty.style.display = list.length ? "none" : "block";
-      const baseUrl = "/images/plants/";
       grid.innerHTML = list
         .map((p) => {
-          const imgSrc = p.image ? baseUrl + encodeURIComponent(p.image) : "";
+          const imgSrc = getPlantImageCandidates(p.image, p.id)[0] || "";
           const name = escapeHtml(p.name || p.id);
           const species = escapeHtml(p.species || "");
           return `<article class="plant-card" data-plant-id="${escapeHtml(p.id)}">
             <div class="plant-card-img-wrap">
-              <img src="${imgSrc}" alt="${name}" class="plant-card-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.classList.add('visible'));" />
+              <img src="${imgSrc}" alt="${name}" class="plant-card-img" data-image="${escapeHtml(p.image || "")}" data-plant-id="${escapeHtml(
+                p.id || ""
+              )}" loading="lazy" />
               <span class="plant-card-initial" aria-hidden="true">${(p.name || p.id)[0]}</span>
             </div>
             <div class="plant-card-body">
@@ -322,6 +431,7 @@ function loadMyPlantsUsed() {
           </article>`;
         })
         .join("");
+      bindPlantCardImageFallbacks(grid);
 
       grid.querySelectorAll(".plant-card").forEach((card) => {
         card.addEventListener("click", (e) => {
@@ -371,10 +481,9 @@ function loadPlantsFavouritesStrip() {
         .then((r) => r.json())
         .then((catalog) => {
           const list = Array.isArray(catalog) ? catalog.filter((p) => favIds.includes(p.id)) : [];
-          const baseUrl = "/images/plants/";
           grid.innerHTML = list
             .map((p) => {
-              const imgSrc = p.image ? baseUrl + encodeURIComponent(p.image) : "";
+              const imgSrc = getPlantImageCandidates(p.image, p.id)[0] || "";
               const name = escapeHtml(p.name || p.id);
               const species = escapeHtml(p.species || "");
               return `<article class="plant-card" data-plant-id="${escapeHtml(p.id)}">
@@ -382,7 +491,9 @@ function loadPlantsFavouritesStrip() {
                   <button type="button" class="plant-card-fav-remove" data-remove-id="${escapeHtml(
                     p.id
                   )}" aria-label="Remove from favourites"><i class="ri-close-line"></i></button>
-                  <img src="${imgSrc}" alt="${name}" class="plant-card-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.classList.add('visible'));" />
+                  <img src="${imgSrc}" alt="${name}" class="plant-card-img" data-image="${escapeHtml(
+                    p.image || ""
+                  )}" data-plant-id="${escapeHtml(p.id || "")}" loading="lazy" />
                   <span class="plant-card-initial" aria-hidden="true">${(p.name || p.id)[0]}</span>
                 </div>
                 <div class="plant-card-body">
@@ -393,6 +504,7 @@ function loadPlantsFavouritesStrip() {
               </article>`;
             })
             .join("");
+          bindPlantCardImageFallbacks(grid);
 
           grid.querySelectorAll(".plant-card").forEach((card) => {
             card.addEventListener("click", (e) => {
@@ -422,6 +534,7 @@ function openPlantDetail(plantId) {
   if (!plantId) return;
   currentPlantDetailId = plantId;
   showView("plant");
+  animatePlantDetailEntry();
   loadPlantDetail(plantId);
 }
 
@@ -475,16 +588,11 @@ function loadPlantDetail(plantId) {
       const name = p?.name || p?.id || "Plant";
       const species = p?.species || "—";
       const summary = p?.summary || "";
-      const imgSrc = p?.image ? `/images/plants/${encodeURIComponent(p.image)}` : "";
-
       if (nameEl) nameEl.textContent = name;
       if (speciesEl) speciesEl.textContent = species;
       if (summaryEl) summaryEl.textContent = summary;
       if (crumbs) crumbs.textContent = name;
-      if (imgEl) {
-        imgEl.src = imgSrc;
-        imgEl.alt = name;
-      }
+      setPlantDetailImageWithFallback(imgEl, p?.image, p?.id || plantId, name);
       if (ratingsEl) ratingsEl.innerHTML = renderRatings(p?.ratings);
       if (toxEl) toxEl.textContent = p?.toxicity || "—";
 
@@ -861,8 +969,13 @@ function renderCreateCommunityWizard() {
 }
 
 function parseCommunitySlugFromPath() {
-  const m = window.location.pathname.match(/^\/community\/r\/([a-z0-9-]+)$/i);
-  return m ? m[1].toLowerCase() : null;
+  const path = String(window.location.pathname || "");
+  const canonical = path.match(/^\/community\/r\/([a-z0-9-]+)$/i);
+  if (canonical) return canonical[1].toLowerCase();
+  // Backward compatible slug route: /community/<slug>
+  const legacy = path.match(/^\/community\/([a-z0-9-]+)$/i);
+  if (legacy) return legacy[1].toLowerCase();
+  return null;
 }
 
 function setCommunityRoute(slug) {

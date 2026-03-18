@@ -3,10 +3,15 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "https://dew.up.railway.app/api/:path*"
+      "src": "/api/(.*)",
+      "dest": "https://dew.up.railway.app/api/$1"
+    },
+    { "handle": "filesystem" },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
     }
   ]
 }

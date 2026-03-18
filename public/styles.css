@@ -1177,6 +1177,55 @@ body {
 .plant-detail-view {
   padding: 18px 0 48px;
 }
+.plant-detail-view.plant-detail-enter .plant-detail-top {
+  animation: plant-detail-fade-up 0.28s ease-out both;
+}
+.plant-detail-view.plant-detail-enter .plant-detail-hero {
+  animation: plant-detail-fade-up 0.4s cubic-bezier(0.19, 1, 0.22, 1) 0.05s both;
+}
+.plant-detail-view.plant-detail-enter .plant-detail-media-inner {
+  animation: plant-detail-zoom-in 0.42s cubic-bezier(0.19, 1, 0.22, 1) 0.08s both;
+}
+.plant-detail-view.plant-detail-enter .plant-detail-info {
+  animation: plant-detail-fade-up 0.4s cubic-bezier(0.19, 1, 0.22, 1) 0.12s both;
+}
+.plant-detail-view.plant-detail-enter .plant-detail-benefits,
+.plant-detail-view.plant-detail-enter .plant-detail-panel {
+  animation: plant-detail-fade-up 0.45s cubic-bezier(0.19, 1, 0.22, 1) 0.18s both;
+}
+
+@keyframes plant-detail-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes plant-detail-zoom-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant-detail-view.plant-detail-enter .plant-detail-top,
+  .plant-detail-view.plant-detail-enter .plant-detail-hero,
+  .plant-detail-view.plant-detail-enter .plant-detail-media-inner,
+  .plant-detail-view.plant-detail-enter .plant-detail-info,
+  .plant-detail-view.plant-detail-enter .plant-detail-benefits,
+  .plant-detail-view.plant-detail-enter .plant-detail-panel {
+    animation: none !important;
+  }
+}
 .plant-detail-top {
   margin-bottom: 14px;
 }
