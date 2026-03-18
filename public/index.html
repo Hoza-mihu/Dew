@@ -1205,9 +1205,14 @@
           </nav>
           <section class="community-layout">
             <aside class="community-sidebar-left">
-              <div class="card community-sidebar-card">
-                <h2 class="community-sidebar-title"><i class="ri-home-4-line"></i> Home</h2>
-                <p class="community-sidebar-desc">Main feed</p>
+              <div class="card community-sidebar-card community-nav-card">
+                <div class="community-nav-card-title"><i class="ri-leaf-line"></i> Eco-Eco</div>
+                <a href="#" class="community-nav-card-link" data-view="community" data-community-home="true"><i class="ri-home-4-line"></i> Home</a>
+                <a href="#" class="community-nav-card-link"><i class="ri-line-chart-line"></i> Popular</a>
+                <a href="#" class="community-nav-card-link"><i class="ri-sparkling-2-line"></i> All</a>
+                <button type="button" class="btn btn-primary community-btn-start community-btn-start--card" id="communityStartCommunityBtn">
+                  <i class="ri-add-line"></i> Start a community
+                </button>
               </div>
               <div class="card community-sidebar-card">
                 <h2 class="community-sidebar-title"><i class="ri-team-line"></i> Your Communities</h2>
@@ -1221,9 +1226,6 @@
                   <li class="community-list-loading">Loading…</li>
                 </ul>
               </div>
-              <button type="button" class="btn btn-primary community-btn-start" id="communityStartCommunityBtn">
-                <i class="ri-add-line"></i> Start a community
-              </button>
             </aside>
             <div class="community-main">
               <div class="community-main-header">
@@ -1269,13 +1271,22 @@
                     <div class="community-notify">
                       <button type="button" class="btn btn-ghost" id="communityNotifyBtn" aria-haspopup="menu" aria-expanded="false"><i class="ri-notification-3-line"></i></button>
                       <div class="community-notify-menu" id="communityNotifyMenu" role="menu" aria-label="Community notifications">
-                        <button type="button" class="community-notify-option" data-notify-level="off" role="menuitem"><i class="ri-notification-off-line"></i> Off</button>
-                        <button type="button" class="community-notify-option" data-notify-level="low" role="menuitem"><i class="ri-notification-2-line"></i> Low</button>
-                        <button type="button" class="community-notify-option" data-notify-level="high" role="menuitem"><i class="ri-notification-4-line"></i> Highlights</button>
-                        <button type="button" class="community-notify-option" data-notify-level="all" role="menuitem"><i class="ri-notification-3-line"></i> All</button>
+                        <div class="community-notify-title">Community notifications</div>
+                        <button type="button" class="community-notify-option" data-notify-level="all" role="menuitem">
+                          <i class="ri-notification-3-line"></i><span>All new posts</span><i class="ri-check-line check"></i>
+                        </button>
+                        <button type="button" class="community-notify-option" data-notify-level="high" role="menuitem">
+                          <i class="ri-notification-2-line"></i><span>Popular posts</span><i class="ri-check-line check"></i>
+                        </button>
+                        <button type="button" class="community-notify-option" data-notify-level="off" role="menuitem">
+                          <i class="ri-notification-off-line"></i><span>Off</span><i class="ri-check-line check"></i>
+                        </button>
+                        <div class="community-notify-divider"></div>
+                        <button type="button" class="community-notify-option community-notify-option--mute" data-notify-mute="true" role="menuitem">
+                          <i class="ri-volume-mute-line"></i><span>Mute</span>
+                        </button>
                       </div>
                     </div>
-                    <button type="button" class="btn btn-ghost" id="communityMuteBtn"><i class="ri-volume-mute-line"></i></button>
                     <button type="button" class="btn btn-ghost" id="communitySymbolBtn" style="display: none" title="Edit symbol"><i class="ri-shapes-line"></i></button>
                     <button type="button" class="btn btn-ghost" id="communityManageModsBtn" style="display: none" title="Manage moderators"><i class="ri-shield-user-line"></i></button>
                   </div>

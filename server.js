@@ -1663,6 +1663,16 @@ app.get('/api/communities', async (req, res) => {
         displayName: userNameByUid.get(u) || null,
       }));
       const members = memberCountBySlug.has(slug) ? memberCountBySlug.get(slug) : (c.member_count ?? 0);
+      const creatorUid = String(c.creator_firebase_uid || '').trim();
+      const isCreator = !!(uid && creatorUid && uid === creatorUid);
+      // If the viewer is the creator, treat them as joined (and persist it).
+      if (isCreator && !joinedBySlug.get(slug)) {
+        joinedBySlug.set(slug, true);
+        db.run(
+          'INSERT OR IGNORE INTO community_members (community_slug, uid, joined_at) VALUES (?, ?, ?)',
+          [slug, uid, new Date().toISOString()]
+        );
+      }
       return {
         ...c,
         slug,
@@ -2379,6 +2389,14 @@ app.post('/api/communities', upload.fields([{ name: 'banner', maxCount: 1 }, { n
   if (insertErr) {
     if (insertErr.code === '23505') return res.status(409).json({ error: 'A community with this slug already exists.', code: 'duplicate_slug' });
     return res.status(500).json({ error: insertErr.message });
+  }
+  // Auto-join creator/admin to their own community unless they leave later.
+  if (creatorFirebaseUid) {
+    const now = new Date().toISOString();
+    db.run(
+      'INSERT OR IGNORE INTO community_members (community_slug, uid, joined_at) VALUES (?, ?, ?)',
+      [slug, creatorFirebaseUid, now]
+    );
   }
   res.status(201).json({ id: inserted?.id, slug });
 });

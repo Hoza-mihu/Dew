@@ -1207,17 +1207,7 @@ function renderCommunityPanels(allPosts) {
       } catch (_) {}
     };
   }
-  if (muteBtn) {
-    const muted = communityMutedSlugs.has(slug);
-    muteBtn.classList.toggle("btn-danger", muted);
-    muteBtn.title = muted ? "Unmute community" : "Mute community";
-    muteBtn.onclick = () => {
-      if (communityMutedSlugs.has(slug)) communityMutedSlugs.delete(slug);
-      else communityMutedSlugs.add(slug);
-      saveCommunityPrefs();
-      renderCommunityPanels(allPosts);
-    };
-  }
+  // Mute is now inside the bell dropdown (like your reference).
   if (notifyBtn) notifyBtn.title = "Notifications";
   const editBtn = document.getElementById("communityEditBtn");
   const bannerEditBtn = document.getElementById("communityBannerEditBtn");
@@ -1257,11 +1247,9 @@ function renderCommunityPanels(allPosts) {
     notifyBtn.title =
       level === "off"
         ? "Notifications: Off"
-        : level === "low"
-        ? "Notifications: Low"
         : level === "high"
-        ? "Notifications: Highlights"
-        : "Notifications: All";
+        ? "Notifications: Popular posts"
+        : "Notifications: All new posts";
   };
 
   const initialLevel = String(comm.notify_level || getCommunityNotifyPref(slug) || "all");
@@ -1272,11 +1260,19 @@ function renderCommunityPanels(allPosts) {
       e.stopPropagation();
       notifyMenu.classList.toggle("open");
     };
+    const setChecks = (level) => {
+      notifyMenu.querySelectorAll("[data-notify-level]").forEach((btn) => {
+        btn.classList.toggle("selected", String(btn.dataset.notifyLevel) === level);
+      });
+    };
+    setChecks(initialLevel);
+
     notifyMenu.querySelectorAll("[data-notify-level]").forEach((opt) => {
       opt.onclick = async () => {
         const level = String(opt.dataset.notifyLevel || "all");
         setCommunityNotifyPref(slug, level);
         setNotifyUI(level);
+        setChecks(level);
         notifyMenu.classList.remove("open");
         try {
           const auth = await authReady;
@@ -1290,6 +1286,15 @@ function renderCommunityPanels(allPosts) {
           }
         } catch (_) {}
         loadCommunitiesSidebar();
+      };
+    });
+    notifyMenu.querySelectorAll("[data-notify-mute]").forEach((opt) => {
+      opt.onclick = () => {
+        if (communityMutedSlugs.has(slug)) communityMutedSlugs.delete(slug);
+        else communityMutedSlugs.add(slug);
+        saveCommunityPrefs();
+        notifyMenu.classList.remove("open");
+        renderCommunityPanels(allPosts);
       };
     });
     document.addEventListener(
