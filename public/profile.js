@@ -3439,6 +3439,13 @@ async function handleCommunityPostSubmit(e) {
       if (error) throw error;
     } catch (err) {
       // Fallback for older schema: store only `image_url`.
+      console.error("Media insert failed; falling back to image_url only.", err);
+      // This is important for debugging: otherwise the post succeeds but only
+      // a single image is displayed in the community gallery.
+      showToast(
+        "Saved post, but media gallery couldn't be saved (media_urls/media_types insert failed). Re-run `supabase/community_schema.sql` so the posts table supports media arrays.",
+        "error"
+      );
       const { error } = await supabase.from("posts").insert(commonPayload);
       if (error) throw error;
     }
