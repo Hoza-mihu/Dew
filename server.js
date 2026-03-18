@@ -150,6 +150,42 @@ function initDbAndMigrateFromJson() {
         PRIMARY KEY (community_slug, uid)
       )`
     );
+
+    // Weekly community stats (distinct users per week)
+    db.run(
+      `CREATE TABLE IF NOT EXISTS community_weekly_visitors (
+        community_slug TEXT NOT NULL,
+        week_start TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        first_seen_at TEXT NOT NULL,
+        PRIMARY KEY (community_slug, week_start, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_weekly_visitors_slug_week ON community_weekly_visitors(community_slug, week_start)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS community_weekly_contributors (
+        community_slug TEXT NOT NULL,
+        week_start TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        first_contributed_at TEXT NOT NULL,
+        PRIMARY KEY (community_slug, week_start, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_weekly_contrib_slug_week ON community_weekly_contributors(community_slug, week_start)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS community_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        community_slug TEXT NOT NULL,
+        from_uid TEXT NOT NULL,
+        to_kind TEXT NOT NULL, -- 'admin' | 'mods' | 'user'
+        to_uid TEXT,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_community_messages_slug ON community_messages(community_slug, created_at DESC)');
   });
 
   // Migration: add status column to weather_alerts if it doesn't exist (existing DBs)
@@ -204,6 +240,15 @@ function initDbAndMigrateFromJson() {
 }
 
 const db = initDbAndMigrateFromJson();
+
+function getWeekStartIso(d = new Date()) {
+  const dt = new Date(d);
+  dt.setHours(0, 0, 0, 0);
+  // Monday as week start
+  const day = (dt.getDay() + 6) % 7;
+  dt.setDate(dt.getDate() - day);
+  return dt.toISOString();
+}
 
 async function requireFirebaseUser(req) {
   if (!firebaseAdmin || !firebaseAdmin.auth) throw new Error('Firebase admin not configured');
@@ -1560,6 +1605,94 @@ app.put('/api/communities/:slug/notify', async (req, res) => {
   );
 });
 
+app.post('/api/communities/:slug/visit', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  let uid;
+  try {
+    uid = await requireFirebaseUser(req);
+  } catch (e) {
+    return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  const week = getWeekStartIso();
+  const now = new Date().toISOString();
+  db.run(
+    'INSERT OR IGNORE INTO community_weekly_visitors (community_slug, week_start, uid, first_seen_at) VALUES (?, ?, ?, ?)',
+    [slug, week, uid, now],
+    (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to record visit' });
+      res.json({ ok: true });
+    }
+  );
+});
+
+app.post('/api/communities/:slug/contribute', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  let uid;
+  try {
+    uid = await requireFirebaseUser(req);
+  } catch (e) {
+    return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  const week = getWeekStartIso();
+  const now = new Date().toISOString();
+  db.run(
+    'INSERT OR IGNORE INTO community_weekly_contributors (community_slug, week_start, uid, first_contributed_at) VALUES (?, ?, ?, ?)',
+    [slug, week, uid, now],
+    (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to record contribution' });
+      res.json({ ok: true });
+    }
+  );
+});
+
+app.get('/api/communities/:slug/weekly-stats', (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  const week = getWeekStartIso();
+  db.get(
+    'SELECT COUNT(*) AS n FROM community_weekly_visitors WHERE community_slug = ? AND week_start = ?',
+    [slug, week],
+    (err1, vRow) => {
+      if (err1) return res.status(500).json({ error: 'Failed to load stats' });
+      db.get(
+        'SELECT COUNT(*) AS n FROM community_weekly_contributors WHERE community_slug = ? AND week_start = ?',
+        [slug, week],
+        (err2, cRow) => {
+          if (err2) return res.status(500).json({ error: 'Failed to load stats' });
+          res.json({ week_start: week, visitors: (vRow && vRow.n) || 0, contributors: (cRow && cRow.n) || 0 });
+        }
+      );
+    }
+  );
+});
+
+app.post('/api/communities/:slug/messages', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  let uid;
+  try {
+    uid = await requireFirebaseUser(req);
+  } catch (e) {
+    return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  const toKind = String(req.body.toKind || 'mods').trim().toLowerCase();
+  const body = String(req.body.body || '').trim();
+  const toUid = String(req.body.toUid || '').trim() || null;
+  if (!body) return res.status(400).json({ error: 'Message required' });
+  if (!['admin', 'mods', 'user'].includes(toKind)) return res.status(400).json({ error: 'Invalid toKind' });
+  const now = new Date().toISOString();
+  db.run(
+    'INSERT INTO community_messages (community_slug, from_uid, to_kind, to_uid, body, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [slug, uid, toKind, toUid, body, now],
+    function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to send message' });
+      res.json({ ok: true, id: String(this.lastID) });
+    }
+  );
+});
+
 app.get('/api/communities', async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
   const uid = String(req.query.uid || '').trim() || null;
@@ -1641,6 +1774,36 @@ app.get('/api/communities', async (req, res) => {
     });
   }
 
+  const week = getWeekStartIso();
+  const weeklyVisitorsBySlug = new Map();
+  const weeklyContribBySlug = new Map();
+  await new Promise((resolve) => {
+    db.all(
+      `SELECT community_slug, COUNT(*) AS n
+       FROM community_weekly_visitors
+       WHERE week_start = ? AND community_slug IN (${placeholders})
+       GROUP BY community_slug`,
+      [week, ...slugs],
+      (e, rows) => {
+        (rows || []).forEach((r) => weeklyVisitorsBySlug.set(String(r.community_slug), r.n || 0));
+        resolve();
+      }
+    );
+  });
+  await new Promise((resolve) => {
+    db.all(
+      `SELECT community_slug, COUNT(*) AS n
+       FROM community_weekly_contributors
+       WHERE week_start = ? AND community_slug IN (${placeholders})
+       GROUP BY community_slug`,
+      [week, ...slugs],
+      (e, rows) => {
+        (rows || []).forEach((r) => weeklyContribBySlug.set(String(r.community_slug), r.n || 0));
+        resolve();
+      }
+    );
+  });
+
   // Resolve moderator display names
   const allModUids = [...new Set([].concat(...[...modsBySlug.values()]))];
   const userNameByUid = new Map();
@@ -1681,6 +1844,8 @@ app.get('/api/communities', async (req, res) => {
         joined: uid ? !!joinedBySlug.get(slug) : false,
         moderators,
         notify_level: uid ? (notifyBySlug.get(slug) || 'all') : 'all',
+        weekly_visitors: weeklyVisitorsBySlug.get(slug) || 0,
+        weekly_contributors: weeklyContribBySlug.get(slug) || 0,
       };
     })
   );

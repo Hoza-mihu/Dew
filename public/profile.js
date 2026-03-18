@@ -944,6 +944,34 @@ function initNav() {
     clearTimeout(window.__dewModsSearchTimer);
     window.__dewModsSearchTimer = setTimeout(searchUsersForMods, 250);
   });
+
+  document.getElementById("communityMessageSendBtn")?.addEventListener("click", async () => {
+    const input = document.getElementById("communityMessageInput");
+    const target = document.getElementById("communityMessageTarget");
+    const slug = String(communitySelectedSlug || "").trim();
+    const body = String(input?.value || "").trim();
+    const sel = String(target?.value || "mods");
+    if (!slug || !body || !currentProfileUser?.uid) return;
+    let toKind = "mods";
+    let toUid = null;
+    if (sel === "admin") toKind = "admin";
+    else if (sel.startsWith("user:")) { toKind = "user"; toUid = sel.slice(5); }
+    try {
+      const auth = await authReady;
+      const token = await auth.currentUser?.getIdToken?.();
+      if (!token) return;
+      const res = await fetch(`/api/communities/${encodeURIComponent(slug)}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ toKind, toUid, body }),
+      });
+      if (!res.ok) throw new Error("not ok");
+      if (input) input.value = "";
+      showToast("Message sent.", "success");
+    } catch (_) {
+      showToast("Could not send message.", "error");
+    }
+  });
 }
 
 let communityCategoryFilter = "all";
@@ -1323,12 +1351,16 @@ function renderCommunityPanels(allPosts) {
   if (infoGrid) {
     const created = comm.created_at ? new Date(comm.created_at).toLocaleDateString() : "—";
     const members = comm.members_count ?? comm.member_count ?? 0;
+    const weeklyVisitors = comm.weekly_visitors ?? 0;
+    const weeklyContrib = comm.weekly_contributors ?? 0;
     infoGrid.innerHTML = `
       <div class="row"><span>Created</span><strong>${escapeHtml(created)}</strong></div>
       <div class="row"><span>Status</span><strong>${escapeHtml(comm.status || "public")}</strong></div>
       <div class="row"><span>Members</span><strong>${members}</strong></div>
       <div class="row"><span>Posts</span><strong>${comm.post_count ?? 0}</strong></div>
       <div class="row"><span>Category</span><strong>${escapeHtml(comm.category || "Other")}</strong></div>
+      <div class="row"><span>Weekly visitors</span><strong>${weeklyVisitors}</strong></div>
+      <div class="row"><span>Weekly contributions</span><strong>${weeklyContrib}</strong></div>
     `;
   }
   if (modsEl) {
@@ -1347,6 +1379,49 @@ function renderCommunityPanels(allPosts) {
       rows.push(`<li>${label} — Mod</li>`);
     });
     modsEl.innerHTML = rows.join("");
+  }
+
+  // Achievements (earned + available)
+  const achCard = document.getElementById("communityAchievementsCard");
+  const achList = document.getElementById("communityAchievementsList");
+  if (achCard && achList) {
+    achCard.style.display = "block";
+    const createdAt = comm.created_at ? new Date(comm.created_at) : null;
+    const ageDays = createdAt ? Math.floor((Date.now() - createdAt.getTime()) / 86400000) : 0;
+    const achievements = [
+      { id: "rising_star", icon: "ri-star-line", title: "Rising Star", desc: "New community that’s getting active.", earned: (comm.weekly_contributors ?? 0) >= 2 },
+      { id: "repeat_contributor", icon: "ri-refresh-line", title: "Repeat Contributor", desc: "5+ weekly contributors.", earned: (comm.weekly_contributors ?? 0) >= 5 },
+      { id: "super_contributor", icon: "ri-flashlight-line", title: "Super Contributor", desc: "10+ weekly contributors.", earned: (comm.weekly_contributors ?? 0) >= 10 },
+      { id: "content_connoisseur", icon: "ri-file-list-3-line", title: "Content Connoisseur", desc: "10+ total posts in the community.", earned: (comm.post_count ?? 0) >= 10 },
+      { id: "elder", icon: "ri-user-star-line", title: "Elder", desc: "Community is 30+ days old.", earned: ageDays >= 30 },
+      { id: "popular_hub", icon: "ri-group-line", title: "Popular Hub", desc: "25+ weekly visitors.", earned: (comm.weekly_visitors ?? 0) >= 25 },
+    ];
+    achList.innerHTML = achievements
+      .map((a) => {
+        return `<li class="community-achievement ${a.earned ? "" : "locked"}">
+          <div class="community-achievement-icon"><i class="${a.icon}"></i></div>
+          <div>
+            <div class="community-achievement-title">${escapeHtml(a.title)}</div>
+            <div class="community-achievement-desc">${escapeHtml(a.desc)}</div>
+          </div>
+        </li>`;
+      })
+      .join("");
+  }
+
+  // Message admin/mods box recipient options
+  const msgTarget = document.getElementById("communityMessageTarget");
+  if (msgTarget) {
+    const opts = [];
+    opts.push(`<option value="mods">Mods</option>`);
+    opts.push(`<option value="admin">Admin</option>`);
+    const mods = Array.isArray(comm.moderators) ? comm.moderators : [];
+    mods.forEach((m) => {
+      if (!m?.uid) return;
+      const label = m.displayName ? `Mod: ${m.displayName}` : `Mod: ${String(m.uid).slice(0, 10)}`;
+      opts.push(`<option value="user:${escapeHtml(m.uid)}">${escapeHtml(label)}</option>`);
+    });
+    msgTarget.innerHTML = opts.join("");
   }
 }
 
@@ -1869,6 +1944,19 @@ async function loadCommunityView() {
     else if (sort === "controversial") posts.sort((a, b) => (b.comment_count ?? 0) - (a.comment_count ?? 0));
     else if (sort === "qa") posts = posts.filter((p) => (p.title || "").includes("?") || (p.body || "").includes("?"));
     renderCommunityPanels(posts);
+    // Record weekly visitor (DB-backed) when user is viewing a community.
+    try {
+      if (currentProfileUser?.uid && communitySelectedSlug) {
+        const auth = await authReady;
+        const token = await auth.currentUser?.getIdToken?.();
+        if (token) {
+          await fetch(`/api/communities/${encodeURIComponent(communitySelectedSlug)}/visit`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        }
+      }
+    } catch (_) {}
     posts = posts.slice(0, 50);
     communityRecentPosts = posts.slice(0, 10);
     renderCommunityRecentList();
@@ -2008,6 +2096,17 @@ async function handleCommunityPostSubmit(e) {
       tags: tags.length ? tags : [],
     });
     if (error) throw error;
+    // Record weekly contributor for this community (DB-backed).
+    try {
+      const auth = await authReady;
+      const token = await auth.currentUser?.getIdToken?.();
+      if (token) {
+        await fetch(`/api/communities/${encodeURIComponent(String(category).toLowerCase())}/contribute`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch (_) {}
     titleEl.value = "";
     bodyEl.value = "";
     if (tagsEl) tagsEl.value = "";

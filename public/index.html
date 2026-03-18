@@ -1347,6 +1347,21 @@
                 <div class="community-info-grid" id="communityInfoGrid"></div>
                 <h3 class="community-info-subtitle">Moderators</h3>
                 <ul id="communityModeratorsList" class="community-recent-list"></ul>
+                <h3 class="community-info-subtitle">Message admin/mods</h3>
+                <div class="community-message-row">
+                  <input type="text" id="communityMessageInput" class="community-input" placeholder="Type your message" />
+                  <select id="communityMessageTarget" class="community-category-select" aria-label="Send to">
+                    <option value="mods">Mods</option>
+                  </select>
+                  <button type="button" class="btn btn-primary" id="communityMessageSendBtn">Send</button>
+                </div>
+              </div>
+              <div class="card community-sidebar-card" id="communityAchievementsCard" style="display: none">
+                <div class="community-achievements-header">
+                  <h2 class="community-sidebar-title"><i class="ri-award-line"></i> Community achievements</h2>
+                  <button type="button" class="btn btn-ghost btn-sm" id="communityAchievementsToggle">Show less</button>
+                </div>
+                <ul class="community-achievements-list" id="communityAchievementsList"></ul>
               </div>
               <div class="card community-sidebar-card">
                 <h2 class="community-sidebar-title"><i class="ri-star-line"></i> Recent Posts</h2>
