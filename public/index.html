@@ -1253,19 +1253,31 @@
                 </div>
                 <div class="community-detail-head">
                   <div class="community-detail-identity">
-                    <div class="community-detail-logo" id="communityDetailLogo">r</div>
+                    <div class="community-detail-logo-wrap">
+                      <div class="community-detail-logo" id="communityDetailLogo">r</div>
+                      <button type="button" class="btn btn-ghost community-logo-edit-btn" id="communityLogoEditBtn" style="display: none" title="Edit logo"><i class="ri-pencil-line"></i></button>
+                    </div>
                     <div>
-                      <h2 id="communityDetailTitle">r/community</h2>
-                      <p id="communityDetailDesc">Community description</p>
+                      <h2 id="communityDetailTitle">r/community <span class="community-detail-symbol" id="communityDetailSymbol"></span></h2>
+                      <p class="community-detail-desc-row"><span id="communityDetailDesc">Community description</span><button type="button" class="btn btn-ghost community-desc-edit-btn" id="communityDescEditBtn" style="display: none" title="Edit description"><i class="ri-pencil-line"></i></button></p>
                       <div class="community-detail-meta" id="communityDetailMeta"></div>
                     </div>
                   </div>
                   <div class="community-detail-actions">
-                    <button type="button" class="btn btn-ghost" id="communityEditBtn" style="display: none" title="Edit banner, logo, description"><i class="ri-settings-3-line"></i> Edit</button>
                     <button type="button" class="btn btn-ghost" id="communityJoinBtn">Join</button>
                     <button type="button" class="btn btn-primary" id="communityCreatePostQuickBtn"><i class="ri-add-line"></i> Create Post</button>
-                    <button type="button" class="btn btn-ghost" id="communityNotifyBtn"><i class="ri-notification-3-line"></i></button>
+                    <div class="community-notify">
+                      <button type="button" class="btn btn-ghost" id="communityNotifyBtn" aria-haspopup="menu" aria-expanded="false"><i class="ri-notification-3-line"></i></button>
+                      <div class="community-notify-menu" id="communityNotifyMenu" role="menu" aria-label="Community notifications">
+                        <button type="button" class="community-notify-option" data-notify-level="off" role="menuitem"><i class="ri-notification-off-line"></i> Off</button>
+                        <button type="button" class="community-notify-option" data-notify-level="low" role="menuitem"><i class="ri-notification-2-line"></i> Low</button>
+                        <button type="button" class="community-notify-option" data-notify-level="high" role="menuitem"><i class="ri-notification-4-line"></i> Highlights</button>
+                        <button type="button" class="community-notify-option" data-notify-level="all" role="menuitem"><i class="ri-notification-3-line"></i> All</button>
+                      </div>
+                    </div>
                     <button type="button" class="btn btn-ghost" id="communityMuteBtn"><i class="ri-volume-mute-line"></i></button>
+                    <button type="button" class="btn btn-ghost" id="communitySymbolBtn" style="display: none" title="Edit symbol"><i class="ri-shapes-line"></i></button>
+                    <button type="button" class="btn btn-ghost" id="communityManageModsBtn" style="display: none" title="Manage moderators"><i class="ri-shield-user-line"></i></button>
                   </div>
                 </div>
                 <div class="community-highlights" id="communityHighlights">
@@ -1341,6 +1353,45 @@
               </div>
             </aside>
           </section>
+        </div>
+        <!-- Community: Symbol picker modal -->
+        <div class="modal community-admin-modal" id="communitySymbolModal" style="display: none" aria-hidden="true">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2>Edit community symbol</h2>
+              <button type="button" class="modal-close" id="communitySymbolModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+            </div>
+            <p class="community-create-wizard-subtitle">Pick a short symbol (emoji or 1–3 chars) that appears next to your community.</p>
+            <div class="community-symbol-row">
+              <div class="community-symbol-current" id="communitySymbolCurrent">✦</div>
+              <input id="communitySymbolInput" class="community-input" type="text" maxlength="6" placeholder="e.g. 🌿" />
+            </div>
+            <div class="community-create-modal-actions">
+              <button type="button" class="btn btn-ghost" id="communitySymbolCancel">Cancel</button>
+              <button type="button" class="btn btn-primary" id="communitySymbolSave"><i class="ri-save-line"></i> Save</button>
+            </div>
+          </div>
+        </div>
+        <!-- Community: Manage moderators modal -->
+        <div class="modal community-admin-modal" id="communityModsModal" style="display: none" aria-hidden="true">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2>Manage moderators</h2>
+              <button type="button" class="modal-close" id="communityModsModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+            </div>
+            <p class="community-create-wizard-subtitle">Search users and add/remove moderators for this community.</p>
+            <label class="community-field">
+              <span class="label">Search users</span>
+              <input id="communityModsSearch" class="community-input" type="text" placeholder="Type a username or email…" />
+            </label>
+            <ul class="community-mods-results" id="communityModsResults"></ul>
+            <div class="community-mods-picked-title">Selected moderators</div>
+            <ul class="community-mods-picked" id="communityModsPicked"></ul>
+            <div class="community-create-modal-actions">
+              <button type="button" class="btn btn-ghost" id="communityModsCancel">Cancel</button>
+              <button type="button" class="btn btn-primary" id="communityModsSave"><i class="ri-save-line"></i> Save</button>
+            </div>
+          </div>
         </div>
         <div
           class="plants-list-view"

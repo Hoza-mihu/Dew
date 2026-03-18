@@ -101,6 +101,55 @@ function initDbAndMigrateFromJson() {
     db.run('CREATE INDEX IF NOT EXISTS idx_user_plant_usage_uid_last ON user_plant_usage(uid, last_used_at DESC)');
     db.run('CREATE INDEX IF NOT EXISTS idx_sensor_alerts_created ON sensor_alerts(created_at DESC)');
     db.run('CREATE INDEX IF NOT EXISTS idx_sensor_alerts_user_created ON sensor_alerts(user_id, created_at DESC)');
+
+    // --- Community: user directory + membership + moderators + meta (symbol) ---
+    db.run(
+      `CREATE TABLE IF NOT EXISTS users (
+        uid TEXT PRIMARY KEY,
+        display_name TEXT,
+        email TEXT,
+        updated_at TEXT NOT NULL
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_users_display_name ON users(display_name)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS community_members (
+        community_slug TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        joined_at TEXT NOT NULL,
+        PRIMARY KEY (community_slug, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_community_members_slug ON community_members(community_slug)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS community_moderators (
+        community_slug TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'moderator',
+        added_at TEXT NOT NULL,
+        PRIMARY KEY (community_slug, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_community_mods_slug ON community_moderators(community_slug)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS community_meta (
+        community_slug TEXT PRIMARY KEY,
+        logo_symbol TEXT,
+        updated_at TEXT NOT NULL
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS community_notification_prefs (
+        community_slug TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        level TEXT NOT NULL DEFAULT 'all',
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (community_slug, uid)
+      )`
+    );
   });
 
   // Migration: add status column to weather_alerts if it doesn't exist (existing DBs)
@@ -155,6 +204,16 @@ function initDbAndMigrateFromJson() {
 }
 
 const db = initDbAndMigrateFromJson();
+
+async function requireFirebaseUser(req) {
+  if (!firebaseAdmin || !firebaseAdmin.auth) throw new Error('Firebase admin not configured');
+  const h = req.headers.authorization || '';
+  const m = String(h).match(/^Bearer\s+(.+)$/i);
+  if (!m) throw new Error('Missing Authorization bearer token');
+  const decoded = await firebaseAdmin.auth().verifyIdToken(m[1]);
+  if (!decoded?.uid) throw new Error('Invalid token');
+  return decoded.uid;
+}
 
 function loadUserData() {
   try {
@@ -1313,6 +1372,309 @@ function insertSensorAlert(alert, done) {
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// --- API: User directory (for moderator search) ---
+app.post('/api/users/upsert', async (req, res) => {
+  const { uid, displayName, email } = req.body || {};
+  const cleanUid = String(uid || '').trim();
+  if (!cleanUid) return res.status(400).json({ error: 'uid required' });
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO users (uid, display_name, email, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(uid) DO UPDATE SET
+       display_name = excluded.display_name,
+       email = excluded.email,
+       updated_at = excluded.updated_at`,
+    [cleanUid, String(displayName || '').trim() || null, String(email || '').trim() || null, now],
+    (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to save user' });
+      res.json({ ok: true });
+    }
+  );
+});
+
+app.get('/api/users/search', (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.json([]);
+  const like = `%${q.replace(/%/g, '')}%`;
+  db.all(
+    `SELECT uid, display_name, email
+     FROM users
+     WHERE uid LIKE ? OR display_name LIKE ? OR email LIKE ?
+     ORDER BY updated_at DESC
+     LIMIT 20`,
+    [like, like, like],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: 'Search failed' });
+      res.json((rows || []).map((r) => ({ uid: r.uid, displayName: r.display_name, email: r.email })));
+    }
+  );
+});
+
+async function requireCommunityCreator(slug, req) {
+  const uid = await requireFirebaseUser(req);
+  if (!supabaseAdmin) throw new Error('Supabase not configured');
+  const { data: comm, error } = await supabaseAdmin
+    .from('communities')
+    .select('slug, creator_firebase_uid')
+    .eq('slug', slug)
+    .single();
+  if (error || !comm) throw new Error('Community not found');
+  const creatorUid = String(comm.creator_firebase_uid || '').trim();
+  if (creatorUid && creatorUid !== uid) throw new Error('Only the community creator can manage moderators');
+  return uid;
+}
+
+// --- API: Community membership + moderators + meta (symbol) ---
+app.post('/api/communities/:slug/join', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  let uid;
+  try {
+    uid = await requireFirebaseUser(req);
+  } catch (e) {
+    return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  const now = new Date().toISOString();
+  db.serialize(() => {
+    db.run(
+      'INSERT OR IGNORE INTO community_members (community_slug, uid, joined_at) VALUES (?, ?, ?)',
+      [slug, uid, now],
+      (err) => {
+        if (err) return res.status(500).json({ error: 'Failed to join' });
+        db.get('SELECT COUNT(*) AS n FROM community_members WHERE community_slug = ?', [slug], (err2, row) => {
+          if (err2) return res.json({ ok: true, joined: true });
+          res.json({ ok: true, joined: true, members: (row && row.n) || 0 });
+        });
+      }
+    );
+  });
+});
+
+app.post('/api/communities/:slug/leave', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  let uid;
+  try {
+    uid = await requireFirebaseUser(req);
+  } catch (e) {
+    return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  db.run('DELETE FROM community_members WHERE community_slug = ? AND uid = ?', [slug, uid], (err) => {
+    if (err) return res.status(500).json({ error: 'Failed to leave' });
+    db.get('SELECT COUNT(*) AS n FROM community_members WHERE community_slug = ?', [slug], (err2, row) => {
+      if (err2) return res.json({ ok: true, joined: false });
+      res.json({ ok: true, joined: false, members: (row && row.n) || 0 });
+    });
+  });
+});
+
+app.get('/api/communities/:slug/membership', (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  const uid = String(req.query.uid || '').trim();
+  if (!slug || !uid) return res.json({ joined: false });
+  db.get(
+    'SELECT 1 AS ok FROM community_members WHERE community_slug = ? AND uid = ?',
+    [slug, uid],
+    (err, row) => {
+      if (err) return res.json({ joined: false });
+      res.json({ joined: !!row });
+    }
+  );
+});
+
+app.put('/api/communities/:slug/meta', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  try {
+    await requireCommunityCreator(slug, req);
+  } catch (e) {
+    return res.status(403).json({ error: e.message || 'Forbidden' });
+  }
+  const symbol = String(req.body.logoSymbol || '').trim().slice(0, 6) || null;
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO community_meta (community_slug, logo_symbol, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(community_slug) DO UPDATE SET
+       logo_symbol = excluded.logo_symbol,
+       updated_at = excluded.updated_at`,
+    [slug, symbol, now],
+    (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to update meta' });
+      res.json({ ok: true, logoSymbol: symbol });
+    }
+  );
+});
+
+app.put('/api/communities/:slug/moderators', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  try {
+    await requireCommunityCreator(slug, req);
+  } catch (e) {
+    return res.status(403).json({ error: e.message || 'Forbidden' });
+  }
+  const uids = Array.isArray(req.body.moderatorUids) ? req.body.moderatorUids : [];
+  const clean = [...new Set(uids.map((u) => String(u || '').trim()).filter(Boolean))].slice(0, 50);
+  const now = new Date().toISOString();
+  db.serialize(() => {
+    db.run('DELETE FROM community_moderators WHERE community_slug = ?', [slug], (delErr) => {
+      if (delErr) return res.status(500).json({ error: 'Failed to update moderators' });
+      const stmt = db.prepare(
+        'INSERT OR IGNORE INTO community_moderators (community_slug, uid, role, added_at) VALUES (?, ?, ?, ?)'
+      );
+      clean.forEach((u) => stmt.run(slug, u, 'moderator', now));
+      stmt.finalize((insErr) => {
+        if (insErr) return res.status(500).json({ error: 'Failed to update moderators' });
+        res.json({ ok: true, moderators: clean });
+      });
+    });
+  });
+});
+
+app.put('/api/communities/:slug/notify', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  let uid;
+  try {
+    uid = await requireFirebaseUser(req);
+  } catch (e) {
+    return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  const levelRaw = String(req.body.level || 'all').trim().toLowerCase();
+  const level = ['off', 'low', 'high', 'all'].includes(levelRaw) ? levelRaw : 'all';
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO community_notification_prefs (community_slug, uid, level, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(community_slug, uid) DO UPDATE SET
+       level = excluded.level,
+       updated_at = excluded.updated_at`,
+    [slug, uid, level, now],
+    (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to update notifications' });
+      res.json({ ok: true, level });
+    }
+  );
+});
+
+app.get('/api/communities', async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+  const uid = String(req.query.uid || '').trim() || null;
+  const { data: communities, error } = await supabaseAdmin
+    .from('communities')
+    .select('id,name,slug,description,member_count,post_count,category,banner_url,logo_url,status,creator_firebase_uid')
+    .eq('status', 'public')
+    .order('post_count', { ascending: false })
+    .limit(200);
+  if (error) return res.status(500).json({ error: 'Failed to load communities' });
+
+  const list = Array.isArray(communities) ? communities : [];
+  const slugs = list.map((c) => String(c.slug || '').toLowerCase()).filter(Boolean);
+  if (!slugs.length) return res.json([]);
+
+  const placeholders = slugs.map(() => '?').join(',');
+  const metaBySlug = new Map();
+  const memberCountBySlug = new Map();
+  const joinedBySlug = new Map();
+  const modsBySlug = new Map();
+
+  await new Promise((resolve) => {
+    db.all(`SELECT community_slug, logo_symbol FROM community_meta WHERE community_slug IN (${placeholders})`, slugs, (e, rows) => {
+      (rows || []).forEach((r) => metaBySlug.set(String(r.community_slug), { logo_symbol: r.logo_symbol }));
+      resolve();
+    });
+  });
+
+  await new Promise((resolve) => {
+    db.all(
+      `SELECT community_slug, COUNT(*) AS n FROM community_members WHERE community_slug IN (${placeholders}) GROUP BY community_slug`,
+      slugs,
+      (e, rows) => {
+        (rows || []).forEach((r) => memberCountBySlug.set(String(r.community_slug), r.n || 0));
+        resolve();
+      }
+    );
+  });
+
+  await new Promise((resolve) => {
+    db.all(
+      `SELECT community_slug, uid FROM community_moderators WHERE community_slug IN (${placeholders})`,
+      slugs,
+      (e, rows) => {
+        (rows || []).forEach((r) => {
+          const s = String(r.community_slug);
+          if (!modsBySlug.has(s)) modsBySlug.set(s, []);
+          modsBySlug.get(s).push(String(r.uid));
+        });
+        resolve();
+      }
+    );
+  });
+
+  if (uid) {
+    await new Promise((resolve) => {
+      db.all(
+        `SELECT community_slug FROM community_members WHERE uid = ? AND community_slug IN (${placeholders})`,
+        [uid, ...slugs],
+        (e, rows) => {
+          (rows || []).forEach((r) => joinedBySlug.set(String(r.community_slug), true));
+          resolve();
+        }
+      );
+    });
+  }
+
+  const notifyBySlug = new Map();
+  if (uid) {
+    await new Promise((resolve) => {
+      db.all(
+        `SELECT community_slug, level FROM community_notification_prefs WHERE uid = ? AND community_slug IN (${placeholders})`,
+        [uid, ...slugs],
+        (e, rows) => {
+          (rows || []).forEach((r) => notifyBySlug.set(String(r.community_slug), r.level || 'all'));
+          resolve();
+        }
+      );
+    });
+  }
+
+  // Resolve moderator display names
+  const allModUids = [...new Set([].concat(...[...modsBySlug.values()]))];
+  const userNameByUid = new Map();
+  if (allModUids.length) {
+    const ph = allModUids.map(() => '?').join(',');
+    await new Promise((resolve) => {
+      db.all(`SELECT uid, display_name FROM users WHERE uid IN (${ph})`, allModUids, (e, rows) => {
+        (rows || []).forEach((r) => userNameByUid.set(String(r.uid), r.display_name || null));
+        resolve();
+      });
+    });
+  }
+
+  res.json(
+    list.map((c) => {
+      const slug = String(c.slug || '').toLowerCase();
+      const meta = metaBySlug.get(slug) || {};
+      const moderators = (modsBySlug.get(slug) || []).map((u) => ({
+        uid: u,
+        displayName: userNameByUid.get(u) || null,
+      }));
+      const members = memberCountBySlug.has(slug) ? memberCountBySlug.get(slug) : (c.member_count ?? 0);
+      return {
+        ...c,
+        slug,
+        logo_symbol: meta.logo_symbol || null,
+        members_count: members,
+        joined: uid ? !!joinedBySlug.get(slug) : false,
+        moderators,
+        notify_level: uid ? (notifyBySlug.get(slug) || 'all') : 'all',
+      };
+    })
+  );
+});
 
 // --- API: Plants (latest readings) ---
 app.get('/api/plants', (req, res) => {

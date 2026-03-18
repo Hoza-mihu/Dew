@@ -70,6 +70,43 @@ const PERSISTED_VIEWS = new Set([
   "community",
 ]);
 
+async function upsertUserDirectoryEntry(user) {
+  if (!user?.uid) return;
+  try {
+    await fetch("/api/users/upsert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uid: user.uid,
+        displayName: user.displayName || "",
+        email: user.email || "",
+      }),
+    });
+  } catch (_) {}
+}
+
+function getCommunityNotifyPref(slug) {
+  try {
+    const raw = window.localStorage.getItem("dewCommunityNotifyPrefs");
+    const obj = raw ? JSON.parse(raw) : {};
+    const s = String(slug || "").toLowerCase();
+    return (obj && s && obj[s]) || "all";
+  } catch (_) {
+    return "all";
+  }
+}
+
+function setCommunityNotifyPref(slug, level) {
+  try {
+    const raw = window.localStorage.getItem("dewCommunityNotifyPrefs");
+    const obj = raw ? JSON.parse(raw) : {};
+    const s = String(slug || "").toLowerCase();
+    if (!s) return;
+    obj[s] = level;
+    window.localStorage.setItem("dewCommunityNotifyPrefs", JSON.stringify(obj));
+  } catch (_) {}
+}
+
 function saveLastView(view) {
   if (!PERSISTED_VIEWS.has(view)) return;
   try {
@@ -894,6 +931,19 @@ function initNav() {
     refreshAlertsBtn.classList.add("btn-refresh--spinning");
     loadAlertsView(refreshAlertsBtn);
   });
+
+  // Community admin modals + controls
+  document.getElementById("communitySymbolModalClose")?.addEventListener("click", closeCommunitySymbolModal);
+  document.getElementById("communitySymbolCancel")?.addEventListener("click", closeCommunitySymbolModal);
+  document.getElementById("communitySymbolSave")?.addEventListener("click", saveCommunitySymbolFromModal);
+
+  document.getElementById("communityModsModalClose")?.addEventListener("click", closeCommunityModsModal);
+  document.getElementById("communityModsCancel")?.addEventListener("click", closeCommunityModsModal);
+  document.getElementById("communityModsSave")?.addEventListener("click", saveModeratorsFromModal);
+  document.getElementById("communityModsSearch")?.addEventListener("input", () => {
+    clearTimeout(window.__dewModsSearchTimer);
+    window.__dewModsSearchTimer = setTimeout(searchUsersForMods, 250);
+  });
 }
 
 let communityCategoryFilter = "all";
@@ -997,14 +1047,10 @@ async function loadCommunitiesSidebar() {
   const categorySelect = document.getElementById("communityCategory");
   const feedCategorySelect = document.getElementById("communityCategoryFilter");
   try {
-    const supabase = await getSupabaseClient();
-    const { data: communities, error } = await supabase
-      .from("communities")
-      .select("id,name,slug,description,member_count,post_count,category,banner_url,logo_url,status,creator_firebase_uid")
-      .eq("status", "public")
-      .order("post_count", { ascending: false })
-      .limit(20);
-    if (error) throw error;
+    const uid = currentProfileUser?.uid || "";
+    const res = await fetch("/api/communities" + (uid ? "?uid=" + encodeURIComponent(uid) : ""));
+    if (!res.ok) throw new Error("Failed to load communities");
+    const communities = await res.json();
     communityList = Array.isArray(communities) ? communities : [];
   } catch {
     communityList = [];
@@ -1015,7 +1061,9 @@ async function loadCommunitiesSidebar() {
     el.innerHTML = list.map((c) => {
       const name = c.name || c.slug || c.id;
       const slug = c.slug || c.id;
-      return `<li data-community-id="${escapeHtml(c.id)}" data-community-slug="${escapeHtml(slug)}"><span>r/${escapeHtml(slug)}</span><span class="pill">${c.post_count ?? 0} posts</span></li>`;
+      const symbol = String(c.logo_symbol || "").trim();
+      const label = symbol ? `${symbol} r/${slug}` : `r/${slug}`;
+      return `<li data-community-id="${escapeHtml(c.id)}" data-community-slug="${escapeHtml(slug)}"><span>${escapeHtml(label)}</span><span class="pill">${c.post_count ?? 0} posts</span></li>`;
     }).join("");
     el.querySelectorAll("li[data-community-id]").forEach((li) => {
       li.addEventListener("click", () => {
@@ -1029,7 +1077,7 @@ async function loadCommunitiesSidebar() {
       });
     });
   };
-  const yourCommunities = communityList.filter((c) => communityJoinedSlugs.has((c.slug || c.id || "").toLowerCase()));
+  const yourCommunities = communityList.filter((c) => c.joined);
   renderList(yourCommunities.length ? yourCommunities : communityList.slice(0, 6), yourEl);
   renderList(communityList, popularEl);
   if (categorySelect) {
@@ -1092,6 +1140,7 @@ function renderCommunityPanels(allPosts) {
   const joinBtn = document.getElementById("communityJoinBtn");
   const muteBtn = document.getElementById("communityMuteBtn");
   const notifyBtn = document.getElementById("communityNotifyBtn");
+  const notifyMenu = document.getElementById("communityNotifyMenu");
   const quickCreateBtn = document.getElementById("communityCreatePostQuickBtn");
   const latestEl = document.getElementById("communityLatestList");
   const topEl = document.getElementById("communityTopList");
@@ -1126,19 +1175,36 @@ function renderCommunityPanels(allPosts) {
     }
   }
   if (metaEl) {
-    metaEl.innerHTML = `<span>${comm.member_count ?? 0} members</span><span>${comm.post_count ?? 0} posts</span><span>${escapeHtml(comm.category || "Other")}</span>`;
+    const members = comm.members_count ?? comm.member_count ?? 0;
+    metaEl.innerHTML = `<span>${members} members</span><span>${comm.post_count ?? 0} posts</span><span>${escapeHtml(comm.category || "Other")}</span>`;
   }
+
+  // Symbol next to title (admin editable)
+  const symbolEl = document.getElementById("communityDetailSymbol");
+  const symbolBtn = document.getElementById("communitySymbolBtn");
+  const currentSymbol = String(comm.logo_symbol || "").trim();
+  if (symbolEl) symbolEl.textContent = currentSymbol || "";
+
   if (joinBtn) {
-    const joined = communityJoinedSlugs.has(slug);
+    const joined = !!comm.joined;
     joinBtn.textContent = joined ? "Joined" : "Join";
-    joinBtn.classList.toggle("btn-primary", !joined);
-    joinBtn.classList.toggle("btn-ghost", joined);
-    joinBtn.onclick = () => {
-      if (communityJoinedSlugs.has(slug)) communityJoinedSlugs.delete(slug);
-      else communityJoinedSlugs.add(slug);
-      saveCommunityPrefs();
-      renderCommunityPanels(allPosts);
-      loadCommunitiesSidebar();
+    joinBtn.classList.toggle("btn-primary", joined);
+    joinBtn.classList.toggle("btn-ghost", !joined);
+    joinBtn.onclick = async () => {
+      if (!currentProfileUser?.uid) return;
+      try {
+        const auth = await authReady;
+        const token = await auth.currentUser?.getIdToken?.();
+        if (!token) return;
+        const endpoint = joined ? `/api/communities/${encodeURIComponent(slug)}/leave` : `/api/communities/${encodeURIComponent(slug)}/join`;
+        const res = await fetch(endpoint, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error("not ok");
+        const out = await res.json();
+        comm.joined = !!out.joined;
+        if (typeof out.members === "number") comm.members_count = out.members;
+        loadCommunitiesSidebar();
+        loadCommunityView();
+      } catch (_) {}
     };
   }
   if (muteBtn) {
@@ -1155,17 +1221,84 @@ function renderCommunityPanels(allPosts) {
   if (notifyBtn) notifyBtn.title = "Notifications";
   const editBtn = document.getElementById("communityEditBtn");
   const bannerEditBtn = document.getElementById("communityBannerEditBtn");
+  const manageModsBtn = document.getElementById("communityManageModsBtn");
   const creatorUid = String(comm.creator_firebase_uid || "").trim();
   // Legacy rows may not have creator_firebase_uid yet; allow signed-in user
   // to open edit once and claim ownership server-side.
   const isCreator = !!(currentProfileUser?.uid && (!creatorUid || currentProfileUser.uid === creatorUid));
-  if (editBtn) {
-    editBtn.style.display = isCreator ? "inline-flex" : "none";
-    editBtn.onclick = () => openEditCommunityModal(slug, comm);
-  }
+  if (editBtn) editBtn.style.display = "none";
   if (bannerEditBtn) {
     bannerEditBtn.style.display = isCreator ? "inline-flex" : "none";
     bannerEditBtn.onclick = () => openEditCommunityModal(slug, comm);
+  }
+  const logoEditBtn = document.getElementById("communityLogoEditBtn");
+  if (logoEditBtn) {
+    logoEditBtn.style.display = isCreator ? "inline-flex" : "none";
+    logoEditBtn.onclick = () => openEditCommunityModal(slug, comm);
+  }
+  const descEditBtn = document.getElementById("communityDescEditBtn");
+  if (descEditBtn) {
+    descEditBtn.style.display = isCreator ? "inline-flex" : "none";
+    descEditBtn.onclick = () => openEditCommunityModal(slug, comm);
+  }
+  if (symbolBtn) {
+    symbolBtn.style.display = isCreator ? "inline-flex" : "none";
+    symbolBtn.onclick = () => openCommunitySymbolModal(slug, comm);
+  }
+  if (manageModsBtn) {
+    manageModsBtn.style.display = isCreator ? "inline-flex" : "none";
+    manageModsBtn.onclick = () => openCommunityModsModal(slug, comm);
+  }
+
+  // Bell dropdown (saved per community, stored locally + in backend)
+  const setNotifyUI = (level) => {
+    if (!notifyBtn) return;
+    notifyBtn.dataset.level = level;
+    notifyBtn.title =
+      level === "off"
+        ? "Notifications: Off"
+        : level === "low"
+        ? "Notifications: Low"
+        : level === "high"
+        ? "Notifications: Highlights"
+        : "Notifications: All";
+  };
+
+  const initialLevel = String(comm.notify_level || getCommunityNotifyPref(slug) || "all");
+  setNotifyUI(initialLevel);
+  if (notifyMenu) notifyMenu.dataset.openFor = slug;
+  if (notifyBtn && notifyMenu) {
+    notifyBtn.onclick = (e) => {
+      e.stopPropagation();
+      notifyMenu.classList.toggle("open");
+    };
+    notifyMenu.querySelectorAll("[data-notify-level]").forEach((opt) => {
+      opt.onclick = async () => {
+        const level = String(opt.dataset.notifyLevel || "all");
+        setCommunityNotifyPref(slug, level);
+        setNotifyUI(level);
+        notifyMenu.classList.remove("open");
+        try {
+          const auth = await authReady;
+          const token = await auth.currentUser?.getIdToken?.();
+          if (token) {
+            await fetch(`/api/communities/${encodeURIComponent(slug)}/notify`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ level }),
+            });
+          }
+        } catch (_) {}
+        loadCommunitiesSidebar();
+      };
+    });
+    document.addEventListener(
+      "click",
+      () => {
+        notifyMenu.classList.remove("open");
+      },
+      { once: true }
+    );
   }
   if (quickCreateBtn) quickCreateBtn.onclick = () => {
     const block = document.getElementById("communityCreateBlock");
@@ -1184,10 +1317,11 @@ function renderCommunityPanels(allPosts) {
   }
   if (infoGrid) {
     const created = comm.created_at ? new Date(comm.created_at).toLocaleDateString() : "—";
+    const members = comm.members_count ?? comm.member_count ?? 0;
     infoGrid.innerHTML = `
       <div class="row"><span>Created</span><strong>${escapeHtml(created)}</strong></div>
       <div class="row"><span>Status</span><strong>${escapeHtml(comm.status || "public")}</strong></div>
-      <div class="row"><span>Members</span><strong>${comm.member_count ?? 0}</strong></div>
+      <div class="row"><span>Members</span><strong>${members}</strong></div>
       <div class="row"><span>Posts</span><strong>${comm.post_count ?? 0}</strong></div>
       <div class="row"><span>Category</span><strong>${escapeHtml(comm.category || "Other")}</strong></div>
     `;
@@ -1200,8 +1334,178 @@ function renderCommunityPanels(allPosts) {
       : creatorUid
       ? `u/${escapeHtml(creatorUid.slice(0, 10))}`
       : "u/creator";
-    modsEl.innerHTML = `<li>${creatorLabel} — Admin</li>`;
+    const rows = [`<li>${creatorLabel} — Admin</li>`];
+    const mods = Array.isArray(comm.moderators) ? comm.moderators : [];
+    mods.forEach((m) => {
+      if (!m?.uid || m.uid === creatorUid) return;
+      const label = m.displayName ? `u/${escapeHtml(m.displayName)}` : `u/${escapeHtml(String(m.uid).slice(0, 10))}`;
+      rows.push(`<li>${label} — Mod</li>`);
+    });
+    modsEl.innerHTML = rows.join("");
   }
+}
+
+function openCommunitySymbolModal(slug, comm) {
+  const modal = document.getElementById("communitySymbolModal");
+  if (!modal) return;
+  modal.dataset.slug = slug;
+  const current = document.getElementById("communitySymbolCurrent");
+  if (current) current.textContent = String(comm.logo_symbol || "✦");
+  const input = document.getElementById("communitySymbolInput");
+  if (input) input.value = String(comm.logo_symbol || "").trim();
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeCommunitySymbolModal() {
+  const modal = document.getElementById("communitySymbolModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+}
+
+async function saveCommunitySymbolFromModal() {
+  const modal = document.getElementById("communitySymbolModal");
+  const slug = String(modal?.dataset?.slug || "").trim();
+  const input = document.getElementById("communitySymbolInput");
+  const symbol = String(input?.value || "").trim().slice(0, 6);
+  if (!slug || !currentProfileUser?.uid) return;
+  try {
+    const auth = await authReady;
+    const token = await auth.currentUser?.getIdToken?.();
+    if (!token) return;
+    const res = await fetch(`/api/communities/${encodeURIComponent(slug)}/meta`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ logoSymbol: symbol }),
+    });
+    if (!res.ok) throw new Error("not ok");
+    closeCommunitySymbolModal();
+    await loadCommunitiesSidebar();
+    await loadCommunityView();
+  } catch (_) {}
+}
+
+function openCommunityModsModal(slug, comm) {
+  const modal = document.getElementById("communityModsModal");
+  if (!modal) return;
+  modal.dataset.slug = slug;
+  const list = document.getElementById("communityModsPicked");
+  if (list) list.innerHTML = "";
+  const picked = new Set(
+    (Array.isArray(comm.moderators) ? comm.moderators : []).map((m) => String(m?.uid || "").trim()).filter(Boolean)
+  );
+  modal.dataset.picked = JSON.stringify(Array.from(picked));
+  const input = document.getElementById("communityModsSearch");
+  if (input) input.value = "";
+  const results = document.getElementById("communityModsResults");
+  if (results) results.innerHTML = "";
+  renderPickedMods();
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeCommunityModsModal() {
+  const modal = document.getElementById("communityModsModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function getPickedMods() {
+  const modal = document.getElementById("communityModsModal");
+  try {
+    return new Set(JSON.parse(modal?.dataset?.picked || "[]"));
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function setPickedMods(set) {
+  const modal = document.getElementById("communityModsModal");
+  if (!modal) return;
+  modal.dataset.picked = JSON.stringify(Array.from(set));
+}
+
+function renderPickedMods() {
+  const list = document.getElementById("communityModsPicked");
+  if (!list) return;
+  const picked = Array.from(getPickedMods());
+  list.innerHTML = picked.length
+    ? picked
+        .map(
+          (u) =>
+            `<li class="mod-chip"><span>${escapeHtml(u)}</span><button type="button" class="mod-chip-x" data-remove-uid="${escapeHtml(
+              u
+            )}"><i class="ri-close-line"></i></button></li>`
+        )
+        .join("")
+    : `<li class="mod-empty">No moderators selected yet.</li>`;
+  list.querySelectorAll("[data-remove-uid]").forEach((btn) => {
+    btn.onclick = () => {
+      const uid = String(btn.dataset.removeUid || "").trim();
+      const set = getPickedMods();
+      set.delete(uid);
+      setPickedMods(set);
+      renderPickedMods();
+    };
+  });
+}
+
+async function searchUsersForMods() {
+  const input = document.getElementById("communityModsSearch");
+  const results = document.getElementById("communityModsResults");
+  if (!input || !results) return;
+  const q = String(input.value || "").trim();
+  if (!q) {
+    results.innerHTML = "";
+    return;
+  }
+  try {
+    const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`);
+    const rows = res.ok ? await res.json() : [];
+    const list = Array.isArray(rows) ? rows : [];
+    results.innerHTML = list
+      .map((u) => {
+        const label = u.displayName ? `${u.displayName} (${u.uid.slice(0, 10)}…)` : u.uid;
+        return `<li><button type="button" class="mod-result" data-pick-uid="${escapeHtml(u.uid)}">${escapeHtml(
+          label
+        )}</button></li>`;
+      })
+      .join("");
+    results.querySelectorAll("[data-pick-uid]").forEach((btn) => {
+      btn.onclick = () => {
+        const uid = String(btn.dataset.pickUid || "").trim();
+        const set = getPickedMods();
+        if (uid) set.add(uid);
+        setPickedMods(set);
+        renderPickedMods();
+      };
+    });
+  } catch (_) {
+    results.innerHTML = "<li>Search failed.</li>";
+  }
+}
+
+async function saveModeratorsFromModal() {
+  const modal = document.getElementById("communityModsModal");
+  const slug = String(modal?.dataset?.slug || "").trim();
+  if (!slug || !currentProfileUser?.uid) return;
+  try {
+    const auth = await authReady;
+    const token = await auth.currentUser?.getIdToken?.();
+    if (!token) return;
+    const set = Array.from(getPickedMods());
+    const res = await fetch(`/api/communities/${encodeURIComponent(slug)}/moderators`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ moderatorUids: set }),
+    });
+    if (!res.ok) throw new Error("not ok");
+    closeCommunityModsModal();
+    await loadCommunitiesSidebar();
+    await loadCommunityView();
+  } catch (_) {}
 }
 
 function updateEditCommunityImagePreview(kind, file, fallbackUrl, fallbackLabel) {
@@ -2983,6 +3287,7 @@ authReady.then((auth) => {
   onAuthStateChanged(auth, (user) => {
     if (user) {
       currentProfileUser = user;
+      upsertUserDirectoryEntry(user);
       renderProfile(user);
       initProfileForm(user);
       refreshProfileStats(user.uid);
