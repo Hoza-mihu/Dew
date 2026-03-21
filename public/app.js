@@ -43,6 +43,9 @@ const telemetryCache = new Map();
 const TELEMETRY_TTL_MS = 20000;
 const ONLINE_MS = 5 * 60 * 1000;
 
+/** Today's area averages from Open-Meteo (saved map location), not sensors. Set by loadDashboardWeather. */
+let areaTodayAverages = null;
+
 const WEATHER_CACHE_MS = 15 * 60 * 1000;
 let weatherCache = { data: null, at: 0, locKey: null };
 let weatherApiKey = '';
@@ -299,6 +302,7 @@ async function loadDashboardWeather() {
 
   const uid = window.__dewUid;
   if (!uid) {
+    areaTodayAverages = null;
     hero.style.display = 'none';
     if (wrap) wrap.style.display = 'none';
     empty.style.display = 'block';
@@ -309,10 +313,12 @@ async function loadDashboardWeather() {
   try {
     const res = await authFetch(`${API}/api/weather?user_id=${encodeURIComponent(uid)}`);
     if (res.status === 404) {
+      areaTodayAverages = null;
       hero.style.display = 'none';
       if (wrap) wrap.style.display = 'none';
       empty.style.display = 'block';
       maybeShowWeatherLocationPrompt();
+      renderMetrics(typeof plants !== 'undefined' ? plants : []);
       return;
     }
     if (!res.ok) throw new Error('Weather request failed');
@@ -320,17 +326,21 @@ async function loadDashboardWeather() {
     const data = await res.json();
     const loc = data.location;
     const weather = data.weather;
+    areaTodayAverages = data.areaToday || null;
     empty.style.display = 'none';
     hero.style.display = 'block';
     if (wrap) wrap.style.display = 'block';
     renderWeatherHero(loc, weather);
     maybeHideWeatherLocationPrompt();
+    renderMetrics(typeof plants !== 'undefined' ? plants : []);
   } catch (e) {
     console.warn('Dashboard weather failed:', e.message);
+    areaTodayAverages = null;
     hero.style.display = 'none';
     if (wrap) wrap.style.display = 'none';
     empty.style.display = 'block';
     maybeShowWeatherLocationPrompt();
+    renderMetrics(typeof plants !== 'undefined' ? plants : []);
   }
 }
 
@@ -579,108 +589,110 @@ function metricBarRow(label, valueStr, unit, range, rawVal, min, max, status, ri
     </div>`;
 }
 
-/** When fleet has no plants: show target ranges + dashes (not an infinite skeleton). */
-function renderMetricsEmptyFleet() {
-  const o = DEFAULT_OPTIMAL;
-  const tempR = `${o.temp.min}–${o.temp.max} °C`;
-  const humR = `${o.humidity.min}–${o.humidity.max} %`;
-  const luxR = `${o.lux.min}–${o.lux.max} lx`;
-  const moistR = `${o.moisture.min}–${o.moisture.max} %`;
-  const cards = [
-    metricBarRow('Avg temp', '—', '°C', tempR, null, o.temp.min, o.temp.max, 'warn'),
-    metricBarRow('Humidity', '—', '%', humR, null, o.humidity.min, o.humidity.max, 'warn'),
-    metricBarRow('Avg light', '—', 'lx', luxR, null, o.lux.min, o.lux.max, 'warn'),
-    metricBarRow(
-      'Garden health',
-      '—',
-      '%',
-      `${moistR} soil moisture (typical)`,
-      null,
-      o.moisture.min,
-      o.moisture.max,
-      'warn',
-      'Index'
-    ),
-  ];
-  const hint = window.__dewUid
-    ? 'No plants in your fleet yet. Live averages appear when your Plant Bot sends data or you save <strong>Desk Bot</strong>.'
-    : 'Sign in and link plants to see live fleet metrics.';
-  return `${cards.join('')}<p class="metric-row-hint">${hint}</p>`;
+/** Plants linked via live Plant Bot telemetry (sensors). */
+function telemetryPlantsList(plants) {
+  return (plants || []).filter((p) => String(p.usage?.last_source || '') === 'telemetry');
 }
 
+/**
+ * Top row: temp / humidity / light = **today’s averages for the user’s saved map area** (weather API), not sensors.
+ * Garden health: **average index from Plant Bot (telemetry) plants only**.
+ */
 function renderMetrics(plants) {
   const row = document.getElementById('metricsRow');
   if (!row) return;
-  const n = plants.length;
-  if (!n) {
-    row.innerHTML = renderMetricsEmptyFleet();
-    return;
-  }
-  const avgTemp = plants.reduce((s, p) => s + Number(p.temp || 0), 0) / n;
-  const avgLux = Math.round(plants.reduce((s, p) => s + Number(p.lux || 0), 0) / n);
-  const withHum = plants.filter((p) => p.humidity != null);
-  const avgHum = withHum.length
-    ? Math.round(withHum.reduce((s, p) => s + Number(p.humidity), 0) / withHum.length)
-    : null;
-  const avgMoist = Math.round(plants.reduce((s, p) => s + Number(p.moisture || 0), 0) / n);
-  const lowMoisture = plants.filter((p) => p.moisture < 45).length;
-  const health = Math.round(100 - (lowMoisture / n) * 22);
+  const o = DEFAULT_OPTIMAL;
+  const a = areaTodayAverages;
+  const tp = telemetryPlantsList(plants);
 
-  const tr = fleetAvgRange(plants, 'temp');
-  const hr = fleetAvgRange(plants, 'humidity');
-  const mr = fleetAvgRange(plants, 'moisture');
-  const lr = fleetAvgRange(plants, 'lux');
+  const tempRange = `${o.temp.min}–${o.temp.max} °C`;
+  const humRange = `${o.humidity.min}–${o.humidity.max} %`;
+  const luxRange = `${o.lux.min}–${o.lux.max} lx`;
+  const moistRangeDefault = `${o.moisture.min}–${o.moisture.max} %`;
 
-  const st = valueInRangeStatus(avgTemp, tr.min, tr.max);
-  const sh = avgHum != null ? valueInRangeStatus(avgHum, hr.min, hr.max) : 'warn';
-  const sm = valueInRangeStatus(avgMoist, mr.min, mr.max);
-  const sl = valueInRangeStatus(avgLux, lr.min, lr.max);
+  const avgTemp = a && a.avgTempC != null ? Number(a.avgTempC) : null;
+  const avgHum = a && a.avgHumidityPct != null ? Number(a.avgHumidityPct) : null;
+  const avgLux = a && a.avgLuxApprox != null ? Number(a.avgLuxApprox) : null;
 
-  const tempRange =
-    tr.min != null && tr.max != null ? `${tr.min.toFixed(0)}–${tr.max.toFixed(0)} °C` : '—';
-  const humRange =
-    hr.min != null && hr.max != null ? `${Math.round(hr.min)}–${Math.round(hr.max)} %` : '—';
-  const moistRange =
-    mr.min != null && mr.max != null ? `${Math.round(mr.min)}–${Math.round(mr.max)} %` : '—';
-  const luxRange =
-    lr.min != null && lr.max != null ? `${Math.round(lr.min)}–${Math.round(lr.max)} lx` : '—';
-
-  const healthStatus = health >= 75 ? 'optimal' : health >= 50 ? 'warn' : 'bad';
-  const healthFill =
-    healthStatus === 'optimal'
-      ? 'metric-bar-fill--optimal'
-      : healthStatus === 'warn'
-        ? 'metric-bar-fill--warn'
-        : 'metric-bar-fill--bad';
-  const hp = Math.max(0, Math.min(100, health));
+  const st = valueInRangeStatus(avgTemp, o.temp.min, o.temp.max);
+  const sh = avgHum != null ? valueInRangeStatus(avgHum, o.humidity.min, o.humidity.max) : 'warn';
+  const sl = avgLux != null ? valueInRangeStatus(avgLux, o.lux.min, o.lux.max) : 'warn';
 
   const cards = [
     metricBarRow(
       'Avg temp',
-      avgTemp.toFixed(1),
+      avgTemp != null ? avgTemp.toFixed(1) : '—',
       '°C',
       tempRange,
       avgTemp,
-      tr.min,
-      tr.max,
-      st
+      o.temp.min,
+      o.temp.max,
+      st,
+      'Area · today'
     ),
     metricBarRow(
-      'Humidity',
-      avgHum != null ? String(avgHum) : '—',
+      'Air humidity',
+      avgHum != null ? String(Math.round(avgHum)) : '—',
       '%',
       humRange,
       avgHum,
-      hr.min,
-      hr.max,
-      sh
+      o.humidity.min,
+      o.humidity.max,
+      sh,
+      'Area · today'
     ),
-    metricBarRow('Avg light', String(avgLux), 'lx', luxRange, avgLux, lr.min, lr.max, sl),
-    `
+    metricBarRow(
+      'Avg light',
+      avgLux != null ? String(Math.round(avgLux)) : '—',
+      'lx',
+      luxRange,
+      avgLux,
+      o.lux.min,
+      o.lux.max,
+      sl,
+      'Area · today'
+    ),
+  ];
+
+  const mr = fleetAvgRange(tp, 'moisture');
+  const mrMin = mr.min != null ? mr.min : o.moisture.min;
+  const mrMax = mr.max != null ? mr.max : o.moisture.max;
+  const moistRangeFleet =
+    mr.min != null && mr.max != null ? `${Math.round(mr.min)}–${Math.round(mr.max)} %` : moistRangeDefault;
+
+  const nt = tp.length;
+  if (nt === 0) {
+    cards.push(`
     <div class="metric-card">
-      <div class="metric-label"><span>Garden health</span><span class="right">Index</span></div>
+      <div class="metric-label"><span>Garden health</span><span class="right">Plant Bots</span></div>
+      <div class="metric-value"><span>—</span><span class="metric-unit">%</span></div>
+      <div class="metric-optimal">Optimal ${moistRangeDefault} soil moisture (sensor plants)</div>
+      <div class="metric-bar-wrap">
+        <div class="metric-bar-zone" style="left:35%;width:30%"></div>
+        <div class="metric-bar-fill metric-bar-fill--warn" style="width:50%"></div>
+        <div class="metric-bar-dot" style="left:50%"></div>
+      </div>
+      <div class="metric-delta negative"><i class="ri-robot-2-line"></i> No Plant Bot sensors linked yet</div>
+      <div class="metric-tag">DEW Warden</div>
+    </div>`);
+  } else {
+    const avgMoist = Math.round(tp.reduce((s, p) => s + Number(p.moisture || 0), 0) / nt);
+    const lowMoisture = tp.filter((p) => p.moisture < 45).length;
+    const health = Math.round(100 - (lowMoisture / nt) * 22);
+    const sm = valueInRangeStatus(avgMoist, mrMin, mrMax);
+    const healthStatus = health >= 75 ? 'optimal' : health >= 50 ? 'warn' : 'bad';
+    const healthFill =
+      healthStatus === 'optimal'
+        ? 'metric-bar-fill--optimal'
+        : healthStatus === 'warn'
+          ? 'metric-bar-fill--warn'
+          : 'metric-bar-fill--bad';
+    const hp = Math.max(0, Math.min(100, health));
+    cards.push(`
+    <div class="metric-card">
+      <div class="metric-label"><span>Garden health</span><span class="right">Plant Bots</span></div>
       <div class="metric-value"><span>${health}</span><span class="metric-unit">%</span></div>
-      <div class="metric-optimal">Optimal ${moistRange} soil moisture (fleet)</div>
+      <div class="metric-optimal">Optimal ${moistRangeFleet} soil moisture (${nt} sensor plant${nt === 1 ? '' : 's'})</div>
       <div class="metric-bar-wrap">
         <div class="metric-bar-zone" style="left:35%;width:30%"></div>
         <div class="metric-bar-fill ${healthFill}" style="width:${hp}%"></div>
@@ -688,9 +700,18 @@ function renderMetrics(plants) {
       </div>
       <div class="metric-delta ${sm === 'optimal' ? '' : 'negative'}"><i class="ri-arrow-${sm === 'optimal' ? 'up' : 'down'}-s-line"></i>moisture ${sm === 'optimal' ? 'on target' : 'check plants'}</div>
       <div class="metric-tag">DEW Warden</div>
-    </div>`,
-  ];
-  row.innerHTML = cards.join('');
+    </div>`);
+  }
+
+  let hint = '';
+  if (window.__dewUid && !a) {
+    hint =
+      '<p class="metric-row-hint">Save a location in <strong>Settings</strong> to load <strong>today’s area averages</strong> (weather) for the top row. Garden health uses <strong>Plant Bot</strong> sensors only.</p>';
+  } else if (window.__dewUid && a) {
+    hint =
+      '<p class="metric-row-hint">Top row = your saved map area for <strong>today</strong> (weather). Light is approximated from sun energy. Garden health = <strong>Plant Bot</strong> plants only.</p>';
+  }
+  row.innerHTML = cards.join('') + hint;
 }
 
 function computeSmartInsight(plants) {

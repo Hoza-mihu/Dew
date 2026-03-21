@@ -660,7 +660,9 @@ async function fetchOpenMeteoWeather(lat, lon) {
     `&longitude=${encodeURIComponent(lon)}` +
     `&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m` +
     `&hourly=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m` +
-    `&forecast_hours=12&timezone=auto`;
+    `&forecast_hours=12&timezone=auto` +
+    `&daily=temperature_2m_max,temperature_2m_min,relative_humidity_2m_max,relative_humidity_2m_min,shortwave_radiation_sum,daylight_duration` +
+    `&forecast_days=2`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error("Weather unavailable");
@@ -692,6 +694,32 @@ async function fetchOpenMeteoWeather(lat, lon) {
     };
   });
 
+  /** Today's calendar-day averages for the selected map area (not plant sensors). */
+  let areaToday = null;
+  const daily = json.daily || {};
+  const tMax = daily.temperature_2m_max;
+  const tMin = daily.temperature_2m_min;
+  const hMax = daily.relative_humidity_2m_max;
+  const hMin = daily.relative_humidity_2m_min;
+  const radSum = daily.shortwave_radiation_sum;
+  const dayDur = daily.daylight_duration;
+  if (Array.isArray(tMax) && Array.isArray(tMin) && tMax[0] != null && tMin[0] != null) {
+    const avgTempC = (Number(tMax[0]) + Number(tMin[0])) / 2;
+    let avgHumidityPct = null;
+    if (Array.isArray(hMax) && Array.isArray(hMin) && hMax[0] != null && hMin[0] != null) {
+      avgHumidityPct = (Number(hMax[0]) + Number(hMin[0])) / 2;
+    }
+    let avgLuxApprox = null;
+    if (Array.isArray(radSum) && Array.isArray(dayDur) && radSum[0] != null && dayDur[0] != null) {
+      const dur = Number(dayDur[0]);
+      if (dur > 0) {
+        const wm2 = (Number(radSum[0]) * 1e6) / dur;
+        avgLuxApprox = Math.round(Math.min(130000, Math.max(0, wm2 * 110)));
+      }
+    }
+    areaToday = { avgTempC, avgHumidityPct, avgLuxApprox };
+  }
+
   return {
     current: {
       temp,
@@ -702,6 +730,7 @@ async function fetchOpenMeteoWeather(lat, lon) {
       weather_code: code != null ? Number(code) : null,
     },
     forecast,
+    areaToday,
   };
 }
 
@@ -3695,7 +3724,7 @@ app.get('/api/weather', async (req, res) => {
     const lon = Number(loc.longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(404).json({ error: 'Invalid location' });
 
-    const cacheKey = `${lat},${lon}`;
+    const cacheKey = `v2:${lat},${lon}`;
     const now = Date.now();
     const cached = serverWeatherCache.get(cacheKey);
     if (cached && cached.at && now - cached.at < DEVICE_WEATHER_CACHE_MS) {
@@ -3715,6 +3744,8 @@ app.get('/api/weather', async (req, res) => {
       },
       weather: weather.current,
       forecast: weather.forecast,
+      /** Daily averages for saved map area (Open-Meteo today), for dashboard metrics row. */
+      areaToday: weather.areaToday || null,
     };
 
     serverWeatherCache.set(cacheKey, { at: now, payload });
