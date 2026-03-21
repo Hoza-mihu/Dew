@@ -30,6 +30,19 @@ const PLANT_FLEET_POLL_MS = 20000;
 let activityFeed = [];
 let activityFilter = 'all';
 
+/** Fleet optimal ranges (aligned with server `PLANT_OPTIMAL_*`). */
+const DEFAULT_OPTIMAL = {
+  temp: { min: 18, max: 30 },
+  humidity: { min: 40, max: 70 },
+  moisture: { min: 30, max: 60 },
+  lux: { min: 200, max: 1500 },
+};
+let chartRange = '24h';
+let lastWeatherForTips = null;
+const telemetryCache = new Map();
+const TELEMETRY_TTL_MS = 20000;
+const ONLINE_MS = 5 * 60 * 1000;
+
 const WEATHER_CACHE_MS = 15 * 60 * 1000;
 let weatherCache = { data: null, at: 0, locKey: null };
 let weatherApiKey = '';
@@ -236,6 +249,7 @@ function renderWeatherHero(loc, weather) {
   if (windEl) windEl.textContent = (weather.wind != null ? weather.wind + ' km/h' : '—');
 
   reportWeatherForAlerts(weather);
+  applyWeatherPlantTips(loc, weather, typeof plants !== 'undefined' ? plants : []);
 }
 
 function reportWeatherForAlerts(weather) {
@@ -274,6 +288,7 @@ function renderWeatherCard(loc, weather) {
   if (condEl) condEl.textContent = weather.condition;
   if (humEl) humEl.textContent = (weather.humidity != null ? weather.humidity + '%' : '—');
   if (windEl) windEl.textContent = (weather.wind != null ? weather.wind + ' km/h' : '—');
+  applyWeatherPlantTips(loc, weather, typeof plants !== 'undefined' ? plants : []);
 }
 
 async function loadDashboardWeather() {
@@ -508,31 +523,768 @@ function createPetals() {
   }
 }
 
+function plantOptimal(p) {
+  return p && p.optimal ? p.optimal : DEFAULT_OPTIMAL;
+}
+
+/** @returns {'optimal'|'warn'|'bad'} */
+function valueInRangeStatus(val, min, max) {
+  if (val == null || min == null || max == null) return 'warn';
+  const span = Math.max(1e-6, max - min);
+  const margin = span * 0.12;
+  if (val >= min && val <= max) return 'optimal';
+  if (val >= min - margin && val <= max + margin) return 'warn';
+  return 'bad';
+}
+
+function fleetAvgRange(plants, key) {
+  if (!plants.length) return { min: null, max: null };
+  let minSum = 0;
+  let maxSum = 0;
+  let n = 0;
+  plants.forEach((p) => {
+    const o = plantOptimal(p)[key];
+    if (o && o.min != null && o.max != null) {
+      minSum += o.min;
+      maxSum += o.max;
+      n += 1;
+    }
+  });
+  if (!n) return { min: null, max: null };
+  return { min: minSum / n, max: maxSum / n };
+}
+
+function metricBarRow(label, valueStr, unit, range, rawVal, min, max, status) {
+  const fillClass =
+    status === 'optimal' ? 'metric-bar-fill--optimal' : status === 'warn' ? 'metric-bar-fill--warn' : 'metric-bar-fill--bad';
+  let pct = 50;
+  if (rawVal != null && min != null && max != null) {
+    const lo = min - (max - min) * 0.5;
+    const hi = max + (max - min) * 0.5;
+    pct = Math.max(0, Math.min(100, ((Number(rawVal) - lo) / Math.max(1e-6, hi - lo)) * 100));
+  }
+  const zoneLeft = min != null && max != null ? 35 : 25;
+  const zoneW = min != null && max != null ? 30 : 50;
+  return `
+    <div class="metric-card">
+      <div class="metric-label"><span>${label}</span><span class="right">Fleet avg</span></div>
+      <div class="metric-value"><span>${valueStr}</span><span class="metric-unit">${unit}</span></div>
+      <div class="metric-optimal">Optimal ${range}</div>
+      <div class="metric-bar-wrap">
+        <div class="metric-bar-zone" style="left:${zoneLeft}%;width:${zoneW}%"></div>
+        <div class="metric-bar-fill ${fillClass}" style="width:${pct}%"></div>
+        <div class="metric-bar-dot" style="left:${pct}%"></div>
+      </div>
+      <div class="metric-tag">DEW Warden</div>
+    </div>`;
+}
+
 function renderMetrics(plants) {
+  const row = document.getElementById('metricsRow');
+  if (!row) return;
   const n = plants.length;
-  const avgTemp = n ? (plants.reduce((s, p) => s + p.temp, 0) / n).toFixed(1) : '—';
-  const avgLux = n ? Math.round(plants.reduce((s, p) => s + p.lux, 0) / n) : '—';
+  if (!n) {
+    row.innerHTML =
+      '<div class="metric-card metric-card--skeleton" style="grid-column:1/-1;min-height:100px"></div>';
+    return;
+  }
+  const avgTemp = plants.reduce((s, p) => s + Number(p.temp || 0), 0) / n;
+  const avgLux = Math.round(plants.reduce((s, p) => s + Number(p.lux || 0), 0) / n);
   const withHum = plants.filter((p) => p.humidity != null);
   const avgHum = withHum.length
     ? Math.round(withHum.reduce((s, p) => s + Number(p.humidity), 0) / withHum.length)
     : null;
-  const lowMoisture = plants.filter(p => p.moisture < 45).length;
-  const health = n ? Math.round(100 - (lowMoisture / n) * 22) : 0;
-  const metrics = [
-    { label: 'Avg Temp', value: avgTemp, unit: '°C', delta: 'fleet', positive: true },
-    { label: 'Humidity', value: avgHum != null ? String(avgHum) : '—', unit: '%', delta: avgHum != null ? 'sensor avg' : 'room', positive: true },
-    { label: 'Lux (Light)', value: String(avgLux), unit: 'lx', delta: 'Optimal range', positive: true },
-    { label: 'Garden Health', value: String(health), unit: '%', delta: 'AI index', positive: health >= 70 },
-  ];
-  const row = document.getElementById('metricsRow');
-  row.innerHTML = metrics.map(m => `
+  const avgMoist = Math.round(plants.reduce((s, p) => s + Number(p.moisture || 0), 0) / n);
+  const lowMoisture = plants.filter((p) => p.moisture < 45).length;
+  const health = Math.round(100 - (lowMoisture / n) * 22);
+
+  const tr = fleetAvgRange(plants, 'temp');
+  const hr = fleetAvgRange(plants, 'humidity');
+  const mr = fleetAvgRange(plants, 'moisture');
+  const lr = fleetAvgRange(plants, 'lux');
+
+  const st = valueInRangeStatus(avgTemp, tr.min, tr.max);
+  const sh = avgHum != null ? valueInRangeStatus(avgHum, hr.min, hr.max) : 'warn';
+  const sm = valueInRangeStatus(avgMoist, mr.min, mr.max);
+  const sl = valueInRangeStatus(avgLux, lr.min, lr.max);
+
+  const tempRange =
+    tr.min != null && tr.max != null ? `${tr.min.toFixed(0)}–${tr.max.toFixed(0)} °C` : '—';
+  const humRange =
+    hr.min != null && hr.max != null ? `${Math.round(hr.min)}–${Math.round(hr.max)} %` : '—';
+  const moistRange =
+    mr.min != null && mr.max != null ? `${Math.round(mr.min)}–${Math.round(mr.max)} %` : '—';
+  const luxRange =
+    lr.min != null && lr.max != null ? `${Math.round(lr.min)}–${Math.round(lr.max)} lx` : '—';
+
+  const healthStatus = health >= 75 ? 'optimal' : health >= 50 ? 'warn' : 'bad';
+  const healthFill =
+    healthStatus === 'optimal'
+      ? 'metric-bar-fill--optimal'
+      : healthStatus === 'warn'
+        ? 'metric-bar-fill--warn'
+        : 'metric-bar-fill--bad';
+  const hp = Math.max(0, Math.min(100, health));
+
+  const cards = [
+    metricBarRow(
+      'Avg temp',
+      avgTemp.toFixed(1),
+      '°C',
+      tempRange,
+      avgTemp,
+      tr.min,
+      tr.max,
+      st
+    ),
+    metricBarRow(
+      'Humidity',
+      avgHum != null ? String(avgHum) : '—',
+      '%',
+      humRange,
+      avgHum,
+      hr.min,
+      hr.max,
+      sh
+    ),
+    metricBarRow('Avg light', String(avgLux), 'lx', luxRange, avgLux, lr.min, lr.max, sl),
+    `
     <div class="metric-card">
-      <div class="metric-label"><span>${m.label}</span><span class="right">Today</span></div>
-      <div class="metric-value"><span>${m.value}</span><span class="metric-unit">${m.unit}</span></div>
-      <div class="metric-delta ${m.positive ? '' : 'negative'}"><i class="ri-arrow-${m.positive ? 'up' : 'down'}-s-line"></i>${m.delta}</div>
+      <div class="metric-label"><span>Garden health</span><span class="right">Index</span></div>
+      <div class="metric-value"><span>${health}</span><span class="metric-unit">%</span></div>
+      <div class="metric-optimal">Optimal ${moistRange} soil moisture (fleet)</div>
+      <div class="metric-bar-wrap">
+        <div class="metric-bar-zone" style="left:35%;width:30%"></div>
+        <div class="metric-bar-fill ${healthFill}" style="width:${hp}%"></div>
+        <div class="metric-bar-dot" style="left:${hp}%"></div>
+      </div>
+      <div class="metric-delta ${sm === 'optimal' ? '' : 'negative'}"><i class="ri-arrow-${sm === 'optimal' ? 'up' : 'down'}-s-line"></i>moisture ${sm === 'optimal' ? 'on target' : 'check plants'}</div>
       <div class="metric-tag">DEW Warden</div>
+    </div>`,
+  ];
+  row.innerHTML = cards.join('');
+}
+
+function computeSmartInsight(plants) {
+  const lines = [];
+  let level = 'good';
+  const bump = (to) => {
+    if (to === 'critical') level = 'critical';
+    else if (to === 'warning' && level === 'good') level = 'warning';
+  };
+  plants.forEach((p) => {
+    const o = plantOptimal(p);
+    const m = Number(p.moisture);
+    const t = Number(p.temp);
+    const lx = Number(p.lux);
+    if (!Number.isNaN(m) && o.moisture) {
+      if (m < o.moisture.min) {
+        lines.push(`💧 ${p.name || p.id}: soil moisture low (${Math.round(m)}%. Target ${o.moisture.min}–${o.moisture.max}%).`);
+        bump('warning');
+      } else if (m > o.moisture.max) {
+        lines.push(`💧 ${p.name || p.id}: soil very wet — ease watering.`);
+        bump('warning');
+      }
+    }
+    if (!Number.isNaN(t) && o.temp) {
+      if (t > o.temp.max) {
+        lines.push(`🌡 ${p.name || p.id}: temperature above comfort (${t.toFixed(1)}°C).`);
+        bump('critical');
+      } else if (t < o.temp.min) {
+        lines.push(`🌡 ${p.name || p.id}: cooler than ideal (${t.toFixed(1)}°C).`);
+        bump('warning');
+      }
+    }
+    if (!Number.isNaN(lx) && o.lux) {
+      if (lx < o.lux.min) {
+        lines.push(`☀ ${p.name || p.id}: light below ideal (${Math.round(lx)} lx). Consider a brighter spot.`);
+        bump('warning');
+      } else if (lx > o.lux.max) {
+        lines.push(`☀ ${p.name || p.id}: very bright (${Math.round(lx)} lx) — watch for leaf stress.`);
+        bump('warning');
+      }
+    }
+  });
+  if (!lines.length) {
+    lines.push('🌱 All monitored plants are within typical ranges. Keep observing sensor trends.');
+  }
+  return { level, lines };
+}
+
+/** Simple “water in ~N hours” hints from soil deficit (heuristic). */
+function computeWaterRecommendations(plants) {
+  const out = [];
+  plants.forEach((p) => {
+    const o = plantOptimal(p);
+    const m = Number(p.moisture);
+    if (Number.isNaN(m) || !o.moisture || m >= o.moisture.min) return;
+    const deficit = o.moisture.min - m;
+    const hours = Math.min(48, Math.max(2, Math.round(4 + deficit / 4)));
+    out.push(`💧 ${p.name || p.id}: consider watering within ~${hours}h (soil under target).`);
+  });
+  return out;
+}
+
+function renderSmartInsight(plants) {
+  const el = document.getElementById('smartInsightBody');
+  if (!el) return;
+  if (!plants.length) {
+    el.innerHTML = '<p class="dew-muted">Add plants to your fleet to see smart insights.</p>';
+    return;
+  }
+  const { level, lines } = computeSmartInsight(plants);
+  const cls =
+    level === 'critical' ? 'dew-insight-status--crit' : level === 'warning' ? 'dew-insight-status--warn' : 'dew-insight-status--good';
+  const label =
+    level === 'critical' ? 'Critical — needs attention' : level === 'warning' ? 'Warning — review' : 'Good';
+  const icon = level === 'critical' ? 'ri-alarm-warning-fill' : level === 'warning' ? 'ri-alarm-warning-line' : 'ri-leaf-fill';
+  el.innerHTML = `
+    <div class="dew-insight-status ${cls}"><i class="${icon}"></i> Plant Health Status: ${label}</div>
+    <ul class="dew-insight-lines">${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`;
+}
+
+function renderDailySummary(plants) {
+  const el = document.getElementById('dailySummaryBody');
+  if (!el) return;
+  if (!plants.length) {
+    el.innerHTML = '<p class="dew-muted">No plants linked yet.</p>';
+    return;
+  }
+  const { level, lines } = computeSmartInsight(plants);
+  const happy = level === 'good';
+  const recs = computeWaterRecommendations(plants);
+  const recBlock =
+    recs.length > 0
+      ? `<p class="dew-daily-rec" style="margin-top:10px"><strong>Recommendations</strong></p><ul class="dew-insight-lines">${recs
+          .slice(0, 2)
+          .map((r) => `<li>${escapeHtml(r)}</li>`)
+          .join('')}</ul>`
+      : '';
+  el.innerHTML = `<p>${happy ? '✨ Your plants are doing well today.' : '⚠️ Check smart insights — some readings need attention.'}</p>
+    <p class="dew-muted" style="margin-top:8px">${lines.length ? escapeHtml(lines[0]) : ''}</p>${recBlock}`;
+}
+
+async function latestBatteryFromFleet(plants) {
+  const tp = plants.filter((p) => String(p.usage?.last_source || '') === 'telemetry');
+  if (!tp.length) return null;
+  for (const p of tp) {
+    try {
+      const arr = await fetchTelemetryCached(p.id, '24h');
+      for (let i = arr.length - 1; i >= 0; i--) {
+        const b = arr[i].battery;
+        if (b != null && !Number.isNaN(Number(b))) {
+          return { pct: Math.round(Number(b)), plant: p.name || p.id };
+        }
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function renderDeviceStatus(plants) {
+  const el = document.getElementById('deviceStatusBody');
+  if (!el) return;
+  const telemetryPlants = plants.filter((p) => String(p.usage?.last_source || '') === 'telemetry');
+  let lastMs = 0;
+  plants.forEach((p) => {
+    const t = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+    if (t > lastMs) lastMs = t;
+  });
+  const online = lastMs && Date.now() - lastMs < ONLINE_MS;
+  let batteryHtml = '';
+  if (telemetryPlants.length) {
+    const bat = await latestBatteryFromFleet(plants);
+    if (bat) {
+      batteryHtml = `<p class="dew-muted" style="margin-top:8px">Battery: ~${bat.pct}% <span class="dew-battery-plant">(${escapeHtml(bat.plant)})</span></p>`;
+    } else {
+      batteryHtml =
+        '<p class="dew-muted" style="margin-top:8px">Battery: not reported — send <code>battery</code> (0–100) in telemetry to show.</p>';
+    }
+  }
+  el.innerHTML = `
+    <div class="dew-device-row">
+      <span class="dew-device-name">ESP32 Sensor Hub</span>
+      <span class="dew-device-pill ${online ? 'dew-device-pill--on' : 'dew-device-pill--off'}">${online ? '🟢 Online' : '🔴 Offline / idle'}</span>
     </div>
-  `).join('');
+    <p class="dew-muted">Last sensor sync: ${lastMs ? formatRelativeTime(new Date(lastMs).toISOString()) : '—'}</p>
+    ${batteryHtml}`;
+  const chip = document.getElementById('dashboardLiveChip');
+  const dot = document.getElementById('dashboardLiveDot');
+  if (chip) chip.classList.toggle('offline', !online);
+  if (dot && !online) dot.classList.remove('chip-dot--pulse');
+  else if (dot && online) dot.classList.add('chip-dot--pulse');
+}
+
+function renderAlertsPreview() {
+  const ul = document.getElementById('alertsPreviewList');
+  if (!ul) return;
+  const alerts = (activityFeed || []).filter(
+    (a) => a.kind === 'alert' || a.source === 'weather' || a.source === 'sensor'
+  );
+  if (!alerts.length) {
+    ul.innerHTML = '<li class="dew-muted">No recent alerts.</li>';
+    return;
+  }
+  ul.innerHTML = alerts.slice(0, 3).map((a) => {
+    const t = escapeHtml(a.title || 'Alert');
+    const d = escapeHtml((a.desc || '').slice(0, 80));
+    return `<li class="dew-alerts-preview-item" data-nav-alerts="1" role="button" tabindex="0"><i class="ri-notification-3-line"></i><div><strong>${t}</strong>${d}</div></li>`;
+  });
+  ul.querySelectorAll('[data-nav-alerts]').forEach((node) => {
+    const go = () => document.querySelector('.nav-item[data-view="alerts"]')?.click();
+    node.addEventListener('click', go);
+    node.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') go();
+    });
+  });
+}
+
+async function renderUsageStats(plants) {
+  const el = document.getElementById('usageStatsBody');
+  if (!el) return;
+  updateUsageRangeLabel();
+  if (!plants.length) {
+    el.innerHTML = '<p class="dew-muted">No fleet data.</p>';
+    return;
+  }
+  const ids = plants.slice(0, 6).map((p) => p.id);
+  const range = chartRange;
+  let total = 0;
+  let sumM = 0;
+  let countM = 0;
+  let firstHalf = [];
+  let secondHalf = [];
+  try {
+    const results = await Promise.all(ids.map((id) => fetchTelemetryCached(id, range)));
+    results.forEach((arr) => {
+      total += arr.length;
+      arr.forEach((r) => {
+        if (r.moisture != null) {
+          sumM += Number(r.moisture);
+          countM += 1;
+        }
+      });
+    });
+    const merged = results.flat().sort((a, b) => new Date(a.at) - new Date(b.at));
+    const mid = Math.floor(merged.length / 2);
+    firstHalf = merged.slice(0, mid);
+    secondHalf = merged.slice(mid);
+  } catch (_) {}
+  const avgM = countM ? (sumM / countM).toFixed(1) : '—';
+  const mFirst =
+    firstHalf.length && firstHalf.some((r) => r.moisture != null)
+      ? firstHalf
+          .filter((r) => r.moisture != null)
+          .reduce((s, r) => s + Number(r.moisture), 0) /
+        firstHalf.filter((r) => r.moisture != null).length
+      : null;
+  const mSecond =
+    secondHalf.length && secondHalf.some((r) => r.moisture != null)
+      ? secondHalf
+          .filter((r) => r.moisture != null)
+          .reduce((s, r) => s + Number(r.moisture), 0) /
+        secondHalf.filter((r) => r.moisture != null).length
+      : null;
+  let trend = '';
+  if (mFirst != null && mSecond != null) {
+    const up = mSecond > mFirst + 1;
+    const down = mSecond < mFirst - 1;
+    const spanHint = range === '24h' ? 'today' : 'this range';
+    trend = up
+      ? `<span class="dew-trend dew-trend--up">↑ vs earlier in ${spanHint}</span>`
+      : down
+        ? `<span class="dew-trend dew-trend--down">↓ vs earlier in ${spanHint}</span>`
+        : '<span class="dew-trend">→ steady</span>';
+  }
+  const rlab = chartRangeLabel(range);
+  el.innerHTML = `
+    <div class="dew-stat-grid">
+      <div class="dew-stat-pill"><span>Readings (${rlab})</span><strong class="dew-count-up">${total}</strong></div>
+      <div class="dew-stat-pill"><span>Avg moisture (${rlab})</span><strong>${avgM}${avgM !== '—' ? '%' : ''}</strong>${trend}</div>
+    </div>`;
+}
+
+function updateLiveChip(plants) {
+  const label = document.getElementById('lastSyncLabel');
+  if (!label) return;
+  let lastMs = 0;
+  plants.forEach((p) => {
+    const t = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+    if (t > lastMs) lastMs = t;
+  });
+  label.textContent = lastMs ? formatRelativeTime(new Date(lastMs).toISOString()) : '—';
+}
+
+function applyWeatherPlantTips(loc, weather, plants) {
+  const tipH = document.getElementById('weatherHeroTip');
+  const tipC = document.getElementById('dashboardWeatherTip');
+  if (!weather) {
+    if (tipH) tipH.textContent = '';
+    if (tipC) tipC.textContent = '';
+    return;
+  }
+  lastWeatherForTips = { loc, weather, plants };
+  const hum = weather.humidity != null ? Number(weather.humidity) : null;
+  const cond = String(weather.condition || '').toLowerCase();
+  const anim = weather.animation || 'cloudy';
+  let msg = '';
+  if (anim === 'sunny' || cond.includes('clear'))
+    msg += ' Good day for bright indirect light — watch soil drying in warm sun.';
+  else if (anim === 'rainy' || cond.includes('rain'))
+    msg += ' Humid air — reduce watering and ensure drainage.';
+  else if (hum != null && hum > 75) msg += ' High humidity — soil stays wet longer; check moisture before watering.';
+  else if (hum != null && hum < 35) msg += ' Dry air — some plants may need misting or a pebble tray.';
+  else msg += ' Stable outdoor conditions — align indoor watering with your sensor readings.';
+
+  const insight = computeSmartInsight(plants || []);
+  if (insight.level !== 'good' && insight.lines[0]) {
+    msg += ` ${insight.lines[0]}`;
+  }
+  if (tipH) tipH.textContent = msg.trim();
+  if (tipC) tipC.textContent = msg.trim();
+}
+
+async function refreshDashboardPanels(plants) {
+  renderSmartInsight(plants);
+  renderDailySummary(plants);
+  await renderDeviceStatus(plants);
+  renderAlertsPreview();
+  updateLiveChip(plants);
+  renderUsageStats(plants).catch(() => {});
+  if (lastWeatherForTips && lastWeatherForTips.weather) {
+    applyWeatherPlantTips(lastWeatherForTips.loc, lastWeatherForTips.weather, plants);
+  }
+}
+
+function chartRangeLabel(range) {
+  if (range === '7d') return '7d';
+  if (range === '30d') return '30d';
+  if (range === 'all') return 'all time';
+  return '24h';
+}
+
+function updateUsageRangeLabel() {
+  const el = document.getElementById('usageStatsRangeLabel');
+  if (el) el.textContent = '(' + chartRangeLabel(chartRange) + ')';
+}
+
+function chartRangeToHoursParam(range) {
+  if (range === 'all') return 'all';
+  if (range === '7d') return '168';
+  if (range === '30d') return '720';
+  return '24';
+}
+
+async function fetchTelemetryCached(plantId, range) {
+  const q = chartRangeToHoursParam(range);
+  const key = `${plantId}:${q}`;
+  const now = Date.now();
+  const hit = telemetryCache.get(key);
+  if (hit && now - hit.at < TELEMETRY_TTL_MS) return hit.data;
+  const url =
+    q === 'all'
+      ? `${API}/api/plants/${encodeURIComponent(plantId)}/telemetry?hours=all`
+      : `${API}/api/plants/${encodeURIComponent(plantId)}/telemetry?hours=${encodeURIComponent(q)}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  const arr = Array.isArray(data) ? data : [];
+  telemetryCache.set(key, { at: now, data: arr });
+  return arr;
+}
+
+function dataKeyForMetric(metricKey) {
+  if (metricKey === 'temperature') return 'temp';
+  if (metricKey === 'light') return 'lux';
+  return 'moisture';
+}
+
+function formatBucketLabel(ts, range) {
+  const d = new Date(ts);
+  if (range === '24h') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (range === '7d') return d.toLocaleDateString([], { weekday: 'short' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function mergeBucketedSeries(plants, metricKey, range, readingsLists) {
+  const mKey = dataKeyForMetric(metricKey);
+  const bucketCount = range === '24h' ? 12 : range === '7d' ? 14 : range === '30d' ? 18 : 24;
+  let minT = Infinity;
+  let maxT = -Infinity;
+  readingsLists.forEach((arr) => {
+    arr.forEach((r) => {
+      const t = new Date(r.at).getTime();
+      if (!Number.isNaN(t)) {
+        minT = Math.min(minT, t);
+        maxT = Math.max(maxT, t);
+      }
+    });
+  });
+  if (minT === Infinity) return { labels: [], series: [], empty: true, bucketMidMs: [] };
+  if (maxT - minT < 120000) maxT = minT + 3600000;
+  const span = maxT - minT;
+  const labels = [];
+  const bucketMidMs = [];
+  const series = plants.map(() => Array(bucketCount).fill(null));
+  for (let b = 0; b < bucketCount; b++) {
+    const t0 = minT + (span * b) / bucketCount;
+    const t1 = minT + (span * (b + 1)) / bucketCount;
+    const mid = (t0 + t1) / 2;
+    bucketMidMs.push(mid);
+    labels.push(formatBucketLabel(mid, range));
+    readingsLists.forEach((arr, pi) => {
+      const inB = arr.filter((r) => {
+        const t = new Date(r.at).getTime();
+        return t >= t0 && t < t1;
+      });
+      const vals = inB.map((r) => r[mKey]).filter((v) => v != null && !Number.isNaN(Number(v)));
+      if (vals.length) series[pi][b] = vals.reduce((a, x) => a + Number(x), 0) / vals.length;
+    });
+  }
+  series.forEach((row) => {
+    let last = null;
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] != null) last = row[i];
+      else row[i] = last;
+    }
+  });
+  return { labels, series, empty: false, bucketMidMs };
+}
+
+function syntheticFromPlants(plants, metricKey) {
+  const key = dataKeyForMetric(metricKey);
+  const labels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', 'Now'];
+  return (plants || []).slice(0, 4).map((p, i) => {
+    const v = p[key] != null ? Number(p[key]) : key === 'lux' ? 800 : 50;
+    const data = Array.from({ length: 7 }, (_, j) =>
+      Math.max(0, v - 5 + j * 2 + (Math.random() * 4 - 2))
+    );
+    return {
+      label: (p.name || p.id).split(' ')[0],
+      data,
+      borderColor: palette[p.id] || Object.values(palette)[i],
+      backgroundColor: (palette[p.id] || Object.values(palette)[i]) + '33',
+      _minMaxIdx: (() => {
+        let minI = 0;
+        let maxI = 0;
+        let minV = Infinity;
+        let maxV = -Infinity;
+        data.forEach((val, idx) => {
+          if (val < minV) {
+            minV = val;
+            minI = idx;
+          }
+          if (val > maxV) {
+            maxV = val;
+            maxI = idx;
+          }
+        });
+        return { minIdx: minI, maxIdx: maxI };
+      })(),
+    };
+  });
+}
+
+function minMaxIndices(arr) {
+  let minI = -1;
+  let maxI = -1;
+  let minV = Infinity;
+  let maxV = -Infinity;
+  arr.forEach((v, i) => {
+    if (v == null || Number.isNaN(Number(v))) return;
+    const n = Number(v);
+    if (n < minV) {
+      minV = n;
+      minI = i;
+    }
+    if (n > maxV) {
+      maxV = n;
+      maxI = i;
+    }
+  });
+  return { minIdx: minI, maxIdx: maxI };
+}
+
+async function buildChart(plants, metricKey = 'moisture') {
+  const canvas = document.getElementById('sensorChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (sensorChart) sensorChart.destroy();
+
+  const range = chartRange;
+  const plantList = (plants || []).slice(0, 4);
+  let labels = [];
+  let datasets = [];
+  /** Mid-timestamp per bucket for rich tooltips (real data only). */
+  let bucketMidMs = [];
+
+  if (plantList.length) {
+    const readingsLists = await Promise.all(plantList.map((p) => fetchTelemetryCached(p.id, range)));
+    const hasAny = readingsLists.some((a) => a.length);
+    if (hasAny) {
+      const merged = mergeBucketedSeries(plantList, metricKey, range, readingsLists);
+      labels = merged.labels;
+      bucketMidMs = merged.bucketMidMs || [];
+      const series = merged.series;
+      datasets = plantList.map((p, i) => {
+        const data = series[i] || [];
+        const mm = minMaxIndices(data);
+        const pr = data.map((_, j) => (j === mm.minIdx || j === mm.maxIdx ? 5 : 0));
+        return {
+          label: (p.name || p.id).split(' ')[0],
+          data,
+          borderColor: palette[p.id] || Object.values(palette)[i],
+          backgroundColor: (palette[p.id] || Object.values(palette)[i]) + '33',
+          tension: 0.35,
+          fill: true,
+          borderWidth: 2,
+          pointRadius: pr,
+          pointHoverRadius: 6,
+        };
+      });
+    }
+  }
+
+  if (!labels.length || !datasets.length) {
+    const demoPlants =
+      plants && plants.length
+        ? plants
+        : [{ id: 'pothos', name: 'Sample', moisture: 55, temp: 22, lux: 900 }];
+    const syn = syntheticFromPlants(demoPlants, metricKey);
+    labels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', 'Now'];
+    datasets = syn.map((ds) => {
+      const mm = ds._minMaxIdx || { minIdx: 0, maxIdx: 0 };
+      const pr = (ds.data || []).map((_, j) => (j === mm.minIdx || j === mm.maxIdx ? 5 : 0));
+      const { _minMaxIdx, ...rest } = ds;
+      return {
+        ...rest,
+        tension: 0.45,
+        fill: true,
+        borderWidth: 2,
+        pointRadius: pr,
+        pointHoverRadius: 6,
+      };
+    });
+  }
+
+  const yLabel =
+    metricKey === 'temperature' ? '°C' : metricKey === 'light' ? 'lux' : '%';
+
+  const fmtTooltipTitle = (dataIndex) => {
+    if (bucketMidMs.length && bucketMidMs[dataIndex] != null) {
+      return new Date(bucketMidMs[dataIndex]).toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+    return labels[dataIndex] != null ? String(labels[dataIndex]) : '';
+  };
+
+  sensorChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      animation: { duration: 900, easing: 'easeOutQuart' },
+      animations: {
+        colors: { type: 'color', duration: 650 },
+      },
+      transitions: {
+        active: { animation: { duration: 450 } },
+      },
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 10, color: '#8fa99f', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const v = ctx.parsed.y;
+              const vStr =
+                metricKey === 'light' && v != null ? Number(v).toLocaleString() : v != null ? Number(v).toFixed(1) : '—';
+              return `${ctx.dataset.label}: ${vStr} ${yLabel}`;
+            },
+            title(items) {
+              const i = items[0]?.dataIndex;
+              return fmtTooltipTitle(i);
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8fa99f', font: { size: 11 }, maxRotation: 0 },
+          grid: { color: 'rgba(126, 242, 191, 0.12)' },
+          title: { display: true, text: 'Time', color: '#6d887a', font: { size: 10 } },
+        },
+        y: {
+          ticks: { color: '#8fa99f', font: { size: 11 } },
+          grid: { color: 'rgba(126, 242, 191, 0.12)' },
+          title: { display: true, text: yLabel, color: '#6d887a', font: { size: 10 } },
+        },
+      },
+    },
+  });
+}
+
+async function buildChartAsync(plants, metricKey) {
+  const key = metricKey || chartMetricFromActiveTab();
+  const wrap = document.getElementById('sensorChartWrap');
+  const skel = document.getElementById('chartSkeleton');
+  if (wrap) wrap.classList.add('chart-wrapper--loading');
+  if (skel) skel.style.display = 'block';
+  try {
+    await buildChart(plants, key);
+  } finally {
+    if (wrap) wrap.classList.remove('chart-wrapper--loading');
+    if (skel) skel.style.display = 'none';
+    const card = document.querySelector('.dew-chart-card');
+    if (card) {
+      card.classList.remove('chart-flash');
+      void card.offsetWidth;
+      card.classList.add('chart-flash');
+    }
+  }
+}
+
+function initChartRangeTabs() {
+  const row = document.getElementById('chartRangeTabs');
+  if (!row || row.dataset.wired) return;
+  row.dataset.wired = '1';
+  row.querySelectorAll('.chart-range-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      row.querySelectorAll('.chart-range-tab').forEach((b) => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      chartRange = btn.getAttribute('data-range') || '24h';
+      updateUsageRangeLabel();
+      buildChartAsync(plants, chartMetricFromActiveTab());
+      renderUsageStats(plants).catch(() => {});
+    });
+  });
+}
+
+function initAlertsPreviewMore() {
+  const btn = document.getElementById('btnAlertsPreviewMore');
+  if (!btn || btn.dataset.wired) return;
+  btn.dataset.wired = '1';
+  btn.addEventListener('click', () => {
+    document.querySelector('.nav-item[data-view="alerts"]')?.click();
+  });
+}
+
+function wireSensorTabs() {
+  document.querySelectorAll('#sensorTabs .tab').forEach((tab) => {
+    tab.onclick = () => {
+      document.querySelectorAll('#sensorTabs .tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      buildChartAsync(plants, tab.dataset.metric);
+    };
+  });
 }
 
 function getPlantImageUrl(p) {
@@ -915,9 +1667,10 @@ async function refreshPlantFleetFromServer() {
     if (npc) npc.textContent = plants.length;
     if (ndc) ndc.textContent = plants.length;
     renderMetrics(plants);
+    await refreshDashboardPanels(plants);
     renderPlantFleetSummary();
     renderPlantTable(plants);
-    buildChart(plants, chartMetricFromActiveTab());
+    await buildChartAsync(plants, chartMetricFromActiveTab());
     const ar = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/activity-feed');
     if (ar.ok) {
       activityFeed = await ar.json();
@@ -1106,12 +1859,15 @@ async function load() {
     document.getElementById('navBotsCount').textContent = plants.length;
 
     renderMetrics(plants);
+    await refreshDashboardPanels(plants);
     renderPlantFleetSummary();
     renderPlantTable(plants);
     renderActivityFiltered();
     initActivityTabs();
-    buildChart(plants, 'moisture');
-    wireSensorTabs(plants);
+    await buildChartAsync(plants, 'moisture');
+    wireSensorTabs();
+    initChartRangeTabs();
+    initAlertsPreviewMore();
     initDeskbot(plants, deskbotConfig);
     loadDashboardWeather();
 

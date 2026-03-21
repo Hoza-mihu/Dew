@@ -138,10 +138,11 @@
               <p>DEW watches over your plants 24/7.</p>
             </div>
             <div class="top-right">
-              <div class="chip">
-                <span class="chip-dot"></span
-                ><span
-                  >Last sync: <span id="lastSyncLabel">Just now</span></span
+              <div class="chip chip--live" id="dashboardLiveChip" title="Sensor data freshness">
+                <span class="chip-dot chip-dot--pulse" id="dashboardLiveDot"></span
+                ><span id="dashboardLiveLabel"
+                  ><span class="dashboard-live-strong">Live</span> · last update
+                  <span id="lastSyncLabel">—</span></span
                 >
               </div>
               <button class="btn btn-ghost" id="btnRefresh">
@@ -184,6 +185,7 @@
                 <span><i class="ri-drop-line"></i> <span id="weatherHeroHumidity">—</span></span>
                 <span><i class="ri-windy-line"></i> <span id="weatherHeroWind">—</span></span>
               </div>
+              <p class="weather-hero-tip" id="weatherHeroTip" aria-live="polite"></p>
             </div>
           </section>
           <section
@@ -221,6 +223,7 @@
                     <span id="dashboardWeatherWind">—</span></span
                   >
                 </div>
+                <p class="dashboard-weather-tip" id="dashboardWeatherTip" aria-live="polite"></p>
               </div>
             </div>
           </section>
@@ -258,8 +261,54 @@
             </div>
           </div>
           <section class="metrics-row" id="metricsRow"></section>
+          <section class="dashboard-insights-row" id="dashboardInsightsRow">
+            <div class="card dew-enhance-card dew-insight-card">
+              <div class="card-header">
+                <h2><i class="ri-mental-health-line"></i> Smart insights</h2>
+              </div>
+              <div class="dew-insight-body" id="smartInsightBody">
+                <p class="dew-muted">Loading…</p>
+              </div>
+            </div>
+            <div class="card dew-enhance-card dew-daily-card">
+              <div class="card-header">
+                <h2><i class="ri-calendar-todo-line"></i> Daily summary</h2>
+              </div>
+              <div class="dew-daily-body" id="dailySummaryBody">
+                <p class="dew-muted">—</p>
+              </div>
+            </div>
+            <div class="card dew-enhance-card dew-device-card">
+              <div class="card-header">
+                <h2><i class="ri-robot-2-line"></i> Bot status</h2>
+              </div>
+              <div class="dew-device-body" id="deviceStatusBody">
+                <p class="dew-muted">—</p>
+              </div>
+            </div>
+            <div class="card dew-enhance-card dew-alerts-preview-card">
+              <div class="card-header">
+                <h2><i class="ri-alarm-warning-line"></i> Alerts</h2>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnAlertsPreviewMore" data-view="alerts">
+                  View all
+                </button>
+              </div>
+              <ul class="dew-alerts-preview-list" id="alertsPreviewList"></ul>
+            </div>
+            <div class="card dew-enhance-card dew-usage-card">
+              <div class="card-header">
+                <h2>
+                  <i class="ri-bar-chart-grouped-line"></i> Activity
+                  <span class="dew-usage-range" id="usageStatsRangeLabel">(24h)</span>
+                </h2>
+              </div>
+              <div class="dew-usage-body" id="usageStatsBody">
+                <p class="dew-muted">—</p>
+              </div>
+            </div>
+          </section>
           <section class="middle-row">
-            <div class="card">
+            <div class="card dew-chart-card">
               <div class="card-header">
                 <h2><i class="ri-timeline-view"></i> Sensor Timeline</h2>
                 <div class="tab-row" id="sensorTabs">
@@ -268,7 +317,14 @@
                   <div class="tab" data-metric="light">Light</div>
                 </div>
               </div>
-              <div class="chart-wrapper">
+              <div class="chart-range-row" id="chartRangeTabs" role="tablist" aria-label="Chart time range">
+                <button type="button" class="chart-range-tab active" data-range="24h" role="tab" aria-selected="true">24h</button>
+                <button type="button" class="chart-range-tab" data-range="7d" role="tab" aria-selected="false">7d</button>
+                <button type="button" class="chart-range-tab" data-range="30d" role="tab" aria-selected="false">30d</button>
+                <button type="button" class="chart-range-tab" data-range="all" role="tab" aria-selected="false">All</button>
+              </div>
+              <div class="chart-wrapper" id="sensorChartWrap">
+                <div class="chart-skeleton" id="chartSkeleton" aria-hidden="true"></div>
                 <canvas id="sensorChart"></canvas>
               </div>
             </div>

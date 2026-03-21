@@ -3050,7 +3050,14 @@ app.get('/api/plants/:plantId/telemetry', (req, res) => {
   }
   const readings = raw
     .slice(-200)
-    .map(r => ({ at: r.at, moisture: r.moisture, temp: r.temp, lux: r.lux, humidity: r.humidity }));
+    .map(r => ({
+      at: r.at,
+      moisture: r.moisture,
+      temp: r.temp,
+      lux: r.lux,
+      humidity: r.humidity,
+      ...(r.battery != null ? { battery: r.battery } : {}),
+    }));
   res.json(readings);
 });
 
