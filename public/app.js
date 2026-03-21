@@ -28,7 +28,6 @@ let plantFleetPollTimer = null;
 const PLANT_FLEET_POLL_MS = 20000;
 /** Dashboard activity list (from GET /api/users/:uid/activity-feed). */
 let activityFeed = [];
-let activityFilter = 'all';
 
 /** Fleet optimal ranges (aligned with server `PLANT_OPTIMAL_*`). */
 const DEFAULT_OPTIMAL = {
@@ -1485,29 +1484,7 @@ function renderActivity(list) {
 }
 
 function renderActivityFiltered() {
-  const list =
-    activityFilter === 'alerts'
-      ? activityFeed.filter((a) => a.kind === 'alert' || a.source === 'weather' || a.source === 'sensor')
-      : activityFeed;
-  renderActivity(list);
-}
-
-function initActivityTabs() {
-  const row = document.getElementById('activityListTabs');
-  if (!row || row.dataset.wired) return;
-  row.dataset.wired = '1';
-  row.querySelectorAll('.tab[data-activity-filter]').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      row.querySelectorAll('.tab').forEach((t) => {
-        t.classList.remove('active');
-        t.setAttribute('aria-selected', 'false');
-      });
-      tab.classList.add('active');
-      tab.setAttribute('aria-selected', 'true');
-      activityFilter = tab.getAttribute('data-activity-filter') || 'all';
-      renderActivityFiltered();
-    });
-  });
+  renderActivity(activityFeed);
 }
 
 /** Derive weather type from plant sensor data (temp °C, moisture %, lux) for dashboard animation. */
@@ -1841,16 +1818,6 @@ async function load() {
     plants = fleetPlants;
     plantFleetSummary = summary;
 
-    activityFilter = 'all';
-    const activityTabAll = document.getElementById('activityTabAll');
-    const activityTabAlerts = document.getElementById('activityTabAlerts');
-    if (activityTabAll && activityTabAlerts) {
-      activityTabAll.classList.add('active');
-      activityTabAlerts.classList.remove('active');
-      activityTabAll.setAttribute('aria-selected', 'true');
-      activityTabAlerts.setAttribute('aria-selected', 'false');
-    }
-
     const [activityRes, configRes] = await Promise.all([
       uid
         ? authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/activity-feed')
@@ -1869,7 +1836,6 @@ async function load() {
     renderPlantFleetSummary();
     renderPlantTable(plants);
     renderActivityFiltered();
-    initActivityTabs();
     await buildChartAsync(plants, 'moisture');
     wireSensorTabs();
     initChartRangeTabs();
