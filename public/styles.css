@@ -146,6 +146,16 @@ body {
 .metrics-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 1080px) { .metrics-row { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 640px) { .metrics-row { grid-template-columns: 1fr; } }
+.metric-row-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 4px 6px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-soft);
+  text-align: center;
+}
+.metric-row-hint strong { color: var(--accent-strong); font-weight: 600; }
 .metric-card {
   background: var(--bg-elevated);
   border-radius: var(--radius-lg);

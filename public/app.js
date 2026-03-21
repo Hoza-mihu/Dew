@@ -554,7 +554,7 @@ function fleetAvgRange(plants, key) {
   return { min: minSum / n, max: maxSum / n };
 }
 
-function metricBarRow(label, valueStr, unit, range, rawVal, min, max, status) {
+function metricBarRow(label, valueStr, unit, range, rawVal, min, max, status, rightTag = 'Fleet avg') {
   const fillClass =
     status === 'optimal' ? 'metric-bar-fill--optimal' : status === 'warn' ? 'metric-bar-fill--warn' : 'metric-bar-fill--bad';
   let pct = 50;
@@ -567,7 +567,7 @@ function metricBarRow(label, valueStr, unit, range, rawVal, min, max, status) {
   const zoneW = min != null && max != null ? 30 : 50;
   return `
     <div class="metric-card">
-      <div class="metric-label"><span>${label}</span><span class="right">Fleet avg</span></div>
+      <div class="metric-label"><span>${label}</span><span class="right">${rightTag}</span></div>
       <div class="metric-value"><span>${valueStr}</span><span class="metric-unit">${unit}</span></div>
       <div class="metric-optimal">Optimal ${range}</div>
       <div class="metric-bar-wrap">
@@ -579,13 +579,41 @@ function metricBarRow(label, valueStr, unit, range, rawVal, min, max, status) {
     </div>`;
 }
 
+/** When fleet has no plants: show target ranges + dashes (not an infinite skeleton). */
+function renderMetricsEmptyFleet() {
+  const o = DEFAULT_OPTIMAL;
+  const tempR = `${o.temp.min}–${o.temp.max} °C`;
+  const humR = `${o.humidity.min}–${o.humidity.max} %`;
+  const luxR = `${o.lux.min}–${o.lux.max} lx`;
+  const moistR = `${o.moisture.min}–${o.moisture.max} %`;
+  const cards = [
+    metricBarRow('Avg temp', '—', '°C', tempR, null, o.temp.min, o.temp.max, 'warn'),
+    metricBarRow('Humidity', '—', '%', humR, null, o.humidity.min, o.humidity.max, 'warn'),
+    metricBarRow('Avg light', '—', 'lx', luxR, null, o.lux.min, o.lux.max, 'warn'),
+    metricBarRow(
+      'Garden health',
+      '—',
+      '%',
+      `${moistR} soil moisture (typical)`,
+      null,
+      o.moisture.min,
+      o.moisture.max,
+      'warn',
+      'Index'
+    ),
+  ];
+  const hint = window.__dewUid
+    ? 'No plants in your fleet yet. Live averages appear when your Plant Bot sends data or you save <strong>Desk Bot</strong>.'
+    : 'Sign in and link plants to see live fleet metrics.';
+  return `${cards.join('')}<p class="metric-row-hint">${hint}</p>`;
+}
+
 function renderMetrics(plants) {
   const row = document.getElementById('metricsRow');
   if (!row) return;
   const n = plants.length;
   if (!n) {
-    row.innerHTML =
-      '<div class="metric-card metric-card--skeleton" style="grid-column:1/-1;min-height:100px"></div>';
+    row.innerHTML = renderMetricsEmptyFleet();
     return;
   }
   const avgTemp = plants.reduce((s, p) => s + Number(p.temp || 0), 0) / n;
