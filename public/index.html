@@ -171,6 +171,14 @@
                 </div>
               </div>
               <h2 class="weather-hero-title">Weather in <span id="weatherHeroLocation">—</span></h2>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                id="dashboardWeatherChangeLocationBtn"
+                style="margin-bottom: 10px"
+              >
+                <i class="ri-map-pin-line"></i> Change location
+              </button>
               <div class="weather-hero-condition" id="weatherHeroCondition">—</div>
               <div class="weather-hero-meta">
                 <span><i class="ri-drop-line"></i> <span id="weatherHeroHumidity">—</span></span>
@@ -226,6 +234,29 @@
               <a href="#" data-view="settings">Settings</a> to see local weather.
             </p>
           </section>
+          <!-- Weather location prompt (first-time + quick changes) -->
+          <div class="modal" id="weatherLocationPromptModal" style="display: none" aria-hidden="true">
+            <div class="modal-content" role="dialog" aria-modal="true" aria-label="Set weather location">
+              <div class="modal-header">
+                <h2><i class="ri-map-pin-line"></i> Set your weather location</h2>
+                <button type="button" class="modal-close" id="weatherLocationPromptCloseBtn" aria-label="Close">
+                  <i class="ri-close-line"></i>
+                </button>
+              </div>
+              <p class="modal-subtitle">
+                Choose how you'd like to set your location for weather and IoT updates.
+              </p>
+              <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
+                <button type="button" class="btn btn-ghost" id="weatherLocationPromptBtnSearch">
+                  <i class="ri-search-line"></i> Search location
+                </button>
+                <button type="button" class="btn btn-primary" id="weatherLocationPromptBtnDetect">
+                  <i class="ri-scan-line"></i> Use current location
+                </button>
+              </div>
+              <div id="weatherLocationPromptStatus" class="location-message" style="display: none; margin-top: 14px" role="status" aria-live="polite"></div>
+            </div>
+          </div>
           <section class="metrics-row" id="metricsRow"></section>
           <section class="middle-row">
             <div class="card">
@@ -253,16 +284,40 @@
             </div>
           </section>
           <section class="bottom-row">
-            <div class="card">
+            <div class="card plant-fleet-card">
               <div class="card-header">
                 <h2><i class="ri-plant-line"></i> Plant Fleet</h2>
                 <button
+                  type="button"
                   class="btn btn-ghost"
+                  id="btnPlantFleetViewAll"
                   style="padding-inline: 10px; font-size: 11px"
+                  aria-expanded="false"
                 >
                   View all
                 </button>
               </div>
+              <p class="plant-fleet-summary" id="plantFleetSummary" aria-live="polite">
+                Loading sensor overview…
+              </p>
+              <details class="plant-fleet-uid-setup" id="plantFleetUidSetup" hidden>
+                <summary>Plant Bot · use this <code>uid</code> in JSON (Option A)</summary>
+                <p class="plant-fleet-uid-hint">
+                  Your ESP32 (or script) should POST to <code>/api/telemetry</code> with the same fields as before, plus
+                  <code>"uid": "…"</code> using the value below. Then readings appear in this fleet.
+                </p>
+                <div class="plant-fleet-uid-row">
+                  <code id="plantFleetUidValue" class="plant-fleet-uid-code" title="Your Firebase user id">—</code>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    id="btnCopyPlantFleetUid"
+                    style="padding-inline: 10px; font-size: 11px"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </details>
               <div style="overflow: auto">
                 <table class="plant-table">
                   <thead>
@@ -272,7 +327,7 @@
                       <th>Moisture</th>
                       <th>Temp</th>
                       <th>Lux</th>
-                      <th>Zone</th>
+                      <th>Last activity</th>
                     </tr>
                   </thead>
                   <tbody id="plantTableBody"></tbody>
@@ -1289,6 +1344,7 @@
                     </div>
                     <button type="button" class="btn btn-ghost" id="communitySymbolBtn" style="display: none" title="Edit symbol"><i class="ri-shapes-line"></i></button>
                     <button type="button" class="btn btn-ghost" id="communityManageModsBtn" style="display: none" title="Manage moderators"><i class="ri-shield-user-line"></i></button>
+                    <button type="button" class="btn btn-ghost" id="communityDeleteBtn" style="display: none" title="Delete community (admin only)"><i class="ri-delete-bin-line"></i></button>
                   </div>
                 </div>
                 <div class="community-highlights" id="communityHighlights">
@@ -2263,6 +2319,63 @@
         </div>
       </main>
     </div>
+
+    <!-- Reddit-style Post Details (post + comments + votes) -->
+    <div
+      class="community-post-detail-modal"
+      id="communityPostDetailModal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Post details"
+      style="display: none"
+    >
+      <div class="community-post-detail-backdrop" id="communityPostDetailBackdrop" aria-hidden="true"></div>
+      <div class="community-post-detail-panel" role="document">
+        <button
+          type="button"
+          class="community-post-detail-close"
+          id="communityPostDetailCloseBtn"
+          aria-label="Close post details"
+        >
+          <i class="ri-close-line"></i>
+        </button>
+
+        <div class="community-post-detail-header">
+          <div class="community-post-detail-header-left">
+            <div class="community-post-detail-title" id="communityPostDetailTitle">Post title</div>
+            <div class="community-post-detail-meta" id="communityPostDetailMeta">u/author • time</div>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="communityPostDetailDeleteBtn" style="display:none">
+            <i class="ri-delete-bin-line"></i> Delete
+          </button>
+        </div>
+
+        <div class="community-post-detail-media" id="communityPostDetailMedia"></div>
+
+        <div class="community-post-detail-votes">
+          <button type="button" class="community-vote-btn" id="communityPostDetailVoteUpBtn" data-vote="up" aria-label="Upvote">
+            <i class="ri-arrow-up-s-line"></i>
+          </button>
+          <div class="community-post-detail-score" id="communityPostDetailScore">0</div>
+          <button type="button" class="community-vote-btn" id="communityPostDetailVoteDownBtn" data-vote="down" aria-label="Downvote">
+            <i class="ri-arrow-down-s-line"></i>
+          </button>
+        </div>
+
+        <div class="community-post-detail-comments">
+          <form id="communityCommentForm" class="community-comment-form">
+            <textarea id="communityCommentBody" class="community-input" placeholder="Add a comment…" rows="3"></textarea>
+            <input type="hidden" id="communityCommentParentId" value="" />
+            <button type="submit" class="btn btn-primary btn-sm" id="communityCommentSubmitBtn">
+              <i class="ri-send-plane-2-line"></i> Comment
+            </button>
+          </form>
+          <div class="community-post-comments-empty" id="communityPostCommentsEmpty" style="display:none">No comments yet.</div>
+          <ul class="community-post-comments-list" id="communityPostCommentsList"></ul>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/profile.js?v=community-reddit-2"></script>

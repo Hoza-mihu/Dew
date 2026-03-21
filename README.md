@@ -36,6 +36,30 @@ DEW Eco Warden is a web app for tracking plants with connected sensors, viewing 
 
 ---
 
+## Plant Bot / ESP32 → dashboard (signed-in Plant Fleet)
+
+The dashboard **Plant Fleet** lists plants tied to your account after usage is recorded (Desk Bot save, dashboard, or sensor data).
+
+**`POST /api/telemetry`** accepts readings, for example:
+
+```json
+{
+  "plantId": "pothos",
+  "moisture": 72,
+  "temp": 23,
+  "lux": 2100,
+  "uid": "YOUR_FIREBASE_USER_ID"
+}
+```
+
+**Recommended (Option A):** put your **Firebase user id** in the JSON as **`uid`**. In the DEW dashboard, open **Plant Fleet → “Plant Bot · use this uid in JSON”** and copy the value into your ESP32 firmware or `scripts/telemetry_sender.py` (`DEW_UID` in `.env`).
+
+Optional: send **`Authorization: Bearer <Firebase ID token>`** instead of `uid` in the body; the server verifies it if **Firebase Admin** is configured (`FIREBASE_SERVICE_ACCOUNT_JSON` or `GOOGLE_APPLICATION_CREDENTIALS`).
+
+While the dashboard is open, the app **polls your plant fleet** periodically so new bot readings show up without a full page refresh.
+
+---
+
 ## Tech stack
 
 - **Node.js** (Express), **SQLite** (local data), **Supabase** (community + storage)

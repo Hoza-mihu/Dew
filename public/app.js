@@ -1,8 +1,31 @@
+import { authReady } from "./firebase-config.js";
+
 const API = window.location.origin;
+
+/** Attach Firebase ID token so the server can link Desk Bot / plant fleet to your account. */
+async function authFetch(url, options = {}) {
+  try {
+    const auth = await authReady;
+    const user = auth.currentUser;
+    const headers = new Headers(options.headers || {});
+    if (user) {
+      const token = await user.getIdToken();
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    return fetch(url, { ...options, headers });
+  } catch (_) {
+    return fetch(url, options);
+  }
+}
 
 const palette = { pothos: '#65d9a5', 'snake-plant': '#ffb86b', 'spider-plant': '#6bc2ff', 'peace-lily': '#ff8ab6', monstera: '#8b7fd9' };
 let plants = [];
+let plantFleetExpanded = false;
+let plantFleetSummary = null;
+const PLANT_FLEET_PREVIEW = 5;
 let sensorChart = null;
+let plantFleetPollTimer = null;
+const PLANT_FLEET_POLL_MS = 20000;
 
 const WEATHER_CACHE_MS = 15 * 60 * 1000;
 let weatherCache = { data: null, at: 0, locKey: null };
@@ -256,56 +279,212 @@ async function loadDashboardWeather() {
   const empty = document.getElementById('dashboardWeatherEmpty');
   if (!hero || !empty) return;
 
-  if (!weatherConfigFetched) {
-    await fetchWeatherConfig();
-    weatherConfigFetched = true;
-  }
-
-  const loc = await fetchUserLocation();
-  if (!loc || loc.latitude == null || loc.longitude == null) {
+  const uid = window.__dewUid;
+  if (!uid) {
     hero.style.display = 'none';
     if (wrap) wrap.style.display = 'none';
     empty.style.display = 'block';
     return;
   }
 
-  const locKey = loc.latitude + ',' + loc.longitude;
-  const now = Date.now();
-  if (weatherCache.data && weatherCache.locKey === locKey && (now - weatherCache.at) < WEATHER_CACHE_MS) {
-    renderWeatherHero(loc, weatherCache.data);
-    return;
-  }
-
+  // Server-side weather endpoint handles caching + open-meteo calls.
   try {
-    let weather;
-    try {
-      weather = await fetchWeatherFromApi(loc.latitude, loc.longitude);
-    } catch (apiErr) {
-      // If OpenWeather key is set but returns 401, fall back to Open-Meteo (no key required)
-      if (weatherApiKey && apiErr.message === 'OPENWEATHER_UNAUTHORIZED') {
-        weatherApiKey = '';
-        weather = await fetchWeatherOpenMeteo(loc.latitude, loc.longitude);
-      } else {
-        throw apiErr;
-      }
+    const res = await fetch(`${API}/api/weather?user_id=${encodeURIComponent(uid)}`);
+    if (res.status === 404) {
+      hero.style.display = 'none';
+      if (wrap) wrap.style.display = 'none';
+      empty.style.display = 'block';
+      maybeShowWeatherLocationPrompt();
+      return;
     }
-    weatherCache = { data: weather, at: now, locKey };
+    if (!res.ok) throw new Error('Weather request failed');
+
+    const data = await res.json();
+    const loc = data.location;
+    const weather = data.weather;
+    empty.style.display = 'none';
+    hero.style.display = 'block';
+    if (wrap) wrap.style.display = 'block';
     renderWeatherHero(loc, weather);
+    maybeHideWeatherLocationPrompt();
   } catch (e) {
     console.warn('Dashboard weather failed:', e.message);
     hero.style.display = 'none';
     if (wrap) wrap.style.display = 'none';
     empty.style.display = 'block';
+    maybeShowWeatherLocationPrompt();
   }
 }
 
 window.refreshDashboardWeather = loadDashboardWeather;
 
+// ============================================================
+// Weather location prompt (first visit + "Change location")
+// ============================================================
+const WEATHER_LOCATION_PROMPT_STORAGE_KEY = "dewWeatherLocationPrompted";
+
+function initWeatherLocationPromptUI() {
+  const modal = document.getElementById("weatherLocationPromptModal");
+  const closeBtn = document.getElementById("weatherLocationPromptCloseBtn");
+  const searchBtn = document.getElementById("weatherLocationPromptBtnSearch");
+  const detectBtn = document.getElementById("weatherLocationPromptBtnDetect");
+  const statusEl = document.getElementById("weatherLocationPromptStatus");
+  const changeBtn = document.getElementById("dashboardWeatherChangeLocationBtn");
+  if (!modal || !detectBtn || !searchBtn) return;
+
+  function setStatus(msg, type = "error") {
+    if (!statusEl) return;
+    statusEl.style.display = msg ? "block" : "none";
+    statusEl.textContent = msg || "";
+    statusEl.className =
+      "location-message" +
+      (type === "error"
+        ? " location-message--error"
+        : type === "success"
+          ? " location-message--success"
+          : "");
+    statusEl.dataset.type = type;
+  }
+
+  function disableModalButtons(disabled) {
+    detectBtn.disabled = !!disabled;
+    searchBtn.disabled = !!disabled;
+    if (closeBtn) closeBtn.disabled = !!disabled;
+  }
+
+  function showModal() {
+    // `.modal` is flex by default in CSS, so use flex when opening.
+    modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
+    disableModalButtons(false);
+    setStatus("");
+    try {
+      document.body.style.overflow = "hidden";
+    } catch (_) {}
+  }
+
+  function hideModal() {
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+    try {
+      document.body.style.overflow = "";
+    } catch (_) {}
+  }
+
+  if (closeBtn) closeBtn.addEventListener("click", hideModal);
+
+  changeBtn?.addEventListener("click", () => {
+    // Always open on explicit change requests.
+    showModal();
+  });
+
+  searchBtn.addEventListener("click", () => {
+    hideModal();
+    // Settings view contains the manual location search UI.
+    const settingsNav = document.querySelector('.nav-item[data-view="settings"]');
+    if (settingsNav) settingsNav.click();
+  });
+
+  async function reverseGeocode(lat, lon) {
+    // Nominatim reverse geocoding for city/country labels.
+    const ua = "dew-weather-system/1.0";
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&format=json&addressdetails=1&zoom=10`;
+    const res = await fetch(url, { headers: { "User-Agent": ua } });
+    if (!res.ok) throw new Error("Reverse geocode failed");
+    const json = await res.json();
+    const a = json?.address || {};
+    const city =
+      a.city ||
+      a.town ||
+      a.village ||
+      a.hamlet ||
+      a.municipality ||
+      "";
+    const state = a.state || "";
+    const country = a.country || "";
+    return { city, state, country };
+  }
+
+  detectBtn.addEventListener("click", async () => {
+    const uid = window.__dewUid;
+    if (!uid) return;
+
+    disableModalButtons(true);
+    setStatus("Requesting device location…", "info");
+
+    if (!navigator.geolocation) {
+      setStatus("Geolocation is not supported by this browser.", "error");
+      disableModalButtons(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          setStatus("Finding your exact location…", "info");
+          const addr = await reverseGeocode(lat, lon);
+          const payload = {
+            city: addr.city,
+            state: addr.state,
+            country: addr.country,
+            latitude: lat,
+            longitude: lon,
+          };
+          const putRes = await fetch(`${API}/api/users/${encodeURIComponent(uid)}/location`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!putRes.ok) throw new Error("Failed to save location");
+          hideModal();
+          disableModalButtons(false);
+          // Refresh after saving.
+          if (typeof window.refreshDashboardWeather === "function") window.refreshDashboardWeather();
+        } catch (e) {
+          setStatus(e?.message || "Could not detect/save location. Try again.", "error");
+          disableModalButtons(false);
+        }
+      },
+      (err) => {
+        const msg =
+          err && err.code === 1
+            ? "Location permission denied. You can still search manually."
+            : "Could not access your location. Try again.";
+        setStatus(msg, "error");
+        disableModalButtons(false);
+      },
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 }
+    );
+  });
+
+  // Expose show/hide for loadDashboardWeather calls.
+  window.__showWeatherLocationPrompt = () => showModal();
+  window.__hideWeatherLocationPrompt = () => hideModal();
+}
+
+function maybeShowWeatherLocationPrompt() {
+  try {
+    const prompted = window.localStorage?.getItem(WEATHER_LOCATION_PROMPT_STORAGE_KEY) === "1";
+    if (prompted) return;
+    window.localStorage?.setItem(WEATHER_LOCATION_PROMPT_STORAGE_KEY, "1");
+  } catch (_) {}
+  if (window.__showWeatherLocationPrompt) window.__showWeatherLocationPrompt();
+}
+
+function maybeHideWeatherLocationPrompt() {
+  if (window.__hideWeatherLocationPrompt) window.__hideWeatherLocationPrompt();
+}
+
+// Bind prompt UI once the module loads (DOM is already present for this script).
+initWeatherLocationPromptUI();
+
 /** Record plant usage for the current user (updates profile "Plants" count). */
 function recordPlantUsage(plantIds) {
   const uid = window.__dewUid;
   if (!uid || !Array.isArray(plantIds) || plantIds.length === 0) return;
-  fetch(API + '/api/users/' + encodeURIComponent(uid) + '/usage', {
+  authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/usage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ plantIds }),
@@ -330,11 +509,15 @@ function renderMetrics(plants) {
   const n = plants.length;
   const avgTemp = n ? (plants.reduce((s, p) => s + p.temp, 0) / n).toFixed(1) : '—';
   const avgLux = n ? Math.round(plants.reduce((s, p) => s + p.lux, 0) / n) : '—';
+  const withHum = plants.filter((p) => p.humidity != null);
+  const avgHum = withHum.length
+    ? Math.round(withHum.reduce((s, p) => s + Number(p.humidity), 0) / withHum.length)
+    : null;
   const lowMoisture = plants.filter(p => p.moisture < 45).length;
   const health = n ? Math.round(100 - (lowMoisture / n) * 22) : 0;
   const metrics = [
-    { label: 'Avg Temp', value: avgTemp, unit: '°C', delta: 'live', positive: true },
-    { label: 'Humidity', value: '52', unit: '%', delta: 'room', positive: true },
+    { label: 'Avg Temp', value: avgTemp, unit: '°C', delta: 'fleet', positive: true },
+    { label: 'Humidity', value: avgHum != null ? String(avgHum) : '—', unit: '%', delta: avgHum != null ? 'sensor avg' : 'room', positive: true },
     { label: 'Lux (Light)', value: String(avgLux), unit: 'lx', delta: 'Optimal range', positive: true },
     { label: 'Garden Health', value: String(health), unit: '%', delta: 'AI index', positive: health >= 70 },
   ];
@@ -354,13 +537,90 @@ function getPlantImageUrl(p) {
   return '/images/plants/' + encodeURIComponent(p.image);
 }
 
+function formatRelativeTime(iso) {
+  if (!iso) return '—';
+  try {
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return '—';
+    const diff = Date.now() - t;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `${days}d ago`;
+    return new Date(iso).toLocaleDateString();
+  } catch (_) {
+    return '—';
+  }
+}
+
+function sourceBadge(usage) {
+  const src = String(usage?.last_source || '').toLowerCase();
+  if (src === 'telemetry') return '<span class="fleet-source-badge fleet-source-badge--live">sensor</span>';
+  if (src) return '<span class="fleet-source-badge">' + src.replace(/-/g, ' ') + '</span>';
+  return '';
+}
+
+function renderPlantFleetSummary() {
+  const el = document.getElementById('plantFleetSummary');
+  const btn = document.getElementById('btnPlantFleetViewAll');
+  if (!el) return;
+  let s = plantFleetSummary;
+  if (!s && plants.length) {
+    s = {
+      total: plants.length,
+      telemetryLinked: plants.filter((p) => String(p.usage?.last_source || '') === 'telemetry').length,
+      needsAttention: plants.filter((p) => /low|dry|drying/i.test(String(p.status || ''))).length,
+      avgMoisture: Math.round(plants.reduce((a, p) => a + (Number(p.moisture) || 0), 0) / plants.length),
+    };
+  }
+  if (!plants.length) {
+    el.textContent = window.__dewUid
+      ? 'No plants linked to your account yet. When your ESP32 sends telemetry (or you use Desk Bot), they will appear here with overall conditions.'
+      : 'Sign in to see plants linked to your sensors.';
+    if (btn) btn.style.display = 'none';
+    return;
+  }
+  if (btn) btn.style.display = plants.length > PLANT_FLEET_PREVIEW ? '' : 'none';
+  if (!s) {
+    el.textContent = '';
+    return;
+  }
+  const parts = [
+    `${s.total} plant${s.total === 1 ? '' : 's'}`,
+    s.telemetryLinked != null ? `${s.telemetryLinked} reporting via sensor` : null,
+    s.avgMoisture != null ? `avg moisture ${s.avgMoisture}%` : null,
+    s.needsAttention ? `${s.needsAttention} need attention` : 'all clear',
+  ].filter(Boolean);
+  el.textContent = 'Overall: ' + parts.join(' · ') + '.';
+}
+
 function renderPlantTable(plants) {
   const tbody = document.getElementById('plantTableBody');
-  tbody.innerHTML = plants.map(p => {
+  const list = plantFleetExpanded || plants.length <= PLANT_FLEET_PREVIEW
+    ? plants
+    : plants.slice(0, PLANT_FLEET_PREVIEW);
+  const btn = document.getElementById('btnPlantFleetViewAll');
+  if (btn) {
+    const more = plants.length > PLANT_FLEET_PREVIEW;
+    btn.style.display = more || plantFleetExpanded ? '' : 'none';
+    btn.textContent = plantFleetExpanded ? 'Show less' : 'View all';
+    btn.setAttribute('aria-expanded', plantFleetExpanded ? 'true' : 'false');
+  }
+  if (!plants.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="plant-fleet-empty">No plants linked yet. Use <strong>Option A</strong>: include <code>"uid"</code> (copy from the box above) in your Plant Bot POST to <code>/api/telemetry</code>. Or save Desk Bot while signed in.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(p => {
     const imgUrl = getPlantImageUrl(p);
     const thumb = imgUrl
       ? `<img class="plant-avatar-img" src="${imgUrl}" alt="${(p.name || p.id)}" loading="lazy" />`
       : `<span class="plant-avatar">${(p.name || '?')[0]}</span>`;
+    const last = p.usage?.last_used_at ? formatRelativeTime(p.usage.last_used_at) : formatRelativeTime(p.updatedAt);
+    const badge = sourceBadge(p.usage);
+    const syncLine = p.updatedAt ? `<span class="fleet-sync">${formatRelativeTime(p.updatedAt)} reading</span>` : '';
     return `
     <tr class="plant-row" data-id="${p.id}">
       <td>
@@ -376,7 +636,10 @@ function renderPlantTable(plants) {
       <td><div class="bar-track"><div class="bar-fill ${(p.moisture || 0) < 45 ? 'low' : ''}" style="width:${Math.min(100, p.moisture || 0)}%;"></div></div></td>
       <td>${(p.temp != null ? p.temp : '—').toString().replace(/^([\d.]+)$/, '$1°C')}</td>
       <td>${p.lux != null ? Number(p.lux).toLocaleString() : '—'}</td>
-      <td class="plant-zone">${p.zone || '—'}</td>
+      <td class="plant-fleet-activity">
+        <div class="fleet-activity-main">${last} ${badge}</div>
+        ${syncLine ? `<div class="fleet-activity-sub">${syncLine}</div>` : ''}
+      </td>
     </tr>
   `;
   }).join('');
@@ -516,6 +779,14 @@ function initDeskbot(plants, config) {
   const lineEl = document.getElementById('deskbotLine');
   const statusEl = document.getElementById('deskbotStatus');
   const themeSwatches = document.getElementById('themeSwatches');
+  if (!focusSelect) return;
+  if (!plants || !plants.length) {
+    focusSelect.innerHTML = '<option value="">No plants in fleet yet</option>';
+    if (lineEl) lineEl.textContent = '—';
+    if (lineInput) lineInput.value = '';
+    updateDeskbotWeather([], null);
+    return;
+  }
   focusSelect.innerHTML = (plants || []).map(p => `<option value="${p.id}" ${(config && config.plantId === p.id) ? 'selected' : ''}>${p.name || p.id}</option>`).join('');
   updateDeskbotWeather(plants, config && config.plantId ? config.plantId : (plants && plants[0] && plants[0].id));
   if (config) {
@@ -556,7 +827,7 @@ function initDeskbot(plants, config) {
       },
     };
     try {
-      const res = await fetch(API + '/api/deskbot-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await authFetch(API + '/api/deskbot-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) {
         statusEl.textContent = 'Pushed to Desk Bot ✓';
         setTimeout(() => { statusEl.textContent = 'Synced'; }, 2500);
@@ -568,14 +839,109 @@ function initDeskbot(plants, config) {
   });
 }
 
+function chartMetricFromActiveTab() {
+  const tab = document.querySelector('#sensorTabs .tab.active');
+  return (tab && tab.dataset && tab.dataset.metric) || 'moisture';
+}
+
+/** Poll plant fleet while signed in so ESP32 / Plant Bot telemetry updates appear without manual refresh. */
+async function refreshPlantFleetFromServer() {
+  const uid = window.__dewUid;
+  if (!uid) return;
+  try {
+    const fleetRes = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/plant-fleet');
+    if (!fleetRes.ok) return;
+    const data = await fleetRes.json();
+    const fleetPlants = Array.isArray(data.plants) ? data.plants : [];
+    plants = fleetPlants;
+    plantFleetSummary = data.summary || null;
+    const po = document.getElementById('plantsOnline');
+    const npc = document.getElementById('navPlantsCount');
+    const ndc = document.getElementById('navDevicesCount');
+    if (po) po.textContent = plants.length;
+    if (npc) npc.textContent = plants.length;
+    if (ndc) ndc.textContent = plants.length;
+    renderMetrics(plants);
+    renderPlantFleetSummary();
+    renderPlantTable(plants);
+    buildChart(plants, chartMetricFromActiveTab());
+  } catch (_) {}
+}
+
+function stopPlantFleetPolling() {
+  if (plantFleetPollTimer) {
+    clearInterval(plantFleetPollTimer);
+    plantFleetPollTimer = null;
+  }
+}
+
+function startPlantFleetPolling() {
+  stopPlantFleetPolling();
+  if (!window.__dewUid) return;
+  plantFleetPollTimer = setInterval(() => refreshPlantFleetFromServer(), PLANT_FLEET_POLL_MS);
+}
+
+/** Show copyable Firebase uid for Plant Bot POST /api/telemetry (Option A: JSON body `uid`). */
+function updatePlantFleetUidDisplay() {
+  const wrap = document.getElementById('plantFleetUidSetup');
+  const el = document.getElementById('plantFleetUidValue');
+  const uid = window.__dewUid;
+  if (el) el.textContent = uid || '—';
+  if (wrap) wrap.hidden = !uid;
+}
+
+function wirePlantFleetUidCopy() {
+  const btn = document.getElementById('btnCopyPlantFleetUid');
+  if (!btn || btn.dataset.wired) return;
+  btn.dataset.wired = '1';
+  btn.addEventListener('click', async () => {
+    const uid = window.__dewUid;
+    if (!uid) return;
+    try {
+      await navigator.clipboard.writeText(uid);
+      const t = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => {
+        btn.textContent = t;
+      }, 2000);
+    } catch (_) {}
+  });
+}
+
 async function load() {
   try {
-    const [plantsRes, activityRes, configRes] = await Promise.all([
-      fetch(API + '/api/plants'),
+    plantFleetExpanded = false;
+    const uid = window.__dewUid;
+    let fleetRes = null;
+    if (uid) {
+      fleetRes = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/plant-fleet').catch(() => null);
+    }
+    let fleetPlants = [];
+    let summary = null;
+    if (fleetRes && fleetRes.ok) {
+      const data = await fleetRes.json();
+      fleetPlants = Array.isArray(data.plants) ? data.plants : [];
+      summary = data.summary || null;
+    } else if (uid && (!fleetRes || !fleetRes.ok)) {
+      // Backend unavailable: fall back to demo plants so dashboard still works.
+      const plantsRes = await fetch(API + '/api/plants');
+      fleetPlants = await plantsRes.json();
+      summary = null;
+    }
+    // Logged-out: show full demo list. Logged-in with empty fleet: stay empty until usage/telemetry exists.
+    if (!fleetPlants.length && !uid) {
+      const plantsRes = await fetch(API + '/api/plants');
+      fleetPlants = await plantsRes.json();
+      summary = null;
+    }
+
+    plants = fleetPlants;
+    plantFleetSummary = summary;
+
+    const [activityRes, configRes] = await Promise.all([
       fetch(API + '/api/activity'),
       fetch(API + '/api/deskbot-config'),
     ]);
-    plants = await plantsRes.json();
     const activity = await activityRes.json();
     const deskbotConfig = await configRes.json();
 
@@ -584,6 +950,7 @@ async function load() {
     document.getElementById('navDevicesCount').textContent = plants.length;
 
     renderMetrics(plants);
+    renderPlantFleetSummary();
     renderPlantTable(plants);
     renderActivity(activity);
     buildChart(plants, 'moisture');
@@ -592,6 +959,8 @@ async function load() {
     loadDashboardWeather();
 
     setTimeout(() => recordPlantUsage(plants.map(p => p.id)), 200);
+    updatePlantFleetUidDisplay();
+    wirePlantFleetUidCopy();
   } catch (e) {
     console.error(e);
     document.getElementById('metricsRow').innerHTML = '<div class="metric-card" style="grid-column:1/-1">Failed to load API. Is the server running? Run: npm start</div>';
@@ -604,9 +973,16 @@ document.getElementById('btnRefresh').addEventListener('click', () => {
 });
 
 createPetals();
+
+document.getElementById('btnPlantFleetViewAll')?.addEventListener('click', () => {
+  plantFleetExpanded = !plantFleetExpanded;
+  renderPlantFleetSummary();
+  renderPlantTable(plants);
+});
+
 // Run dashboard load (and weather) after auth has set __dewUid so location fetch works
 function startApp() {
-  load();
+  load().then(() => startPlantFleetPolling());
 }
 if (window.__dewAuthReady && window.__dewUid) {
   startApp();

@@ -337,6 +337,9 @@ function bindCommunityPostMediaLightbox() {
   }
 
   function onPostClick(e) {
+    // Full-screen media lightbox is disabled for the Reddit-style post page,
+    // because it conflicts with the post details modal interaction.
+    return;
     const card = e.target.closest(".community-post");
     if (!card) return;
     // The post card now includes an in-place media gallery. Don't open the full lightbox
@@ -959,6 +962,7 @@ function initNav() {
   bindPlantDetailStaticActions();
   initSettingsPreferences();
   bindCommunityPostMediaLightbox();
+  bindCommunityPostDetailModal();
 
   const communityForm = document.getElementById("communityCreateForm");
   if (communityForm) communityForm.addEventListener("submit", handleCommunityPostSubmit);
@@ -1766,6 +1770,7 @@ let communityList = [];
 let communitySelectedSlug = null;
 let communityJoinedSlugs = new Set();
 let communityMutedSlugs = new Set();
+let communityPostDetailOpenPostId = null;
 let createCommunityWizard = { step: 1, topic: "Indoor Plants", type: "public", mature: false };
 
 function openCommunityCreatePostModal() {
@@ -2217,6 +2222,36 @@ function renderCommunityPanels(allPosts) {
   if (manageModsBtn) {
     manageModsBtn.style.display = isCreator ? "inline-flex" : "none";
     manageModsBtn.onclick = () => openCommunityModsModal(slug, comm);
+  }
+
+  // Admin/creator can delete the entire community.
+  const deleteCommunityBtn = document.getElementById("communityDeleteBtn");
+  if (deleteCommunityBtn) {
+    deleteCommunityBtn.style.display = isCreator ? "inline-flex" : "none";
+    deleteCommunityBtn.onclick = async () => {
+      if (!confirm("Delete this community? This will also delete its posts and comments.")) return;
+      if (!currentProfileUser?.uid) return;
+      try {
+        const auth = await authReady;
+        const token = await auth.currentUser?.getIdToken?.();
+        if (!token) return;
+        const delRes = await fetch(`/api/communities/${encodeURIComponent(slug)}/delete`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await delRes.json().catch(() => ({}));
+        if (!delRes.ok) throw new Error(j.error || "Delete failed");
+
+        // Navigate away from the deleted community.
+        communitySelectedSlug = null;
+        communityCategoryFilter = "all";
+        setCommunityRoute(null);
+        await loadCommunitiesSidebar();
+        loadCommunityView();
+      } catch (e) {
+        showToast(e?.message || "Could not delete community.", "error");
+      }
+    };
   }
 
   // Bell dropdown (saved per community, stored locally + in backend)
@@ -3032,6 +3067,15 @@ async function loadCommunityView() {
     else if (sort === "hot") posts.sort((a, b) => { const sa = (b.score ?? 0) + (b.comment_count ?? 0) * 2; const sb = (a.score ?? 0) + (a.comment_count ?? 0) * 2; return sa - sb; });
     else if (sort === "controversial") posts.sort((a, b) => (b.comment_count ?? 0) - (a.comment_count ?? 0));
     else if (sort === "qa") posts = posts.filter((p) => (p.title || "").includes("?") || (p.body || "").includes("?"));
+
+    // Ensure `communityList` is populated before rendering.
+    // Otherwise creator/mod data may be missing and "Delete" buttons won't appear.
+    if (currentProfileUser?.uid && (!Array.isArray(communityList) || communityList.length === 0)) {
+      try {
+        await loadCommunitiesSidebar();
+      } catch (_) {}
+    }
+
     renderCommunityPanels(posts);
     // Record weekly visitor (DB-backed) when user is viewing a community.
     try {
@@ -3063,6 +3107,24 @@ async function loadCommunityView() {
         const commSlug = String(p.category || "general").toLowerCase();
         const mediaUrls = Array.isArray(p.media_urls) ? p.media_urls : (Array.isArray(p.media_urls) ? p.media_urls : []);
         const mediaTypes = Array.isArray(p.media_types) ? p.media_types : [];
+        // Safe UI fallback so authors still see Delete even if server-side
+        // can-delete helper fails (server still enforces on click).
+        const authorUsername = String(p.author_username || "").trim().toLowerCase();
+        const myDisplayName = String(currentProfileUser?.displayName || "").trim().toLowerCase();
+        const myEmail = String(currentProfileUser?.email || "").trim().toLowerCase();
+        const showDeleteByAuthor =
+          !!authorUsername &&
+          ((myDisplayName && myDisplayName === authorUsername) || (myEmail && myEmail === authorUsername));
+
+        // Optional: if communityList is available, also show for creator/mod quickly.
+        const comm = communityList.find((c) => String(c.slug || c.id || "").toLowerCase() === commSlug) || {};
+        const creatorUid = String(comm.creator_firebase_uid || "").trim();
+        const isCreator = !!(currentProfileUser?.uid && creatorUid && currentProfileUser.uid === creatorUid);
+        const mods = Array.isArray(comm.moderators) ? comm.moderators : [];
+        const isModerator = !!(currentProfileUser?.uid && mods.some((m) => String(m?.uid || m || "").trim() === String(currentProfileUser.uid)));
+        const showDeleteByAdminMod = isCreator || isModerator;
+        const showDeleteInitial = showDeleteByAuthor || showDeleteByAdminMod;
+
         return `<article class="community-post" data-post-id="${escapeHtml(p.id)}" data-media-urls="${escapeHtml(
           JSON.stringify(mediaUrls)
         )}" data-media-types="${escapeHtml(JSON.stringify(mediaTypes))}">
@@ -3153,6 +3215,15 @@ async function loadCommunityView() {
               </div>
               <div class="community-post-actions">
                 <button type="button" data-action="report"><i class="ri-flag-line"></i> Report</button>
+                <button
+                  type="button"
+                  data-action="delete"
+                  class="community-post-delete-btn"
+                    style="display:${showDeleteInitial ? 'inline-flex' : 'none'}"
+                  title="Delete post"
+                >
+                  <i class="ri-delete-bin-line"></i> Delete
+                </button>
               </div>
             </div>
           </div>
@@ -3175,6 +3246,44 @@ async function loadCommunityView() {
           setCommunityRoute(slug);
           loadCommunityView();
         });
+      });
+
+      // Open Reddit-style post details modal
+      const commentsBtn = card.querySelector('[data-action="comments"]');
+      commentsBtn?.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        openCommunityPostDetail(postId);
+      });
+
+      const deleteBtn = card.querySelector('[data-action="delete"]');
+      deleteBtn?.addEventListener("click", async (ev) => {
+        ev.stopPropagation();
+        if (!confirm("Delete this post?")) return;
+        try {
+          const auth = await authReady;
+          const token = await auth.currentUser?.getIdToken?.();
+          if (!token) throw new Error("Not signed in");
+          const res = await fetch(`/api/posts/${encodeURIComponent(postId)}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j.error || j.message || "Delete failed");
+          }
+          showToast("Post deleted.", "success");
+          loadCommunityView();
+        } catch (e) {
+          showToast(e?.message || "Could not delete post.", "error");
+        }
+      });
+
+      card.addEventListener("click", (ev) => {
+        const voteBtn = ev.target.closest("[data-vote]");
+        if (voteBtn) return;
+        const actionEl = ev.target.closest("[data-action]");
+        if (actionEl && actionEl.dataset.action !== "comments") return;
+        openCommunityPostDetail(postId);
       });
 
       // In-card media gallery UX (thumb -> scroll)
@@ -3249,24 +3358,556 @@ async function loadCommunityView() {
         } catch (_) {}
       })();
     });
+
+    // Server-authoritative visibility: show Delete only when allowed.
+    (async () => {
+      try {
+        if (!currentProfileUser?.uid) return;
+        const auth = await authReady;
+        const token = await auth.currentUser?.getIdToken?.();
+        if (!token) return;
+
+        const deleteButtons = Array.from(feed.querySelectorAll(".community-post-delete-btn"));
+        await Promise.all(
+          deleteButtons.map(async (btn) => {
+            const card = btn.closest(".community-post");
+            const pid = card?.dataset?.postId;
+            if (!pid) return;
+            try {
+              const res = await fetch(`/api/posts/${encodeURIComponent(pid)}/can-delete`, {
+                method: "GET",
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (!res.ok) return;
+              const j = await res.json().catch(() => ({}));
+              // Never auto-hide the button: backend enforces on click.
+              if (j?.canDelete) btn.style.display = "inline-flex";
+            } catch (_) {}
+          })
+        );
+      } catch (_) {}
+    })();
   } catch {
     if (feed) feed.innerHTML = "<p class=\"plants-list-empty\">Unable to load community posts. Check Supabase config and tables (posts).</p>";
     if (empty) empty.style.display = "block";
   }
 }
 
+// ============================================================
+// Reddit-style Post Details Modal (post + comments + votes)
+// ============================================================
+
+let __communityPostDetail = null;
+
+function bindCommunityPostDetailModal() {
+  const modal = document.getElementById("communityPostDetailModal");
+  if (!modal) return;
+
+  const closeBtn = document.getElementById("communityPostDetailCloseBtn");
+  const backdrop = document.getElementById("communityPostDetailBackdrop");
+  const deleteBtn = document.getElementById("communityPostDetailDeleteBtn");
+  const voteUpBtn = document.getElementById("communityPostDetailVoteUpBtn");
+  const voteDownBtn = document.getElementById("communityPostDetailVoteDownBtn");
+
+  const form = document.getElementById("communityCommentForm");
+  const bodyEl = document.getElementById("communityCommentBody");
+  const parentIdEl = document.getElementById("communityCommentParentId");
+  const emptyEl = document.getElementById("communityPostCommentsEmpty");
+  const listEl = document.getElementById("communityPostCommentsList");
+
+  __communityPostDetail = {
+    modal,
+    closeBtn,
+    backdrop,
+    deleteBtn,
+    voteUpBtn,
+    voteDownBtn,
+    form,
+    bodyEl,
+    parentIdEl,
+    emptyEl,
+    listEl,
+  };
+
+  function close() {
+    closeCommunityPostDetailModal();
+  }
+
+  closeBtn?.addEventListener("click", close);
+  backdrop?.addEventListener("click", close);
+}
+
+function closeCommunityPostDetailModal() {
+  if (!__communityPostDetail?.modal) return;
+  __communityPostDetail.modal.style.display = "none";
+  try {
+    document.body.style.overflow = "";
+  } catch (_) {}
+  communityPostDetailOpenPostId = null;
+}
+
+function computeCanComment(commObj) {
+  if (!commObj) return true;
+  if (commObj.status === "public") return true;
+  // Restricted/private: only joined members (and mods/creator).
+  return !!commObj.joined || !!commObj.isModerator || !!commObj.isCreator;
+}
+
+function safeToDate(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch (_) {
+    return iso;
+  }
+}
+
+async function openCommunityPostDetail(postId) {
+  if (!postId) return;
+  if (!__communityPostDetail?.modal) bindCommunityPostDetailModal();
+  if (!__communityPostDetail?.modal) return;
+
+  communityPostDetailOpenPostId = postId;
+
+  const token = await (async () => {
+    if (!currentProfileUser?.uid) return null;
+    const auth = await authReady;
+    return await auth.currentUser?.getIdToken?.();
+  })();
+
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(`/api/posts/${encodeURIComponent(postId)}`, { headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showToast(data.error || "Unable to open post.", "error");
+    return;
+  }
+
+  const post = data.post || {};
+  const comm = data.community || {};
+  const commObj =
+    (Array.isArray(communityList) ? communityList.find((c) => String(c.slug || "").toLowerCase() === String(comm.slug || "").toLowerCase()) : null) ||
+    {};
+  commObj.slug = comm.slug || commObj.slug;
+  commObj.status = comm.status || commObj.status;
+  commObj.creator_firebase_uid = comm.creator_firebase_uid || commObj.creator_firebase_uid;
+
+  const uid = currentProfileUser?.uid || null;
+  const isCreator = !!uid && String(commObj.creator_firebase_uid) === String(uid);
+  const isModerator = !!uid && Array.isArray(commObj.moderators) && commObj.moderators.some((m) => String(m.uid) === String(uid));
+  commObj.isCreator = isCreator;
+  commObj.isModerator = isModerator;
+  const canComment = computeCanComment(commObj);
+
+  // Show modal
+  __communityPostDetail.modal.style.display = "block";
+  try {
+    document.body.style.overflow = "hidden";
+  } catch (_) {}
+
+  // Header
+  const titleEl = document.getElementById("communityPostDetailTitle");
+  const metaEl = document.getElementById("communityPostDetailMeta");
+  if (titleEl) titleEl.textContent = post.title || "";
+  if (metaEl) {
+    const author = post.author_username ? `u/${post.author_username}` : "u/unknown";
+    metaEl.textContent = `${author} • ${safeToDate(post.created_at)}`;
+  }
+
+  // Delete button (server enforces; this is only UI visibility)
+  if (__communityPostDetail.deleteBtn) {
+    // Post author is stored in Supabase as `author_username` (created from displayName in the submit handler).
+    // Some accounts may have displayName casing/whitespace differences, so normalize before comparing.
+    const authorUsername = String(post.author_username || "").trim().toLowerCase();
+    const myDisplayName = String(currentProfileUser?.displayName || "").trim().toLowerCase();
+    const myEmail = String(currentProfileUser?.email || "").trim().toLowerCase();
+    const isPostAuthor =
+      (myDisplayName && authorUsername && myDisplayName === authorUsername) ||
+      (myEmail && authorUsername && myEmail === authorUsername);
+    const canDelete = !!isCreator || !!isModerator || isPostAuthor;
+    __communityPostDetail.deleteBtn.style.display = canDelete ? "inline-flex" : "none";
+  }
+
+  // Votes
+  const scoreEl = document.getElementById("communityPostDetailScore");
+  if (scoreEl) scoreEl.textContent = String(Number(post.score ?? 0));
+
+  // Media
+  const mediaHost = document.getElementById("communityPostDetailMedia");
+  if (mediaHost) {
+    const mediaUrls = Array.isArray(post.media_urls) ? post.media_urls.filter(Boolean) : [];
+    const mediaTypes = Array.isArray(post.media_types) ? post.media_types : [];
+    const fallback = post.image_url ? [post.image_url] : [];
+    const safeUrls = mediaUrls.length ? mediaUrls : fallback;
+    const safeTypes = mediaUrls.length ? mediaTypes : (post.media_types || []);
+    const inferKind = (explicitType, url) => {
+      if (explicitType === "video" || explicitType === "audio") return explicitType;
+      const u = String(url || "").toLowerCase();
+      if (u.match(/\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/)) return "video";
+      if (u.match(/\.(mp3|wav|m4a|aac|flac|ogg)(\?.*)?$/)) return "audio";
+      return "image";
+    };
+
+    const slidesHtml = safeUrls
+      .map((url, idx) => {
+        const kind = inferKind(safeTypes[idx], url);
+        if (kind === "video") return `<div class="community-post-media-slide" data-slide-index="${idx}"><video src="${escapeHtml(url)}" controls preload="metadata" playsinline></video></div>`;
+        if (kind === "audio") return `<div class="community-post-media-slide community-post-media-slide--audio" data-slide-index="${idx}"><audio src="${escapeHtml(url)}" controls preload="metadata"></audio></div>`;
+        return `<div class="community-post-media-slide" data-slide-index="${idx}"><img src="${escapeHtml(url)}" alt="Post media ${idx + 1}" loading="lazy" /></div>`;
+      })
+      .join("");
+
+    const thumbsHtml = safeUrls.length > 1
+      ? `<div class="community-post-media-thumb-row">
+          <div class="community-post-media-thumb-strip" role="tablist" aria-label="Post media thumbnails">
+            ${safeUrls
+              .map((url, idx) => {
+                const kind = inferKind(safeTypes[idx], url);
+                const inner = kind === "image" ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" />` : `<i class="${kind === "video" ? "ri-play-line" : "ri-music-2-line"}"></i>`;
+                return `<button type="button" class="community-post-media-thumb-btn" data-media-slide-index="${idx}">${inner}</button>`;
+              })
+              .join("")}
+          </div>
+        </div>`
+      : "";
+
+    mediaHost.innerHTML = `<div class="community-post-media-gallery" aria-label="Post media gallery">
+      <div class="community-post-media-scroller" role="region" aria-label="Post media scroller">${slidesHtml}</div>
+      ${thumbsHtml}
+    </div>`;
+
+    // Attach scroll + thumb UX (lightweight)
+    const scroller = mediaHost.querySelector(".community-post-media-scroller");
+    const thumbBtns = Array.from(mediaHost.querySelectorAll(".community-post-media-thumb-btn"));
+    if (scroller && thumbBtns.length) {
+      const slides = Array.from(mediaHost.querySelectorAll(".community-post-media-slide"));
+      const updateActive = () => {
+        const idx = Math.round(scroller.scrollLeft / Math.max(1, scroller.clientWidth));
+        thumbBtns.forEach((b) => {
+          const bi = Number(b.dataset.mediaSlideIndex || "0");
+          b.classList.toggle("community-post-media-thumb-btn--active", bi === idx);
+        });
+      };
+      thumbBtns.forEach((btn) => {
+        btn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const idx = Number(btn.dataset.mediaSlideIndex || "0");
+          const slide = slides.find((s) => Number(s.dataset.slideIndex || "0") === idx);
+          slide?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+        });
+      });
+      scroller.addEventListener("scroll", () => window.requestAnimationFrame(updateActive));
+      updateActive();
+    }
+  }
+
+  // Comment form visibility
+  const form = document.getElementById("communityCommentForm");
+  if (form) form.style.display = canComment ? "flex" : "none";
+
+  if (__communityPostDetail.voteUpBtn) {
+    __communityPostDetail.voteUpBtn.onclick = () => voteOnPostDetail(postId, 1);
+  }
+  if (__communityPostDetail.voteDownBtn) {
+    __communityPostDetail.voteDownBtn.onclick = () => voteOnPostDetail(postId, -1);
+  }
+
+  if (__communityPostDetail.deleteBtn) {
+    __communityPostDetail.deleteBtn.onclick = async () => {
+      if (!confirm("Delete this post?")) return;
+      try {
+        const token2 = await (async () => {
+          const auth = await authReady;
+          return await auth.currentUser?.getIdToken?.();
+        })();
+        const delRes = await fetch(`/api/posts/${encodeURIComponent(postId)}`, {
+          method: "DELETE",
+          headers: token2 ? { Authorization: `Bearer ${token2}` } : {},
+        });
+        const j = await delRes.json().catch(() => ({}));
+        if (!delRes.ok) throw new Error(j.error || "Delete failed");
+        closeCommunityPostDetailModal();
+        loadCommunityView();
+      } catch (e) {
+        showToast(e?.message || "Could not delete.", "error");
+      }
+    };
+  }
+
+  // Comments
+  if (form) {
+    // Reset reply state
+    const parentIdEl = document.getElementById("communityCommentParentId");
+    const bodyEl = document.getElementById("communityCommentBody");
+    if (parentIdEl) parentIdEl.value = "";
+    if (bodyEl) bodyEl.value = "";
+  }
+
+  // Wire comment actions (delegated) once per open
+  const listEl = document.getElementById("communityPostCommentsList");
+  const emptyEl = document.getElementById("communityPostCommentsEmpty");
+  if (listEl && !listEl.__dewDelegated) {
+    listEl.__dewDelegated = true;
+    listEl.addEventListener("click", async (ev) => {
+      const replyBtn = ev.target.closest(".community-comment-reply-btn");
+      if (replyBtn) {
+        ev.preventDefault();
+        const cid = replyBtn.dataset.replyCommentId;
+        const parentIdEl = document.getElementById("communityCommentParentId");
+        const bodyEl = document.getElementById("communityCommentBody");
+        if (parentIdEl) parentIdEl.value = String(cid || "");
+        if (bodyEl) {
+          bodyEl.focus();
+          bodyEl.placeholder = "Write a reply…";
+        }
+        return;
+      }
+
+      const delBtn = ev.target.closest(".community-comment-delete-btn");
+      if (delBtn) {
+        ev.preventDefault();
+        const cid = delBtn.dataset.deleteCommentId;
+        if (!cid) return;
+        if (!confirm("Delete this comment (and its replies)?")) return;
+        try {
+          const auth = await authReady;
+          const token2 = await auth.currentUser?.getIdToken?.();
+          const delRes = await fetch(`/api/posts/${encodeURIComponent(communityPostDetailOpenPostId)}/comments/${encodeURIComponent(cid)}`, {
+            method: "DELETE",
+            headers: token2 ? { Authorization: `Bearer ${token2}` } : {},
+          });
+          const j = await delRes.json().catch(() => ({}));
+          if (!delRes.ok) throw new Error(j.error || "Delete failed");
+          await renderCommunityPostComments(communityPostDetailOpenPostId);
+        } catch (e) {
+          showToast(e?.message || "Could not delete.", "error");
+        }
+        return;
+      }
+
+      const voteBtn = ev.target.closest("[data-comment-vote]");
+      if (voteBtn) {
+        ev.preventDefault();
+        const cid = voteBtn.dataset.commentId;
+        const v = Number(voteBtn.dataset.commentVote);
+        if (!cid || ![1, -1].includes(v)) return;
+        try {
+          const auth = await authReady;
+          const token2 = await auth.currentUser?.getIdToken?.();
+          const voteRes = await fetch(`/api/comments/${encodeURIComponent(cid)}/vote`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token2}` },
+            body: JSON.stringify({ value: v }),
+          });
+          const j = await voteRes.json().catch(() => ({}));
+          if (!voteRes.ok) throw new Error(j.error || "Vote failed");
+          await renderCommunityPostComments(communityPostDetailOpenPostId);
+        } catch (e) {
+          showToast(e?.message || "Could not vote.", "error");
+        }
+      }
+    });
+  }
+
+  // Comment submit handler (set once)
+  if (form && !form.__dewCommentSubmit) {
+    form.__dewCommentSubmit = true;
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const bodyEl = document.getElementById("communityCommentBody");
+      const parentIdEl = document.getElementById("communityCommentParentId");
+      if (!bodyEl) return;
+      const body = String(bodyEl.value || "").trim();
+      if (!body) return;
+      const parentCommentId = parentIdEl?.value ? String(parentIdEl.value) : null;
+
+      try {
+        const auth = await authReady;
+        const token2 = await auth.currentUser?.getIdToken?.();
+        const createRes = await fetch(`/api/posts/${encodeURIComponent(communityPostDetailOpenPostId)}/comments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token2}` },
+          body: JSON.stringify({ body, parentCommentId }),
+        });
+        const j = await createRes.json().catch(() => ({}));
+        if (!createRes.ok) throw new Error(j.error || "Comment failed");
+
+        bodyEl.value = "";
+        if (parentIdEl) parentIdEl.value = "";
+        if (bodyEl) bodyEl.placeholder = "Add a comment…";
+        await renderCommunityPostComments(communityPostDetailOpenPostId);
+      } catch (e) {
+        showToast(e?.message || "Could not comment.", "error");
+      }
+    });
+  }
+
+  await renderCommunityPostComments(postId);
+}
+
+async function voteOnPostDetail(postId, delta) {
+  try {
+    if (!currentProfileUser?.uid) {
+      showToast("Please log in to vote.", "error");
+      return;
+    }
+    const auth = await authReady;
+    const token2 = await auth.currentUser?.getIdToken?.();
+    if (!token2) return;
+    const voteRes = await fetch(`/api/posts/${encodeURIComponent(postId)}/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token2}` },
+      body: JSON.stringify({ value: Number(delta) }),
+    });
+    const j = await voteRes.json().catch(() => ({}));
+    if (!voteRes.ok) throw new Error(j.error || "Vote failed");
+    const scoreEl = document.getElementById("communityPostDetailScore");
+    if (scoreEl) scoreEl.textContent = String(Number(j.score ?? 0));
+    // Feed metrics mirror is updated server-side via the voting endpoint itself.
+  } catch (e) {
+    showToast(e?.message || "Could not vote.", "error");
+  }
+}
+
+async function renderCommunityPostComments(postId) {
+  const listEl = document.getElementById("communityPostCommentsList");
+  const emptyEl = document.getElementById("communityPostCommentsEmpty");
+  if (!listEl) return;
+
+  const token = await (async () => {
+    if (!currentProfileUser?.uid) return null;
+    const auth = await authReady;
+    return await auth.currentUser?.getIdToken?.();
+  })();
+
+  listEl.innerHTML = "";
+  if (emptyEl) emptyEl.style.display = "none";
+
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, { headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showToast(data.error || "Could not load comments.", "error");
+    return;
+  }
+
+  const comments = Array.isArray(data.comments) ? data.comments : [];
+  if (!comments.length) {
+    if (emptyEl) emptyEl.style.display = "block";
+    return;
+  }
+
+  // Build thread tree by parent_comment_id
+  const byId = new Map(comments.map((c) => [String(c.id), c]));
+  const childrenByParent = new Map();
+  const roots = [];
+  comments.forEach((c) => {
+    const pid = c.parent_comment_id ? String(c.parent_comment_id) : "";
+    if (!pid) roots.push(c);
+    else {
+      const arr = childrenByParent.get(pid) || [];
+      arr.push(c);
+      childrenByParent.set(pid, arr);
+    }
+  });
+
+  const canDelete = (() => {
+    // UI permission is a best-effort guess; server enforces.
+    const uid = currentProfileUser?.uid || null;
+    return async () => {
+      if (!uid) return false;
+      // Mods/creator delete all in this modal (based on current communityList entry).
+      const commObj = (Array.isArray(communityList) ? communityList.find((c) => String(c.slug || "").toLowerCase() === String(data.community_slug || "").toLowerCase()) : null) || null;
+      return !!commObj;
+    };
+  })();
+
+  const currentUserDisplayName = currentProfileUser?.displayName ? String(currentProfileUser.displayName) : "";
+  const uid = currentProfileUser?.uid || null;
+
+  // Determine can-delete heuristically:
+  const modalPostId = postId;
+  // We'll compute comment delete permission per comment while rendering.
+  const escapeBody = (txt) => escapeHtml(String(txt || ""));
+  const renderNode = (c, depth) => {
+    const commentId = String(c.id);
+    const authorName = c.author_display_name || "Unknown";
+    const created = safeToDate(c.created_at);
+    const score = Number(c.score ?? 0);
+    const myVote = Number(c.my_vote ?? 0);
+
+    const canDeleteComment =
+      (!!uid && Array.isArray(communityList) && communityList.some((comm) => {
+        const isCreator = comm.creator_firebase_uid && String(comm.creator_firebase_uid) === String(uid);
+        const isMod = Array.isArray(comm.moderators) && comm.moderators.some((m) => String(m.uid) === String(uid));
+        const isInThisModal = comm.id && comm.id; // no-op; kept for readability
+        return isCreator || isMod || false;
+      })) || (currentUserDisplayName && authorName === currentUserDisplayName) || String(c.uid) === String(uid);
+
+    const replyBtn = `<button type="button" class="community-comment-reply-btn" data-reply-comment-id="${escapeHtml(commentId)}">
+        Reply</button>`;
+    const deleteBtn = canDeleteComment
+      ? `<button type="button" class="community-comment-delete-btn" data-delete-comment-id="${escapeHtml(commentId)}">
+          Delete</button>`
+      : "";
+
+    const voteUpActive = myVote === 1;
+    const voteDownActive = myVote === -1;
+    const liClass = "community-comment" + (depth > 0 ? " community-comment--reply" : "");
+
+    const children = childrenByParent.get(commentId) || [];
+    const childHtml = children.length ? `<ul class="community-post-comments-list" style="margin-top:10px">${children.map((ch) => renderNode(ch, depth + 1)).join("")}</ul>` : "";
+
+    return `
+      <li class="${liClass}">
+        <div class="community-comment-header">
+          <div><strong>${escapeHtml(authorName)}</strong> <span>• ${escapeHtml(created)}</span></div>
+          <div>${deleteBtn}</div>
+        </div>
+        <div class="community-comment-body">${escapeBody(c.body)}</div>
+        <div class="community-comment-actions">
+          <button type="button" class="community-comment-vote-btn" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Upvote" ${voteUpActive ? 'style="border-color: rgba(126,242,191,0.55)"' : ''}>
+            <i class="ri-arrow-up-s-line"></i>
+          </button>
+          <div class="community-comment-score">${score}</div>
+          <button type="button" class="community-comment-vote-btn" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Downvote" ${voteDownActive ? 'style="border-color: rgba(255,120,120,0.55)"' : ''}>
+            <i class="ri-arrow-down-s-line"></i>
+          </button>
+          ${replyBtn}
+        </div>
+        ${childHtml}
+      </li>
+    `;
+  };
+
+  const html = `<ul class="community-post-comments-list">${roots.map((r) => renderNode(r, 0)).join("")}</ul>`;
+  listEl.innerHTML = html;
+}
+
+
 async function voteOnPost(postId, delta, card) {
   if (!postId) return;
   try {
-    const supabase = await getSupabaseClient();
-    await supabase.rpc("dew_vote_post", { post_id: postId, delta });
-    const scoreEl = card.querySelector(".community-vote-score");
-    if (scoreEl) {
-      const current = Number(scoreEl.textContent) || 0;
-      scoreEl.textContent = current + delta;
+    if (!currentProfileUser?.uid) {
+      showToast("Please log in to vote.", "error");
+      return;
     }
-  } catch {
-    // ignore errors; server-side vote will decide
+    const auth = await authReady;
+    const token = await auth.currentUser?.getIdToken?.();
+    if (!token) return;
+
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ value: Number(delta) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Vote failed");
+
+    const scoreEl = card.querySelector(".community-vote-score");
+    if (scoreEl) scoreEl.textContent = String(Number(data.score ?? 0));
+  } catch (e) {
+    showToast(e?.message || "Could not vote.", "error");
   }
 }
 

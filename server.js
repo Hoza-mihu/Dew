@@ -200,6 +200,52 @@ function initDbAndMigrateFromJson() {
       )`
     );
     db.run('CREATE INDEX IF NOT EXISTS idx_post_metrics_slug ON community_post_metrics(community_slug)');
+
+    // ============================================================
+    // Reddit-like post interactions stored in SQLite:
+    // - post_comments (supports replies via parent_comment_id)
+    // - post_votes (single up/down per user; toggle off supported)
+    // - comment_votes (same rules as post votes)
+    // ============================================================
+    db.run(
+      `CREATE TABLE IF NOT EXISTS post_votes (
+        post_id TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        value INTEGER NOT NULL CHECK (value IN (1, -1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (post_id, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_post_votes_post_id ON post_votes(post_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_post_votes_uid ON post_votes(uid)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS post_comments (
+        id TEXT PRIMARY KEY,
+        post_id TEXT NOT NULL,
+        community_slug TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        parent_comment_id TEXT,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_post_comments_post_id_created ON post_comments(post_id, created_at DESC)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_post_comments_parent_comment_id ON post_comments(parent_comment_id)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS comment_votes (
+        comment_id TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        value INTEGER NOT NULL CHECK (value IN (1, -1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (comment_id, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_comment_votes_comment_id ON comment_votes(comment_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_comment_votes_uid ON comment_votes(uid)');
   });
 
   // Migration: add status column to weather_alerts if it doesn't exist (existing DBs)
@@ -272,6 +318,312 @@ async function requireFirebaseUser(req) {
   const decoded = await firebaseAdmin.auth().verifyIdToken(m[1]);
   if (!decoded?.uid) throw new Error('Invalid token');
   return decoded.uid;
+}
+
+async function requireFirebaseUserClaims(req) {
+  if (!firebaseAdmin || !firebaseAdmin.auth) throw new Error('Firebase admin not configured');
+  const h = req.headers.authorization || '';
+  const m = String(h).match(/^Bearer\s+(.+)$/i);
+  if (!m) throw new Error('Missing Authorization bearer token');
+  const decoded = await firebaseAdmin.auth().verifyIdToken(m[1]);
+  if (!decoded?.uid) throw new Error('Invalid token');
+  return decoded;
+}
+
+/** Resolve Firebase uid from Authorization: Bearer (optional; used by telemetry / deskbot). */
+function optionalFirebaseUid(req) {
+  return new Promise((resolve) => {
+    if (!firebaseAdmin || !firebaseAdmin.auth) return resolve(null);
+    const h = req.headers.authorization || '';
+    const m = String(h).match(/^Bearer\s+(.+)$/i);
+    if (!m) return resolve(null);
+    firebaseAdmin
+      .auth()
+      .verifyIdToken(m[1])
+      .then((d) => resolve(d && d.uid ? d.uid : null))
+      .catch(() => resolve(null));
+  });
+}
+
+function dbGetAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
+
+function dbAllAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
+
+function dbRunAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+}
+
+// ============================================================
+// Weather: Supabase-backed location preferences + caching
+// ============================================================
+const DEVICE_WEATHER_CACHE_MS = 12 * 60 * 1000; // 10–15 min: keep it fresh but avoid hammering API
+const serverWeatherCache = new Map(); // key: "lat,lon" -> { at, payload }
+
+function makeLocationName(city, state, country) {
+  const parts = [city, state, country].map((p) => String(p || "").trim()).filter(Boolean);
+  return parts.join(", ");
+}
+
+async function getUserWeatherLocationPref(uid) {
+  const userId = String(uid || "").trim();
+  if (!userId) return null;
+
+  // Prefer Supabase if configured + table exists.
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("user_weather_preferences")
+        .select("location_name,latitude,longitude,created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && row.latitude != null && row.longitude != null) {
+        return {
+          city: row.location_name || "",
+          state: "",
+          country: "",
+          latitude: Number(row.latitude),
+          longitude: Number(row.longitude),
+          last_updated: row.created_at || null,
+        };
+      }
+    } catch (_) {
+      // Fall back to JSON/SQLite in-memory store.
+    }
+  }
+
+  const loc = (store.locations || {})[userId];
+  if (!loc) return null;
+  return {
+    city: loc.city || "",
+    state: loc.state || "",
+    country: loc.country || "",
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    last_updated: loc.last_updated || null,
+  };
+}
+
+async function saveUserWeatherLocationPref(uid, body) {
+  const userId = String(uid || "").trim();
+  if (!userId) return false;
+
+  const city = String(body?.city || "").trim();
+  const state = String(body?.state || "").trim();
+  const country = String(body?.country || "").trim();
+  const latitude = Number(body?.latitude);
+  const longitude = Number(body?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+
+  // Always persist to the existing in-memory + JSON store for backward compatibility.
+  if (!store.locations) store.locations = {};
+  store.locations[userId] = {
+    city,
+    state,
+    country,
+    latitude,
+    longitude,
+    last_updated: new Date().toISOString(),
+  };
+  saveUserData();
+
+  // Also persist to Supabase (if configured + table exists).
+  if (supabaseAdmin) {
+    try {
+      const location_name = makeLocationName(city, state, country);
+      // delete+insert keeps schema simple and avoids needing unique constraints.
+      await supabaseAdmin.from("user_weather_preferences").delete().eq("user_id", userId);
+      await supabaseAdmin.from("user_weather_preferences").insert([
+        {
+          user_id: userId,
+          location_name,
+          latitude,
+          longitude,
+        },
+      ]);
+    } catch (_) {
+      // ignore supabase errors to not break the app if table isn't set up yet
+    }
+  }
+
+  return true;
+}
+
+function openMeteoCodeToCondition(code) {
+  const c = Number(code);
+  if (!Number.isFinite(c)) return { condition: "Unknown", animation: "cloudy" };
+  // These ranges match the client-side mapping used for open-meteo weather_code.
+  if (c === 0) return { condition: "Clear", animation: "sunny" };
+  if (c >= 1 && c <= 3) return { condition: ["Mainly clear", "Partly cloudy", "Overcast"][c - 1], animation: "cloudy" };
+  if (c >= 45 && c <= 48) return { condition: "Foggy", animation: "cloudy" };
+  if (c >= 51 && c <= 67) return { condition: "Rain", animation: "rainy" };
+  if (c >= 71 && c <= 77) return { condition: "Snow", animation: "snowy" };
+  if (c >= 80 && c <= 82) return { condition: "Rain showers", animation: "rainy" };
+  if (c >= 85 && c <= 86) return { condition: "Snow showers", animation: "snowy" };
+  if (c >= 95 && c <= 99) return { condition: "Thunderstorm", animation: "thunderstorm" };
+  return { condition: "Unknown", animation: "cloudy" };
+}
+
+async function fetchOpenMeteoWeather(lat, lon) {
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}` +
+    `&longitude=${encodeURIComponent(lon)}` +
+    `&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m` +
+    `&hourly=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m` +
+    `&forecast_hours=12&timezone=auto`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Weather unavailable");
+  const json = await res.json();
+  const cur = json.current || {};
+  const code = cur.weather_code;
+  const mapped = openMeteoCodeToCondition(code);
+  const temp = cur.temperature_2m != null ? Number(cur.temperature_2m) : null;
+  const humidity = cur.relative_humidity_2m != null ? Number(cur.relative_humidity_2m) : null;
+  const wind = cur.wind_speed_10m != null ? Number(cur.wind_speed_10m) : null;
+
+  const hourly = json.hourly || {};
+  const times = Array.isArray(hourly.time) ? hourly.time : [];
+  const temps = Array.isArray(hourly.temperature_2m) ? hourly.temperature_2m : [];
+  const hums = Array.isArray(hourly.relative_humidity_2m) ? hourly.relative_humidity_2m : [];
+  const codes = Array.isArray(hourly.weather_code) ? hourly.weather_code : [];
+  const winds = Array.isArray(hourly.wind_speed_10m) ? hourly.wind_speed_10m : [];
+
+  const forecast = times.slice(0, 8).map((t, i) => {
+    const c = codes[i];
+    const m = openMeteoCodeToCondition(c);
+    return {
+      time: t,
+      temp_c: temps[i] != null ? Number(temps[i]) : null,
+      humidity: hums[i] != null ? Number(hums[i]) : null,
+      condition: m.condition,
+      weather_code: c != null ? Number(c) : null,
+      wind_kmh: winds[i] != null ? Number(winds[i]) : null,
+    };
+  });
+
+  return {
+    current: {
+      temp,
+      humidity,
+      wind,
+      condition: mapped.condition,
+      animation: mapped.animation,
+      weather_code: code != null ? Number(code) : null,
+    },
+    forecast,
+  };
+}
+
+async function getCommunityBySlug(slug) {
+  if (!supabaseAdmin) throw new Error('Supabase not configured');
+  const s = String(slug || '').trim().toLowerCase();
+  if (!s) throw new Error('slug required');
+  const { data, error } = await supabaseAdmin.from('communities').select('id,slug,status,creator_firebase_uid').eq('slug', s).single();
+  if (error || !data) throw new Error('Community not found');
+  return data;
+}
+
+async function isUserJoinedToCommunitySQLite(slug, uid) {
+  const s = String(slug || '').trim().toLowerCase();
+  const u = String(uid || '').trim();
+  if (!s || !u) return false;
+  const row = await dbGetAsync('SELECT 1 AS ok FROM community_members WHERE community_slug = ? AND uid = ? LIMIT 1', [s, u]);
+  return !!row;
+}
+
+async function isModeratorToCommunitySQLite(slug, uid) {
+  const s = String(slug || '').trim().toLowerCase();
+  const u = String(uid || '').trim();
+  if (!s || !u) return false;
+  const row = await dbGetAsync('SELECT 1 AS ok FROM community_moderators WHERE community_slug = ? AND uid = ? LIMIT 1', [s, u]);
+  return !!row;
+}
+
+async function canViewCommunity(slug, uid) {
+  const comm = await getCommunityBySlug(slug);
+  if (comm.status === 'public') return true;
+  if (!uid) return false;
+  if (comm.creator_firebase_uid && String(comm.creator_firebase_uid) === String(uid)) return true;
+  if (await isUserJoinedToCommunitySQLite(slug, uid)) return true;
+  if (await isModeratorToCommunitySQLite(slug, uid)) return true;
+  return false;
+}
+
+async function canDeleteCommunity(slug, uid) {
+  const comm = await getCommunityBySlug(slug);
+  if (!uid) return false;
+  return !!(comm.creator_firebase_uid && String(comm.creator_firebase_uid) === String(uid));
+}
+
+async function canDeletePost(postId, uid, firebaseClaims = null) {
+  const postIdStr = String(postId || '').trim();
+  if (!postIdStr || !uid) return false;
+  const uidNorm = String(uid || '').trim();
+  const { data: post, error } = await supabaseAdmin.from('posts').select('id,community_id,title,author_username').eq('id', postIdStr).single();
+  if (error || !post) return false;
+  const comm = await supabaseAdmin.from('communities').select('slug,status,creator_firebase_uid').eq('id', post.community_id).single();
+  if (comm.error || !comm.data) return false;
+  const communityRow = comm.data;
+  if (communityRow.creator_firebase_uid && String(communityRow.creator_firebase_uid).trim() === uidNorm) return true;
+  if (await isModeratorToCommunitySQLite(communityRow.slug, uidNorm)) return true;
+  // Fallback: allow if the author_username matches the user's display_name
+  const authorUsername = String(post.author_username || '').trim().toLowerCase();
+  const claimsName =
+    firebaseClaims?.displayName ||
+    firebaseClaims?.name ||
+    firebaseClaims?.username ||
+    '';
+  const claimsEmail = firebaseClaims?.email || '';
+  const claimsNameNorm = String(claimsName).trim().toLowerCase();
+  const claimsEmailNorm = String(claimsEmail).trim().toLowerCase();
+
+  if (claimsNameNorm && authorUsername && claimsNameNorm === authorUsername) return true;
+  if (claimsEmailNorm && authorUsername && claimsEmailNorm === authorUsername) return true;
+
+  const userRow = await dbGetAsync('SELECT display_name FROM users WHERE uid = ? LIMIT 1', [uid]);
+  const userDisplayName = userRow?.display_name ? String(userRow.display_name).trim().toLowerCase() : '';
+  if (userDisplayName && authorUsername && userDisplayName === authorUsername) return true;
+  return false;
+}
+
+async function canDeleteComment(commentId, uid) {
+  const cId = String(commentId || '').trim();
+  if (!cId || !uid) return false;
+  const comment = await dbGetAsync('SELECT id,post_id,uid FROM post_comments WHERE id = ? LIMIT 1', [cId]);
+  if (!comment) return false;
+  if (String(comment.uid) === String(uid)) return true;
+
+  // Mods/creator can delete
+  const { data: post, error } = await supabaseAdmin.from('posts').select('id,community_id').eq('id', comment.post_id).single();
+  if (error || !post) return false;
+  const comm = await supabaseAdmin.from('communities').select('slug,creator_firebase_uid').eq('id', post.community_id).single();
+  if (comm.error || !comm.data) return false;
+  const communityRow = comm.data;
+  if (communityRow.creator_firebase_uid && String(communityRow.creator_firebase_uid) === String(uid)) return true;
+  if (await isModeratorToCommunitySQLite(communityRow.slug, uid)) return true;
+  return false;
 }
 
 function loadUserData() {
@@ -1769,6 +2121,387 @@ app.post('/api/posts/:id/metrics', async (req, res) => {
   );
 });
 
+// ============================================================
+// Reddit-style: post page + comments + votes (SQLite store)
+// ============================================================
+
+// Read post details (media + author + counts)
+app.get('/api/posts/:id', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  try {
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+
+    let uid = null;
+    const authHeader = req.headers.authorization || '';
+    if (authHeader) {
+      try {
+        uid = await requireFirebaseUser(req);
+      } catch (_) {
+        uid = null;
+      }
+    }
+
+    const { data: post, error: postErr } = await supabaseAdmin
+      .from('posts')
+      .select('id,community_id,title,body,created_at,author_username,image_url,media_urls,media_types,score,comment_count')
+      .eq('id', postId)
+      .single();
+    if (postErr || !post) return res.status(404).json({ error: 'Post not found' });
+
+    const { data: comm, error: commErr } = await supabaseAdmin
+      .from('communities')
+      .select('id,slug,status,creator_firebase_uid')
+      .eq('id', post.community_id)
+      .single();
+    if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
+
+    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+    const [postVotesRow, commentCountRow] = await Promise.all([
+      dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]),
+      dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]),
+    ]);
+
+    res.json({
+      post: {
+        ...post,
+        // prefer SQLite score/commentCount so votes/comments work immediately
+        score: Number(postVotesRow?.score ?? 0),
+        comment_count: Number(commentCountRow?.n ?? 0),
+      },
+      community: {
+        id: comm.id,
+        slug: comm.slug,
+        status: comm.status,
+        creator_firebase_uid: comm.creator_firebase_uid,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load post' });
+  }
+});
+
+app.get('/api/posts/:id/comments', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  try {
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+
+    let uid = null;
+    const authHeader = req.headers.authorization || '';
+    if (authHeader) {
+      try {
+        uid = await requireFirebaseUser(req);
+      } catch (_) {
+        uid = null;
+      }
+    }
+
+    const { data: post, error: postErr } = await supabaseAdmin
+      .from('posts')
+      .select('id,community_id')
+      .eq('id', postId)
+      .single();
+    if (postErr || !post) return res.status(404).json({ error: 'Post not found' });
+
+    const { data: comm, error: commErr } = await supabaseAdmin
+      .from('communities')
+      .select('slug,status')
+      .eq('id', post.community_id)
+      .single();
+    if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
+
+    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+    const comments = await dbAllAsync(
+      `SELECT
+         pc.id,
+         pc.parent_comment_id,
+         pc.post_id,
+         pc.uid,
+         u.display_name,
+         pc.body,
+         pc.created_at,
+         COALESCE(SUM(cv.value), 0) AS score
+       FROM post_comments pc
+       LEFT JOIN comment_votes cv ON cv.comment_id = pc.id
+       LEFT JOIN users u ON u.uid = pc.uid
+       WHERE pc.post_id = ?
+       GROUP BY pc.id
+       ORDER BY pc.created_at ASC`,
+      [postId]
+    );
+
+    // Optional: include whether the current user voted up/down
+    let myVotesByComment = new Map();
+    if (uid) {
+      const voted = await dbAllAsync('SELECT comment_id, value FROM comment_votes WHERE uid = ?', [uid]);
+      voted.forEach((v) => myVotesByComment.set(String(v.comment_id), Number(v.value)));
+    }
+
+    res.json({
+      comments: (comments || []).map((c) => ({
+        id: String(c.id),
+        parent_comment_id: c.parent_comment_id ? String(c.parent_comment_id) : null,
+        uid: c.uid,
+        author_display_name: c.display_name || 'Unknown',
+        body: c.body,
+        created_at: c.created_at,
+        score: Number(c.score ?? 0),
+        my_vote: myVotesByComment.get(String(c.id)) || 0,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load comments' });
+  }
+});
+
+app.post('/api/posts/:id/comments', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  const body = String(req.body.body || '').trim();
+  const parentCommentId = req.body.parentCommentId ? String(req.body.parentCommentId).trim() : null;
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  if (!body) return res.status(400).json({ error: 'comment body required' });
+
+  try {
+    const uid = await requireFirebaseUser(req);
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+
+    const { data: post, error: postErr } = await supabaseAdmin
+      .from('posts')
+      .select('id,community_id')
+      .eq('id', postId)
+      .single();
+    if (postErr || !post) return res.status(404).json({ error: 'Post not found' });
+
+    const { data: comm, error: commErr } = await supabaseAdmin
+      .from('communities')
+      .select('slug,status')
+      .eq('id', post.community_id)
+      .single();
+    if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
+
+    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+    // Validate parent belongs to the same post (when provided)
+    if (parentCommentId) {
+      const parent = await dbGetAsync('SELECT id FROM post_comments WHERE id = ? AND post_id = ? LIMIT 1', [parentCommentId, postId]);
+      if (!parent) return res.status(400).json({ error: 'Invalid parent comment' });
+    }
+
+    const now = new Date().toISOString();
+    const commentId = `c_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await dbRunAsync(
+      'INSERT INTO post_comments (id, post_id, community_slug, uid, parent_comment_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [commentId, postId, comm.slug, uid, parentCommentId, body, now]
+    );
+
+    const commentCountRow = await dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]);
+    const commentCount = Number(commentCountRow?.n ?? 0);
+    await supabaseAdmin.from('posts').update({ comment_count: commentCount }).eq('id', postId);
+
+    res.json({ ok: true, commentId, comment_count: commentCount });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to create comment' });
+  }
+});
+
+app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
+  const postId = String(req.params.postId || '').trim();
+  const commentId = String(req.params.commentId || '').trim();
+  if (!postId || !commentId) return res.status(400).json({ error: 'postId and commentId required' });
+  try {
+    const uid = await requireFirebaseUser(req);
+    if (!(await canDeleteComment(commentId, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+    // Collect descendants (simple iterative BFS)
+    const toDelete = [commentId];
+    const seen = new Set([commentId]);
+    let i = 0;
+    while (i < toDelete.length) {
+      const batch = toDelete[i];
+      const rows = await dbAllAsync('SELECT id FROM post_comments WHERE parent_comment_id = ?', [batch]);
+      for (const r of rows || []) {
+        const id = String(r.id);
+        if (!seen.has(id)) {
+          seen.add(id);
+          toDelete.push(id);
+        }
+      }
+      i += 1;
+    }
+
+    const placeholders = toDelete.map(() => '?').join(',');
+    await dbRunAsync(`DELETE FROM comment_votes WHERE comment_id IN (${placeholders})`, toDelete);
+    await dbRunAsync(`DELETE FROM post_comments WHERE id IN (${placeholders})`, toDelete);
+
+    const commentCountRow = await dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]);
+    const commentCount = Number(commentCountRow?.n ?? 0);
+    await supabaseAdmin.from('posts').update({ comment_count: commentCount }).eq('id', postId);
+
+    res.json({ ok: true, comment_count: commentCount });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to delete comment' });
+  }
+});
+
+app.post('/api/posts/:id/vote', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  const valueRaw = req.body.value ?? req.body.delta ?? null;
+  const value = Number(valueRaw);
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  if (![1, -1].includes(value)) return res.status(400).json({ error: 'value must be 1 or -1' });
+
+  try {
+    const uid = await requireFirebaseUser(req);
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+
+    const { data: post, error: postErr } = await supabaseAdmin.from('posts').select('id,community_id').eq('id', postId).single();
+    if (postErr || !post) return res.status(404).json({ error: 'Post not found' });
+    const { data: comm, error: commErr } = await supabaseAdmin.from('communities').select('slug,status').eq('id', post.community_id).single();
+    if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
+
+    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+    const existing = await dbGetAsync('SELECT value FROM post_votes WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
+    if (existing && Number(existing.value) === value) {
+      await dbRunAsync('DELETE FROM post_votes WHERE post_id = ? AND uid = ?', [postId, uid]);
+    } else {
+      const now = new Date().toISOString();
+      // SQLite UPSERT
+      await dbRunAsync(
+        `INSERT INTO post_votes (post_id, uid, value, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(post_id, uid) DO UPDATE SET
+           value = excluded.value,
+           updated_at = excluded.updated_at`,
+        [postId, uid, value, new Date().toISOString(), now]
+      );
+    }
+
+    const scoreRow = await dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]);
+    const score = Number(scoreRow?.score ?? 0);
+    await supabaseAdmin.from('posts').update({ score }).eq('id', postId);
+
+    res.json({ ok: true, score });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to vote' });
+  }
+});
+
+app.post('/api/comments/:id/vote', async (req, res) => {
+  const commentId = String(req.params.id || '').trim();
+  const valueRaw = req.body.value ?? req.body.delta ?? null;
+  const value = Number(valueRaw);
+  if (!commentId) return res.status(400).json({ error: 'comment id required' });
+  if (![1, -1].includes(value)) return res.status(400).json({ error: 'value must be 1 or -1' });
+
+  try {
+    const uid = await requireFirebaseUser(req);
+    const comment = await dbGetAsync('SELECT id,post_id,community_slug FROM post_comments WHERE id = ? LIMIT 1', [commentId]);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    if (!(await canViewCommunity(comment.community_slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+    const existing = await dbGetAsync('SELECT value FROM comment_votes WHERE comment_id = ? AND uid = ? LIMIT 1', [commentId, uid]);
+    if (existing && Number(existing.value) === value) {
+      await dbRunAsync('DELETE FROM comment_votes WHERE comment_id = ? AND uid = ?', [commentId, uid]);
+    } else {
+      const now = new Date().toISOString();
+      await dbRunAsync(
+        `INSERT INTO comment_votes (comment_id, uid, value, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(comment_id, uid) DO UPDATE SET
+           value = excluded.value,
+           updated_at = excluded.updated_at`,
+        [commentId, uid, value, now, now]
+      );
+    }
+
+    const scoreRow = await dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM comment_votes WHERE comment_id = ?', [commentId]);
+    const score = Number(scoreRow?.score ?? 0);
+    res.json({ ok: true, score });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to vote' });
+  }
+});
+
+app.delete('/api/posts/:id', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  try {
+    const claims = await requireFirebaseUserClaims(req);
+    const uid = claims.uid;
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+    if (!(await canDeletePost(postId, uid, claims))) return res.status(403).json({ error: 'Not allowed' });
+
+    // Delete from Supabase (posts cascade if you have FK to comments in Supabase schema)
+    const { error } = await supabaseAdmin.from('posts').delete().eq('id', postId);
+    if (error) throw new Error('Failed to delete post');
+
+    // Cleanup SQLite comment/vote tables
+    await dbRunAsync('DELETE FROM comment_votes WHERE comment_id IN (SELECT id FROM post_comments WHERE post_id = ?)', [postId]);
+    await dbRunAsync('DELETE FROM post_comments WHERE post_id = ?', [postId]);
+    await dbRunAsync('DELETE FROM post_votes WHERE post_id = ?', [postId]);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to delete post' });
+  }
+});
+
+// --- API: check if current user can delete a post (UI helper) ---
+// This reuses the same server-side authorization logic as DELETE /api/posts/:id.
+app.get('/api/posts/:id/can-delete', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  try {
+    const claims = await requireFirebaseUserClaims(req);
+    const uid = claims.uid;
+    const ok = await canDeletePost(postId, uid, claims);
+    return res.json({ canDelete: !!ok });
+  } catch (e) {
+    // Treat auth errors as "cannot delete" to avoid leaking info.
+    return res.json({ canDelete: false });
+  }
+});
+
+app.delete('/api/communities/:slug/delete', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  try {
+    const uid = await requireFirebaseUser(req);
+    if (!(await canDeleteCommunity(slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+    const { data: comm, error: commErr } = await supabaseAdmin.from('communities').select('id').eq('slug', slug).single();
+    if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
+
+    const { error } = await supabaseAdmin.from('communities').delete().eq('id', comm.id);
+    if (error) throw new Error('Failed to delete community');
+
+    // SQLite cleanup
+    await dbRunAsync('DELETE FROM community_post_metrics WHERE community_slug = ?', [slug]);
+    await dbRunAsync('DELETE FROM community_messages WHERE community_slug = ?', [slug]);
+    await dbRunAsync('DELETE FROM community_members WHERE community_slug = ?', [slug]);
+    await dbRunAsync('DELETE FROM community_moderators WHERE community_slug = ?', [slug]);
+
+    const { data: posts } = await supabaseAdmin.from('posts').select('id').eq('community_id', comm.id);
+    const postIds = (posts || []).map((p) => String(p.id));
+    if (postIds.length) {
+      const placeholders = postIds.map(() => '?').join(',');
+      await dbRunAsync(`DELETE FROM comment_votes WHERE comment_id IN (SELECT id FROM post_comments WHERE post_id IN (${placeholders}))`, postIds);
+      await dbRunAsync(`DELETE FROM post_comments WHERE post_id IN (${placeholders})`, postIds);
+      await dbRunAsync(`DELETE FROM post_votes WHERE post_id IN (${placeholders})`, postIds);
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to delete community' });
+  }
+});
+
 app.get('/api/communities/:slug/highlights', async (req, res) => {
   const slug = String(req.params.slug || '').trim().toLowerCase();
   if (!slug) return res.status(400).json({ error: 'slug required' });
@@ -1985,6 +2718,55 @@ app.get('/api/plants', (req, res) => {
   res.json(plantsWithOptimal);
 });
 
+// --- API: User plant fleet (live readings + per-user usage / sensor link) ---
+// Plants appear here once the user has a row in `user_plant_usage` (dashboard, deskbot, or ESP telemetry).
+app.get('/api/users/:uid/plant-fleet', (req, res) => {
+  const uid = String(req.params.uid || '').trim();
+  if (!uid) return res.status(400).json({ error: 'uid required' });
+  db.all(
+    `SELECT plant_id, first_used_at, last_used_at, use_count, last_source
+     FROM user_plant_usage WHERE uid = ? ORDER BY datetime(last_used_at) DESC`,
+    [uid],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: 'Failed to load plant fleet' });
+      const plantsById = new Map((store.plants || []).map((p) => [p.id, p]));
+      const seen = new Set();
+      const list = [];
+      (rows || []).forEach((r) => {
+        if (seen.has(r.plant_id)) return;
+        seen.add(r.plant_id);
+        const live = plantsById.get(r.plant_id);
+        if (!live) return;
+        list.push({
+          ...live,
+          optimal: PLANT_OPTIMAL_BY_ID[live.id] || PLANT_OPTIMAL_DEFAULT,
+          usage: {
+            first_used_at: r.first_used_at,
+            last_used_at: r.last_used_at,
+            use_count: r.use_count || 0,
+            last_source: r.last_source || null,
+          },
+        });
+      });
+      const telemetryLinked = list.filter((p) => String(p.usage?.last_source || '') === 'telemetry').length;
+      const needsAttention = list.filter((p) => /low|dry|drying/i.test(String(p.status || ''))).length;
+      const avgMoisture =
+        list.length > 0
+          ? Math.round(list.reduce((s, p) => s + (Number(p.moisture) || 0), 0) / list.length)
+          : null;
+      res.json({
+        plants: list,
+        summary: {
+          total: list.length,
+          telemetryLinked,
+          needsAttention,
+          avgMoisture,
+        },
+      });
+    }
+  );
+});
+
 // --- API: Plant catalog (all available plants in app) ---
 app.get('/api/plants/catalog', (req, res) => {
   res.json((store.plantCatalog || []).map(decorateCatalogPlant));
@@ -1998,51 +2780,63 @@ app.get('/api/plants/catalog/:id', (req, res) => {
 });
 
 // --- API: Telemetry (ESP32 Plant Bot POST) ---
+// Links readings to a user via: (1) Authorization: Bearer <Firebase ID token>, or (2) JSON body `uid` (e.g. ESP32 config).
 app.post('/api/telemetry', (req, res) => {
-  const { plantId, moisture, temp, lux, humidity, battery, uid } = req.body;
+  const { plantId, moisture, temp, lux, humidity, battery, uid: bodyUid } = req.body;
   if (!plantId) return res.status(400).json({ error: 'plantId required' });
 
   const plant = store.plants.find(p => p.id === plantId);
   if (!plant) return res.status(404).json({ error: 'Plant not found' });
 
-  const reading = {
-    plantId,
-    moisture: moisture ?? plant.moisture,
-    temp: temp ?? plant.temp,
-    lux: lux ?? plant.lux,
-    humidity: humidity ?? 52,
-    battery,
-    at: new Date().toISOString(),
-  };
+  optionalFirebaseUid(req).then((tokenUid) => {
+    const uid =
+      (tokenUid && String(tokenUid).trim()) ||
+      (bodyUid && String(bodyUid).trim()) ||
+      null;
 
-  store.telemetry.push(reading);
-  if (store.telemetry.length > 500) store.telemetry = store.telemetry.slice(-400);
-
-  plant.moisture = reading.moisture;
-  plant.temp = reading.temp;
-  plant.lux = reading.lux;
-  plant.updatedAt = reading.at;
-  plant.status = reading.moisture < 40 ? 'Moisture low' : reading.moisture < 50 ? 'Drying' : 'Healthy';
-  if (uid) upsertUserPlantUsage(uid, [plantId], 'telemetry');
-
-  if (reading.moisture < 40 && store.plants.find(p => p.id === plantId)) {
-    const alert = {
-      id: String(alertIdCounter++),
-      userId: uid || null,
+    const reading = {
       plantId,
-      plantName: plant.name,
-      type: 'moisture',
-      message: `Low moisture: ${reading.moisture}% — ${plant.name} needs water`,
-      severity: reading.moisture < 25 ? 'error' : 'warning',
-      at: reading.at,
-      read: false,
-      resolved: false,
-      snoozedUntil: null,
+      moisture: moisture ?? plant.moisture,
+      temp: temp ?? plant.temp,
+      lux: lux ?? plant.lux,
+      humidity: humidity ?? 52,
+      battery,
+      at: new Date().toISOString(),
     };
-    insertSensorAlert(alert);
-  }
 
-  res.json({ ok: true, plant });
+    store.telemetry.push(reading);
+    if (store.telemetry.length > 500) store.telemetry = store.telemetry.slice(-400);
+
+    plant.moisture = reading.moisture;
+    plant.temp = reading.temp;
+    plant.lux = reading.lux;
+    plant.updatedAt = reading.at;
+    plant.status = reading.moisture < 40 ? 'Moisture low' : reading.moisture < 50 ? 'Drying' : 'Healthy';
+    if (uid) {
+      upsertUserPlantUsage(uid, [plantId], 'telemetry', (err) => {
+        if (!err) saveUserData();
+      });
+    }
+
+    if (reading.moisture < 40 && store.plants.find(p => p.id === plantId)) {
+      const alert = {
+        id: String(alertIdCounter++),
+        userId: uid || null,
+        plantId,
+        plantName: plant.name,
+        type: 'moisture',
+        message: `Low moisture: ${reading.moisture}% — ${plant.name} needs water`,
+        severity: reading.moisture < 25 ? 'error' : 'warning',
+        at: reading.at,
+        read: false,
+        resolved: false,
+        snoozedUntil: null,
+      };
+      insertSensorAlert(alert);
+    }
+
+    res.json({ ok: true, plant });
+  });
 });
 
 // --- API: History (for charts) ---
@@ -2086,7 +2880,15 @@ app.post('/api/deskbot-config', (req, res) => {
   if (theme !== undefined) store.deskbotConfig.theme = theme;
   if (show !== undefined) store.deskbotConfig.show = { ...store.deskbotConfig.show, ...show };
   store.deskbotConfig.updatedAt = new Date().toISOString();
-  res.json(store.deskbotConfig);
+  const effectivePlantId = store.deskbotConfig.plantId;
+  optionalFirebaseUid(req).then((tokenUid) => {
+    if (tokenUid && effectivePlantId) {
+      upsertUserPlantUsage(tokenUid, [effectivePlantId], 'deskbot', (err) => {
+        if (!err) saveUserData();
+      });
+    }
+    res.json(store.deskbotConfig);
+  });
 });
 
 // --- API: Activity (optional: append from backend) ---
@@ -2524,37 +3326,68 @@ app.delete('/api/users/:toUid/follow', (req, res) => {
 });
 
 // --- API: User location (for weather on dashboard) ---
-app.get('/api/users/:uid/location', (req, res) => {
-  const uid = req.params.uid;
-  const loc = (store.locations || {})[uid];
-  if (!loc) return res.json(null);
-  res.json({
-    city: loc.city,
-    state: loc.state,
-    country: loc.country,
-    latitude: loc.latitude,
-    longitude: loc.longitude,
-    last_updated: loc.last_updated,
-  });
+app.get('/api/users/:uid/location', async (req, res) => {
+  try {
+    const loc = await getUserWeatherLocationPref(req.params.uid);
+    if (!loc) return res.json(null);
+    res.json(loc);
+  } catch (_) {
+    res.json(null);
+  }
 });
 
-app.put('/api/users/:uid/location', (req, res) => {
-  const uid = req.params.uid;
-  const { city, state, country, latitude, longitude } = req.body;
-  if (latitude == null || longitude == null || !Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
-    return res.status(400).json({ error: 'latitude and longitude required' });
+app.put('/api/users/:uid/location', async (req, res) => {
+  try {
+    const ok = await saveUserWeatherLocationPref(req.params.uid, req.body || {});
+    if (!ok) return res.status(400).json({ error: 'Invalid location payload' });
+    const loc = await getUserWeatherLocationPref(req.params.uid);
+    res.json(loc);
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to save location' });
   }
-  if (!store.locations) store.locations = {};
-  store.locations[uid] = {
-    city: city || '',
-    state: state || '',
-    country: country || '',
-    latitude: Number(latitude),
-    longitude: Number(longitude),
-    last_updated: new Date().toISOString(),
-  };
-  saveUserData();
-  res.json(store.locations[uid]);
+});
+
+// --- API: Device-friendly weather endpoint (uses saved location) ---
+// GET /api/weather?user_id=...
+app.get('/api/weather', async (req, res) => {
+  const userId = String(req.query.user_id || '').trim();
+  if (!userId) return res.status(400).json({ error: 'user_id required' });
+
+  try {
+    const loc = await getUserWeatherLocationPref(userId);
+    if (!loc || loc.latitude == null || loc.longitude == null) return res.status(404).json({ error: 'Location not set' });
+
+    const lat = Number(loc.latitude);
+    const lon = Number(loc.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(404).json({ error: 'Invalid location' });
+
+    const cacheKey = `${lat},${lon}`;
+    const now = Date.now();
+    const cached = serverWeatherCache.get(cacheKey);
+    if (cached && cached.at && now - cached.at < DEVICE_WEATHER_CACHE_MS) {
+      return res.json(cached.payload);
+    }
+
+    const weather = await fetchOpenMeteoWeather(lat, lon);
+    const payload = {
+      ok: true,
+      location: {
+        city: loc.city || '',
+        state: loc.state || '',
+        country: loc.country || '',
+        latitude: lat,
+        longitude: lon,
+        last_updated: loc.last_updated || null,
+      },
+      weather: weather.current,
+      forecast: weather.forecast,
+    };
+
+    serverWeatherCache.set(cacheKey, { at: now, payload });
+    return res.json(payload);
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'Weather failed' });
+  }
 });
 
 // --- API: Firebase config (from .env for auth and Firebase processes) ---

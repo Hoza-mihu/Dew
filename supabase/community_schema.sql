@@ -76,12 +76,45 @@ create table if not exists public.posts (
   score int default 0,
   comment_count int default 0,
   created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  updated_at timestamptz default now(),
+  -- Hard limit for UX/performance: allow up to 20 media items per post.
+  constraint posts_media_urls_max_20 check (coalesce(array_length(media_urls, 1), 0) <= 20),
+  constraint posts_media_types_max_20 check (coalesce(array_length(media_types, 1), 0) <= 20),
+  constraint posts_media_lengths_match check (coalesce(array_length(media_urls, 1), 0) = coalesce(array_length(media_types, 1), 0)),
+  constraint posts_media_types_valid check (
+    coalesce(
+      (select bool_and(t in ('image', 'video', 'audio')) from unnest(media_types) as t),
+      true
+    )
+  )
 );
 
 create index if not exists idx_posts_community on public.posts(community_id);
 create index if not exists idx_posts_created_at on public.posts(created_at desc);
 create index if not exists idx_posts_score on public.posts(score desc);
+
+-- Re-apply constraints safely (in case the table already existed before).
+alter table public.posts drop constraint if exists posts_media_urls_max_20;
+alter table public.posts drop constraint if exists posts_media_types_max_20;
+alter table public.posts drop constraint if exists posts_media_lengths_match;
+alter table public.posts drop constraint if exists posts_media_types_valid;
+alter table public.posts
+  add constraint posts_media_urls_max_20
+  check (coalesce(array_length(media_urls, 1), 0) <= 20);
+alter table public.posts
+  add constraint posts_media_types_max_20
+  check (coalesce(array_length(media_types, 1), 0) <= 20);
+alter table public.posts
+  add constraint posts_media_lengths_match
+  check (coalesce(array_length(media_urls, 1), 0) = coalesce(array_length(media_types, 1), 0));
+alter table public.posts
+  add constraint posts_media_types_valid
+  check (
+    coalesce(
+      (select bool_and(t in ('image', 'video', 'audio')) from unnest(media_types) as t),
+      true
+    )
+  );
 
 -- =============================================================================
 -- 5. COMMENTS
@@ -236,6 +269,10 @@ create policy "Posts insert" on public.posts for insert with check (
     where m.community_id = posts.community_id
       and m.user_id = auth.uid()
   )
+  -- Enforce max media items per post at the RLS layer too.
+  and coalesce(array_length(posts.media_urls, 1), 0) <= 20
+  and coalesce(array_length(posts.media_types, 1), 0) <= 20
+  and coalesce(array_length(posts.media_urls, 1), 0) = coalesce(array_length(posts.media_types, 1), 0)
 );
 create policy "Posts update" on public.posts for update using (author_id = auth.uid());
 
