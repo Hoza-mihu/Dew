@@ -62,10 +62,10 @@
             </li>
             <li class="nav-item">
               <div class="nav-item-left">
-                <div class="nav-icon"><i class="ri-cpu-line"></i></div>
-                <span>Devices</span>
+                <div class="nav-icon"><i class="ri-robot-2-line" aria-hidden="true"></i></div>
+                <span>Bots</span>
               </div>
-              <span class="nav-badge" id="navDevicesCount">0</span>
+              <span class="nav-badge" id="navBotsCount">0</span>
             </li>
             <li class="nav-item">
               <div class="nav-item-left">
@@ -972,16 +972,25 @@
           </section>
           <section class="settings-location-card card">
             <div class="card-header">
-              <h2><i class="ri-map-pin-line"></i> Location Settings</h2>
+              <h2>
+                <span class="location-settings-heading-icons" aria-hidden="true"
+                  ><i class="ri-map-pin-line"></i><i class="ri-robot-2-line"></i
+                ></span>
+                Location Settings
+              </h2>
               <p class="card-subtitle">
                 Set your location for local weather on the dashboard.
               </p>
-              <p class="location-settings-note">
-                This location is used for the <strong>plant bot</strong> and not
-                <strong>desk bot</strong>. For the best weather and environment
-                data, use your device when you update your location—ideally when
-                you’re near your plant or plant bot.
-              </p>
+              <div class="location-settings-note-wrap">
+                <i class="ri-robot-2-line location-settings-note-icon" aria-hidden="true"></i>
+                <p class="location-settings-note">
+                  This place is used for <strong>Plant Bot</strong> weather on your
+                  dashboard—not <strong>Desk Bot</strong>. Pick a spot near your
+                  plants (like home). Use <strong>Detect</strong> on your phone or
+                  computer so the map matches where you are, or type it in
+                  manually.
+                </p>
+              </div>
             </div>
             <div class="location-settings-body">
               <div
@@ -1071,10 +1080,14 @@
               </div>
               <div class="location-toggle-row">
                 <div class="settings-list-text">
-                  <div class="settings-list-label">Use device location</div>
+                  <div class="settings-list-label">
+                    <i class="ri-robot-2-line" aria-hidden="true"></i> Prefer
+                    location for Plant Bot weather
+                  </div>
                   <div class="settings-list-desc">
-                    Allow DEW to use your device location for weather when
-                    possible.
+                    When on, DEW can remember that you want weather tied to your
+                    phone or computer’s location when you use Detect (your
+                    browser will still ask permission).
                   </div>
                 </div>
                 <label class="settings-switch">
@@ -1940,7 +1953,7 @@
                     <img src="/images/about%20us/hardware.jpg" alt="" />
                   </div>
                   <div class="about-spec-card-body">
-                    <span class="about-spec-card-label">Devices</span>
+                    <span class="about-spec-card-label">Bots</span>
                     <h3 class="about-spec-card-title">Hardware</h3>
                     <p class="about-spec-card-text">
                       ESP32-compatible sensors.

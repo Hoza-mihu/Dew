@@ -18,6 +18,18 @@ async function authFetch(url, options = {}) {
   }
 }
 
+/** Read `{ error }` from a failed API response for clearer UI messages. */
+async function dewReadErrorMessage(res, fallback) {
+  try {
+    const j = await res.json();
+    if (j && typeof j.error === "string" && j.error.trim()) return j.error.trim();
+  } catch (_) {}
+  if (res.status === 401 || res.status === 403) {
+    return "Please sign in again, then try saving.";
+  }
+  return fallback || "Something went wrong.";
+}
+
 /** Single Supabase client instance to avoid "Multiple GoTrueClient instances" warnings and undefined behavior. */
 let supabaseClient = null;
 
@@ -4433,6 +4445,10 @@ async function loadLocationAndDisplay() {
   if (!uid) return;
   try {
     const res = await authFetch("/api/users/" + encodeURIComponent(uid) + "/location");
+    if (!res.ok) {
+      updateLocationDisplay(null);
+      return;
+    }
     const loc = await res.json();
     updateLocationDisplay(loc);
   } catch (_) {
@@ -4471,12 +4487,12 @@ function initLocationSettings() {
         try {
           const { latitude, longitude } = pos.coords;
           const data = await reverseGeocode(latitude, longitude);
-          const res = await fetch("/api/users/" + encodeURIComponent(uid) + "/location", {
+          const res = await authFetch("/api/users/" + encodeURIComponent(uid) + "/location", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
           });
-          if (!res.ok) throw new Error("Failed to save");
+          if (!res.ok) throw new Error(await dewReadErrorMessage(res, "Could not save your location."));
           const saved = await res.json();
           updateLocationDisplay(saved);
           showLocationMessage("Location saved. Weather will update on the dashboard.", "success");
@@ -4524,7 +4540,7 @@ function initLocationSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to save");
+      if (!res.ok) throw new Error(await dewReadErrorMessage(res, "Could not save your location."));
       const saved = await res.json();
       updateLocationDisplay(saved);
       if (manualForm) manualForm.style.display = "none";
@@ -4675,7 +4691,7 @@ async function loadAlertsView(spinnerBtn) {
           else if (alertsViewFilter === "all") p.textContent = "No alerts yet.";
           else p.textContent = "No alerts in this list.";
         }
-        if (span) span.textContent = alertsViewFilter === "active" ? "Set your location for weather alerts; sensor alerts appear when your devices send them." : "";
+        if (span) span.textContent = alertsViewFilter === "active" ? "Set your location for weather alerts; sensor alerts appear when your bots send them." : "";
       }
     } else {
       listEl.style.display = "block";

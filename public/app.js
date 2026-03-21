@@ -413,7 +413,7 @@ function initWeatherLocationPromptUI() {
     if (!uid) return;
 
     disableModalButtons(true);
-    setStatus("Requesting device location…", "info");
+    setStatus("Requesting your location…", "info");
 
     if (!navigator.geolocation) {
       setStatus("Geolocation is not supported by this browser.", "error");
@@ -910,7 +910,7 @@ async function refreshPlantFleetFromServer() {
     plantFleetSummary = data.summary || null;
     const po = document.getElementById('plantsOnline');
     const npc = document.getElementById('navPlantsCount');
-    const ndc = document.getElementById('navDevicesCount');
+    const ndc = document.getElementById('navBotsCount');
     if (po) po.textContent = plants.length;
     if (npc) npc.textContent = plants.length;
     if (ndc) ndc.textContent = plants.length;
@@ -1103,7 +1103,7 @@ async function load() {
 
     document.getElementById('plantsOnline').textContent = plants.length;
     document.getElementById('navPlantsCount').textContent = plants.length;
-    document.getElementById('navDevicesCount').textContent = plants.length;
+    document.getElementById('navBotsCount').textContent = plants.length;
 
     renderMetrics(plants);
     renderPlantFleetSummary();
