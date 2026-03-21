@@ -1406,7 +1406,7 @@ const store = {
     plantId: 'pothos',
     line: 'Pothos: Moisture at 72% · comfy 🌱',
     theme: 'mint',
-    show: { moisture: true, temp: true, light: true },
+    show: { moisture: true, temp: false, light: false },
     updatedAt: new Date().toISOString(),
   },
   /** Per-user favourite plant IDs (uid -> plantIds[]). Persisted to disk; maintained until user changes. */

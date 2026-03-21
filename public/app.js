@@ -1632,9 +1632,9 @@ function initDeskbot(plants, config) {
       line: lineInput.value || lineEl.textContent,
       theme: theme ? theme.dataset.theme : 'mint',
       show: {
-        moisture: document.getElementById('toggleMoisture').checked,
-        temp: document.getElementById('toggleTemp').checked,
-        light: document.getElementById('toggleLight').checked,
+        moisture: document.getElementById('toggleMoisture')?.checked ?? true,
+        temp: false,
+        light: false,
       },
     };
     try {
