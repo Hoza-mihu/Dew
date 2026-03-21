@@ -1342,7 +1342,7 @@ function renderPlantFleetSummary() {
   }
   if (!plants.length) {
     el.textContent = window.__dewUid
-      ? 'No plants here yet. Connect your Wi‑Fi plant device using the steps below, or save Desk Bot while you’re signed in — then your plants and their overall condition will show up here.'
+      ? 'No plants here yet. Connect your Plant Bot using the steps below, or save Desk Bot while you’re signed in — then your plants and their overall condition will show up here.'
       : 'Sign in to see plants linked to your account.';
     if (btn) btn.style.display = 'none';
     return;
@@ -1374,7 +1374,7 @@ function renderPlantTable(plants) {
     btn.setAttribute('aria-expanded', plantFleetExpanded ? 'true' : 'false');
   }
   if (!plants.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="plant-fleet-empty">No plants here yet. Open <strong>How to connect your plant sensor</strong> above, paste your key into your device once, or save <strong>Desk Bot</strong> below while you’re signed in.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="plant-fleet-empty">No plants here yet. Open <strong>How to connect your plant sensor</strong> above, paste your key into your bot once, or save <strong>Desk Bot</strong> below while you’re signed in.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(p => {
@@ -1415,7 +1415,7 @@ function renderActivity(list) {
   if (!list || !list.length) {
     ul.innerHTML = `<li class="activity-item activity-empty">
       <div class="activity-icon"><i class="ri-inbox-line"></i></div>
-      <div class="activity-text"><strong>No recent activity</strong><span>Weather alerts, sensor alerts, and device syncs will appear here.</span></div>
+      <div class="activity-text"><strong>No recent activity</strong><span>Weather alerts, sensor alerts, and bot syncs will appear here.</span></div>
       <div class="activity-time"></div>
     </li>`;
     return;
@@ -1458,49 +1458,6 @@ function initActivityTabs() {
       activityFilter = tab.getAttribute('data-activity-filter') || 'all';
       renderActivityFiltered();
     });
-  });
-}
-
-function buildChart(plants, metricKey = 'moisture') {
-  const ctx = document.getElementById('sensorChart').getContext('2d');
-  if (sensorChart) sensorChart.destroy();
-  const key = metricKey === 'temperature' ? 'temp' : metricKey;
-  const labels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', 'Now'];
-  const datasets = (plants || []).slice(0, 4).map((p, i) => {
-    const v = p[key] != null ? p[key] : 50;
-    const spread = () => Array.from({ length: 7 }, (_, j) => Math.max(0, v - 5 + (j * 2) + (Math.random() * 4 - 2)));
-    return {
-      label: (p.name || p.id).split(' ')[0],
-      data: spread(),
-      borderColor: palette[p.id] || Object.values(palette)[i],
-      backgroundColor: (palette[p.id] || Object.values(palette)[i]) + '33',
-      tension: 0.45,
-      fill: true,
-      borderWidth: 2,
-      pointRadius: 0,
-    };
-  });
-  sensorChart = new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets },
-    options: {
-      maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { boxWidth: 10, color: '#8fa99f', font: { size: 11 } } } },
-      scales: {
-        x: { ticks: { color: '#8fa99f', font: { size: 11 } }, grid: { color: 'rgba(126, 242, 191, 0.12)' } },
-        y: { ticks: { color: '#8fa99f', font: { size: 11 } }, grid: { color: 'rgba(126, 242, 191, 0.12)' } },
-      },
-    },
-  });
-}
-
-function wireSensorTabs(plants) {
-  document.querySelectorAll('#sensorTabs .tab').forEach(tab => {
-    tab.onclick = () => {
-      document.querySelectorAll('#sensorTabs .tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      buildChart(plants, tab.dataset.metric);
-    };
   });
 }
 
@@ -1719,7 +1676,7 @@ async function ensurePlantIngestToken() {
     if (gj.exists) {
       if (statusEl) {
         statusEl.textContent =
-          'Your key is active. Tap Copy if you need to paste it into your plant device again, or Regenerate for a new key.';
+          'Your key is active. Tap Copy if you need to paste it into your Plant Bot again, or Regenerate for a new key.';
       }
       let show = '••••••••••••••••••••••••••••••••••••••••••••••••••';
       try {
@@ -1796,7 +1753,7 @@ function wirePlantFleetIngestActions() {
       const pj = await pr.json().catch(() => ({}));
       if (pr.ok && pj.token) {
         if (codeEl) codeEl.textContent = pj.token;
-        if (statusEl) statusEl.textContent = 'You have a new key — paste it into your device and keep it somewhere safe.';
+        if (statusEl) statusEl.textContent = 'You have a new key — paste it into your bot and keep it somewhere safe.';
         try {
           sessionStorage.setItem(DEW_INGEST_SESSION_KEY, pj.token);
         } catch (_) {}
