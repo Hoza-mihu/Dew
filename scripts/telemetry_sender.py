@@ -15,7 +15,9 @@ except ImportError:
 
 load_dotenv()
 API_URL = os.getenv("DEW_API_URL", "http://localhost:3000")
-# Your Firebase user id (same as in the DEW dashboard URL / profile) so readings show in Plant Fleet.
+# Preferred: device token from dashboard (Plant Fleet → device token). Auto-created per account.
+DEW_INGEST_TOKEN = os.getenv("DEW_INGEST_TOKEN", "").strip()
+# Legacy: Firebase user id string (same as dashboard “uid” copy).
 DEW_UID = os.getenv("DEW_UID", "").strip()
 
 def send_telemetry(plant_id: str, moisture: float, temp: float, lux: int, humidity: float = None):
@@ -27,7 +29,9 @@ def send_telemetry(plant_id: str, moisture: float, temp: float, lux: int, humidi
     }
     if humidity is not None:
         payload["humidity"] = humidity
-    if DEW_UID:
+    if DEW_INGEST_TOKEN:
+        payload["ingestToken"] = DEW_INGEST_TOKEN
+    elif DEW_UID:
         payload["uid"] = DEW_UID
     r = requests.post(f"{API_URL}/api/telemetry", json=payload, timeout=5)
     r.raise_for_status()

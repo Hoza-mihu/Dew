@@ -59,7 +59,7 @@ function openWeatherToCondition(main) {
 async function fetchUserLocation() {
   const uid = window.__dewUid;
   if (!uid) return null;
-  const res = await fetch(API + '/api/users/' + encodeURIComponent(uid) + '/location');
+  const res = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/location');
   if (!res.ok) return null;
   return res.json();
 }
@@ -289,7 +289,7 @@ async function loadDashboardWeather() {
 
   // Server-side weather endpoint handles caching + open-meteo calls.
   try {
-    const res = await fetch(`${API}/api/weather?user_id=${encodeURIComponent(uid)}`);
+    const res = await authFetch(`${API}/api/weather?user_id=${encodeURIComponent(uid)}`);
     if (res.status === 404) {
       hero.style.display = 'none';
       if (wrap) wrap.style.display = 'none';
@@ -610,7 +610,7 @@ function renderPlantTable(plants) {
     btn.setAttribute('aria-expanded', plantFleetExpanded ? 'true' : 'false');
   }
   if (!plants.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="plant-fleet-empty">No plants linked yet. Use <strong>Option A</strong>: include <code>"uid"</code> (copy from the box above) in your Plant Bot POST to <code>/api/telemetry</code>. Or save Desk Bot while signed in.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="plant-fleet-empty">No plants linked yet. Use the <strong>device token</strong> above in <code>POST /api/telemetry</code> as <code>ingestToken</code>, or save Desk Bot while signed in.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(p => {
@@ -881,29 +881,115 @@ function startPlantFleetPolling() {
   plantFleetPollTimer = setInterval(() => refreshPlantFleetFromServer(), PLANT_FLEET_POLL_MS);
 }
 
-/** Show copyable Firebase uid for Plant Bot POST /api/telemetry (Option A: JSON body `uid`). */
-function updatePlantFleetUidDisplay() {
-  const wrap = document.getElementById('plantFleetUidSetup');
-  const el = document.getElementById('plantFleetUidValue');
+const DEW_INGEST_SESSION_KEY = 'dew_last_ingest_token';
+
+/** Create/load per-user ingest token automatically (no manual Firebase uid copy). */
+async function ensurePlantIngestToken() {
   const uid = window.__dewUid;
-  if (el) el.textContent = uid || '—';
-  if (wrap) wrap.hidden = !uid;
+  const wrap = document.getElementById('plantFleetDeviceSetup');
+  const codeEl = document.getElementById('plantFleetIngestTokenValue');
+  const statusEl = document.getElementById('plantFleetIngestStatus');
+  if (!uid || !wrap) return;
+  wrap.hidden = false;
+  if (codeEl) codeEl.textContent = 'Creating…';
+  try {
+    const gr = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/ingest-token');
+    const gj = await gr.json().catch(() => ({}));
+    if (!gr.ok) {
+      if (codeEl) codeEl.textContent = '—';
+      if (statusEl) {
+        statusEl.textContent =
+          gr.status === 503
+            ? 'Server auth not configured, or sign in again.'
+            : 'Could not load device token. Check that you are signed in.';
+      }
+      return;
+    }
+    if (gj.exists) {
+      if (statusEl) {
+        statusEl.textContent =
+          'Device token is active. Paste it into your Plant Bot as ingestToken (or regenerate for a new secret).';
+      }
+      let show = '••••••••••••••••••••••••••••••••••••••••••••••••••';
+      try {
+        const cached = sessionStorage.getItem(DEW_INGEST_SESSION_KEY);
+        if (cached) show = cached;
+      } catch (_) {}
+      if (codeEl) codeEl.textContent = show;
+    } else {
+      const pr = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/ingest-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const pj = await pr.json().catch(() => ({}));
+      if (pr.ok && pj.token) {
+        if (codeEl) codeEl.textContent = pj.token;
+        if (statusEl) {
+          statusEl.textContent =
+            'Token created. Save it in your Plant Bot once (shown here and in session until you refresh).';
+        }
+        try {
+          sessionStorage.setItem(DEW_INGEST_SESSION_KEY, pj.token);
+        } catch (_) {}
+      } else {
+        if (codeEl) codeEl.textContent = '—';
+        if (statusEl) statusEl.textContent = 'Could not create device token.';
+      }
+    }
+  } catch (_) {
+    if (codeEl) codeEl.textContent = '—';
+  }
 }
 
-function wirePlantFleetUidCopy() {
-  const btn = document.getElementById('btnCopyPlantFleetUid');
-  if (!btn || btn.dataset.wired) return;
-  btn.dataset.wired = '1';
-  btn.addEventListener('click', async () => {
+function wirePlantFleetIngestActions() {
+  const copyBtn = document.getElementById('btnCopyPlantFleetIngest');
+  const regenBtn = document.getElementById('btnRegeneratePlantFleetIngest');
+  if (!copyBtn || copyBtn.dataset.wired) return;
+  copyBtn.dataset.wired = '1';
+  if (regenBtn) regenBtn.dataset.wired = '1';
+  copyBtn.addEventListener('click', async () => {
+    const codeEl = document.getElementById('plantFleetIngestTokenValue');
+    const text = (codeEl && codeEl.textContent) || '';
+    let toCopy = text;
+    if (/^•+$/.test(text.trim()) || text.includes('•')) {
+      try {
+        toCopy = sessionStorage.getItem(DEW_INGEST_SESSION_KEY) || '';
+      } catch (_) {}
+    }
+    if (!toCopy || toCopy.includes('•')) {
+      alert('Regenerate to create a new token you can copy, or copy right after it appears.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(toCopy);
+      const t = copyBtn.textContent;
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => {
+        copyBtn.textContent = t;
+      }, 2000);
+    } catch (_) {}
+  });
+
+  if (regenBtn) regenBtn.addEventListener('click', async () => {
     const uid = window.__dewUid;
+    const codeEl = document.getElementById('plantFleetIngestTokenValue');
+    const statusEl = document.getElementById('plantFleetIngestStatus');
     if (!uid) return;
     try {
-      await navigator.clipboard.writeText(uid);
-      const t = btn.textContent;
-      btn.textContent = 'Copied';
-      setTimeout(() => {
-        btn.textContent = t;
-      }, 2000);
+      const pr = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/ingest-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ regenerate: true }),
+      });
+      const pj = await pr.json().catch(() => ({}));
+      if (pr.ok && pj.token) {
+        if (codeEl) codeEl.textContent = pj.token;
+        if (statusEl) statusEl.textContent = 'New token — update your Plant Bot and store it safely.';
+        try {
+          sessionStorage.setItem(DEW_INGEST_SESSION_KEY, pj.token);
+        } catch (_) {}
+      }
     } catch (_) {}
   });
 }
@@ -959,8 +1045,8 @@ async function load() {
     loadDashboardWeather();
 
     setTimeout(() => recordPlantUsage(plants.map(p => p.id)), 200);
-    updatePlantFleetUidDisplay();
-    wirePlantFleetUidCopy();
+    ensurePlantIngestToken();
+    wirePlantFleetIngestActions();
   } catch (e) {
     console.error(e);
     document.getElementById('metricsRow').innerHTML = '<div class="metric-card" style="grid-column:1/-1">Failed to load API. Is the server running? Run: npm start</div>';

@@ -48,19 +48,19 @@ The dashboard **Plant Fleet** lists plants tied to your account after usage is r
   "moisture": 72,
   "temp": 23,
   "lux": 2100,
-  "uid": "YOUR_FIREBASE_USER_ID"
+  "ingestToken": "dew_…"
 }
 ```
 
-**Recommended (Option A):** put your **Firebase user id** in the JSON as **`uid`**. In the DEW dashboard, open **Plant Fleet → “Plant Bot · use this uid in JSON”** and copy the value into your ESP32 firmware or `scripts/telemetry_sender.py` (`DEW_UID` in `.env`).
+**Recommended:** each account gets a **device ingest token** automatically the first time you open the dashboard (**Plant Fleet → device token**). Put that string in your ESP32 / `DEW_INGEST_TOKEN` in `.env` for `scripts/telemetry_sender.py`. The server stores only a hash; you don’t need to copy your Firebase uid manually.
 
-Optional: send **`Authorization: Bearer <Firebase ID token>`** instead of `uid` in the body; the server verifies it if **Firebase Admin** is configured (`FIREBASE_SERVICE_ACCOUNT_JSON` or `GOOGLE_APPLICATION_CREDENTIALS`).
+**Legacy:** JSON **`uid`** with your Firebase user id still works. You can also send **`Authorization: Bearer <Firebase ID token>`** if **Firebase Admin** is configured on the server.
 
 While the dashboard is open, the app **polls your plant fleet** periodically so new bot readings show up without a full page refresh.
 
 ### Weather location (per user)
 
-Your saved map location is stored in the server **SQLite** database (`user_weather_location`) and is used for the dashboard weather hero, **`GET /api/weather?user_id=...`** (devices), and **weather alerts**. It is **only updated** when you save location (Settings, “Change location”, or the first-run prompt)—not overwritten automatically on each visit.
+Your saved map location is stored in the server **SQLite** database (`user_weather_location`, **one row per Firebase user id**). User A’s coordinates never overwrite user B’s. It powers the dashboard weather hero, **`GET /api/weather?user_id=...`**, and **weather alerts**. It **only changes** when that user saves location (Settings, “Change location”, or the first-run prompt)—not on every visit. **GET/PUT `/api/users/:uid/location`** require a valid **Firebase Bearer** token matching the URL `uid` whenever Firebase Admin is configured. Requests **without** `Authorization` are rejected (**401**). If Firebase Admin is not configured, the server returns **503** unless you set **`DEW_ALLOW_UNAUTH_LOCATION=1`** (local dev only—never in production).
 
 ---
 

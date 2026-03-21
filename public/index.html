@@ -300,21 +300,29 @@
               <p class="plant-fleet-summary" id="plantFleetSummary" aria-live="polite">
                 Loading sensor overview…
               </p>
-              <details class="plant-fleet-uid-setup" id="plantFleetUidSetup" hidden>
-                <summary>Plant Bot · use this <code>uid</code> in JSON (Option A)</summary>
-                <p class="plant-fleet-uid-hint">
-                  Your ESP32 (or script) should POST to <code>/api/telemetry</code> with the same fields as before, plus
-                  <code>"uid": "…"</code> using the value below. Then readings appear in this fleet.
+              <details class="plant-fleet-uid-setup" id="plantFleetDeviceSetup" hidden>
+                <summary>Plant Bot · device token (auto-created for your account)</summary>
+                <p class="plant-fleet-uid-hint" id="plantFleetIngestStatus">
+                  A secret token is created when you first open the dashboard. Add it to your ESP32 or script as JSON
+                  <code>"ingestToken"</code> or header <code>X-DEW-Ingest-Token</code> on <code>POST /api/telemetry</code>.
                 </p>
                 <div class="plant-fleet-uid-row">
-                  <code id="plantFleetUidValue" class="plant-fleet-uid-code" title="Your Firebase user id">—</code>
+                  <code id="plantFleetIngestTokenValue" class="plant-fleet-uid-code" title="Device ingest token">—</code>
                   <button
                     type="button"
                     class="btn btn-ghost"
-                    id="btnCopyPlantFleetUid"
+                    id="btnCopyPlantFleetIngest"
                     style="padding-inline: 10px; font-size: 11px"
                   >
                     Copy
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    id="btnRegeneratePlantFleetIngest"
+                    style="padding-inline: 10px; font-size: 11px"
+                  >
+                    Regenerate
                   </button>
                 </div>
               </details>

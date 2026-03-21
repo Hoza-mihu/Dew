@@ -1,4 +1,5 @@
 require('dotenv').config();
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -112,6 +113,15 @@ function initDbAndMigrateFromJson() {
         latitude REAL NOT NULL,
         longitude REAL NOT NULL,
         updated_at TEXT NOT NULL
+      )`
+    );
+
+    // Auto-created per Firebase user for Plant Bot: hash of secret token (plaintext shown once in dashboard).
+    db.run(
+      `CREATE TABLE IF NOT EXISTS user_ingest_token (
+        uid TEXT NOT NULL PRIMARY KEY,
+        token_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
       )`
     );
 
@@ -384,6 +394,56 @@ function optionalFirebaseUid(req) {
       .then((d) => resolve(d && d.uid ? d.uid : null))
       .catch(() => resolve(null));
   });
+}
+
+function isFirebaseAuthConfigured() {
+  return !!(firebaseAdmin && firebaseAdmin.auth);
+}
+
+/** Allow GET/PUT /location without Firebase only when explicitly set (local dev). Default: deny. */
+function allowUnauthenticatedLocationApi() {
+  return process.env.DEW_ALLOW_UNAUTH_LOCATION === '1';
+}
+
+/**
+ * Per-user isolation for location APIs: require a valid Firebase Bearer token matching :uid.
+ * Unauthenticated requests are rejected when Firebase Admin is available (production).
+ */
+async function requireUidMatchesToken(req, res, paramUid) {
+  const uid = String(paramUid || '').trim();
+  if (!uid) {
+    res.status(400).json({ error: 'uid required' });
+    return false;
+  }
+  if (!isFirebaseAuthConfigured()) {
+    if (allowUnauthenticatedLocationApi()) {
+      return true;
+    }
+    res.status(503).json({ error: 'Authentication not configured on server' });
+    return false;
+  }
+  const authHeader = req.headers.authorization || '';
+  if (!/^Bearer\s+\S+/i.test(authHeader)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  const tokenUid = await optionalFirebaseUid(req);
+  if (!tokenUid || tokenUid !== uid) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+function hashIngestTokenSecret(raw) {
+  return crypto.createHash('sha256').update(String(raw).trim(), 'utf8').digest('hex');
+}
+
+async function findUidByIngestToken(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const h = hashIngestTokenSecret(raw);
+  const row = await dbGetAsync('SELECT uid FROM user_ingest_token WHERE token_hash = ?', [h]);
+  return row && row.uid ? String(row.uid) : null;
 }
 
 function dbGetAsync(sql, params = []) {
@@ -2889,19 +2949,34 @@ app.get('/api/plants/catalog/:id', (req, res) => {
 });
 
 // --- API: Telemetry (ESP32 Plant Bot POST) ---
-// Links readings to a user via: (1) Authorization: Bearer <Firebase ID token>, or (2) JSON body `uid` (e.g. ESP32 config).
-app.post('/api/telemetry', (req, res) => {
-  const { plantId, moisture, temp, lux, humidity, battery, uid: bodyUid } = req.body;
+// Links readings to a user via: (1) Bearer Firebase ID token, (2) JSON ingestToken (auto-created per user), or (3) legacy JSON uid.
+app.post('/api/telemetry', async (req, res) => {
+  const { plantId, moisture, temp, lux, humidity, battery, uid: bodyUid, ingestToken: bodyIngest } = req.body || {};
+  const headerIngest = req.headers['x-dew-ingest-token'] || req.headers['x-dew-device-token'];
+  const rawIngest =
+    bodyIngest != null && String(bodyIngest).trim() !== ''
+      ? String(bodyIngest).trim()
+      : headerIngest != null && String(headerIngest).trim() !== ''
+        ? String(headerIngest).trim()
+        : '';
+
   if (!plantId) return res.status(400).json({ error: 'plantId required' });
 
   const plant = store.plants.find(p => p.id === plantId);
   if (!plant) return res.status(404).json({ error: 'Plant not found' });
 
-  optionalFirebaseUid(req).then((tokenUid) => {
-    const uid =
-      (tokenUid && String(tokenUid).trim()) ||
-      (bodyUid && String(bodyUid).trim()) ||
-      null;
+  try {
+    const tokenUid = await optionalFirebaseUid(req);
+    let uid = null;
+    if (tokenUid) {
+      uid = String(tokenUid).trim();
+    } else if (rawIngest) {
+      const u = await findUidByIngestToken(rawIngest);
+      if (!u) return res.status(401).json({ error: 'Invalid ingest token' });
+      uid = u;
+    } else if (bodyUid && String(bodyUid).trim()) {
+      uid = String(bodyUid).trim();
+    }
 
     const reading = {
       plantId,
@@ -2945,7 +3020,9 @@ app.post('/api/telemetry', (req, res) => {
     }
 
     res.json({ ok: true, plant });
-  });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Telemetry failed' });
+  }
 });
 
 // --- API: History (for charts) ---
@@ -3434,30 +3511,71 @@ app.delete('/api/users/:toUid/follow', (req, res) => {
   res.json({ ok: true, followersCount });
 });
 
-// --- API: User location (for weather on dashboard) ---
+// --- API: User location (for weather on dashboard) — one SQLite row per Firebase uid ---
 app.get('/api/users/:uid/location', async (req, res) => {
   try {
-    const loc = await getUserWeatherLocationPref(req.params.uid);
+    const paramUid = String(req.params.uid || '').trim();
+    if (!(await requireUidMatchesToken(req, res, paramUid))) return;
+    const loc = await getUserWeatherLocationPref(paramUid);
     if (!loc) return res.json(null);
     res.json(loc);
-  } catch (_) {
-    res.json(null);
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load location' });
   }
 });
 
 app.put('/api/users/:uid/location', async (req, res) => {
   try {
     const paramUid = String(req.params.uid || '').trim();
-    const tokenUid = await optionalFirebaseUid(req);
-    if (tokenUid && tokenUid !== paramUid) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
+    if (!(await requireUidMatchesToken(req, res, paramUid))) return;
     const ok = await saveUserWeatherLocationPref(paramUid, req.body || {});
     if (!ok) return res.status(400).json({ error: 'Invalid location payload' });
     const loc = await getUserWeatherLocationPref(paramUid);
     res.json(loc);
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to save location' });
+  }
+});
+
+// --- API: Plant Bot ingest token (auto per user; hash stored; plaintext shown once in dashboard) ---
+app.get('/api/users/:uid/ingest-token', async (req, res) => {
+  try {
+    const paramUid = String(req.params.uid || '').trim();
+    if (!(await requireUidMatchesToken(req, res, paramUid))) return;
+    const row = await dbGetAsync('SELECT 1 AS ok FROM user_ingest_token WHERE uid = ?', [paramUid]);
+    res.json({ exists: !!row });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to read ingest token' });
+  }
+});
+
+app.post('/api/users/:uid/ingest-token', async (req, res) => {
+  try {
+    const paramUid = String(req.params.uid || '').trim();
+    if (!(await requireUidMatchesToken(req, res, paramUid))) return;
+    const regenerate = !!(req.body && req.body.regenerate);
+    const row = await dbGetAsync('SELECT 1 AS ok FROM user_ingest_token WHERE uid = ?', [paramUid]);
+    const exists = !!row;
+    if (exists && !regenerate) {
+      return res.json({ exists: true, token: null });
+    }
+    const raw = `dew_${crypto.randomBytes(32).toString('hex')}`;
+    const hash = hashIngestTokenSecret(raw);
+    const now = new Date().toISOString();
+    await dbRunAsync(
+      `INSERT INTO user_ingest_token (uid, token_hash, created_at) VALUES (?, ?, ?)
+       ON CONFLICT(uid) DO UPDATE SET token_hash = excluded.token_hash, created_at = excluded.created_at`,
+      [paramUid, hash, now]
+    );
+    try {
+      await dbRunAsync(
+        `INSERT OR IGNORE INTO users (uid, display_name, email, updated_at) VALUES (?, '', '', ?)`,
+        [paramUid, now]
+      );
+    } catch (_) {}
+    res.json({ exists: true, token: raw });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to create ingest token' });
   }
 });
 
@@ -3468,6 +3586,10 @@ app.get('/api/weather', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'user_id required' });
 
   try {
+    const tokenUid = await optionalFirebaseUid(req);
+    if (tokenUid && tokenUid !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const loc = await getUserWeatherLocationPref(userId);
     if (!loc || loc.latitude == null || loc.longitude == null) return res.status(404).json({ error: 'Location not set' });
 
