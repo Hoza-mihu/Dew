@@ -3,6 +3,21 @@ import { authReady } from "./firebase-config.js";
 import { onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+async function authFetch(url, options = {}) {
+  try {
+    const auth = await authReady;
+    const user = auth.currentUser;
+    const headers = new Headers(options.headers || {});
+    if (user) {
+      const token = await user.getIdToken();
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    return fetch(url, { ...options, headers });
+  } catch (_) {
+    return fetch(url, options);
+  }
+}
+
 /** Single Supabase client instance to avoid "Multiple GoTrueClient instances" warnings and undefined behavior. */
 let supabaseClient = null;
 
@@ -4417,7 +4432,7 @@ async function loadLocationAndDisplay() {
   const uid = getLocationUid();
   if (!uid) return;
   try {
-    const res = await fetch("/api/users/" + encodeURIComponent(uid) + "/location");
+    const res = await authFetch("/api/users/" + encodeURIComponent(uid) + "/location");
     const loc = await res.json();
     updateLocationDisplay(loc);
   } catch (_) {
@@ -4504,7 +4519,7 @@ function initLocationSettings() {
     showLocationMessage("Looking up location…");
     try {
       const data = await forwardGeocode(city, country, inputPostal?.value?.trim());
-      const res = await fetch("/api/users/" + encodeURIComponent(uid) + "/location", {
+      const res = await authFetch("/api/users/" + encodeURIComponent(uid) + "/location", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),

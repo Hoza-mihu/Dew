@@ -58,6 +58,10 @@ Optional: send **`Authorization: Bearer <Firebase ID token>`** instead of `uid` 
 
 While the dashboard is open, the app **polls your plant fleet** periodically so new bot readings show up without a full page refresh.
 
+### Weather location (per user)
+
+Your saved map location is stored in the server **SQLite** database (`user_weather_location`) and is used for the dashboard weather hero, **`GET /api/weather?user_id=...`** (devices), and **weather alerts**. It is **only updated** when you save location (Settings, “Change location”, or the first-run prompt)—not overwritten automatically on each visit.
+
 ---
 
 ## Tech stack

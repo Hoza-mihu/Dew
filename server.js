@@ -102,6 +102,19 @@ function initDbAndMigrateFromJson() {
     db.run('CREATE INDEX IF NOT EXISTS idx_sensor_alerts_created ON sensor_alerts(created_at DESC)');
     db.run('CREATE INDEX IF NOT EXISTS idx_sensor_alerts_user_created ON sensor_alerts(user_id, created_at DESC)');
 
+    // Per-user weather location (Firebase uid); survives deploys unlike JSON file on ephemeral disks.
+    db.run(
+      `CREATE TABLE IF NOT EXISTS user_weather_location (
+        uid TEXT NOT NULL PRIMARY KEY,
+        city TEXT,
+        state TEXT,
+        country TEXT,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        updated_at TEXT NOT NULL
+      )`
+    );
+
     // --- Community: user directory + membership + moderators + meta (symbol) ---
     db.run(
       `CREATE TABLE IF NOT EXISTS users (
@@ -296,6 +309,34 @@ function initDbAndMigrateFromJson() {
     // Ignore migration failures; app will still work.
   }
 
+  // One-time migration: move weather locations from JSON into SQLite.
+  try {
+    const legacy = loadUserData();
+    const locs = legacy.locations && typeof legacy.locations === 'object' ? legacy.locations : {};
+    const stmt = db.prepare(
+      `INSERT OR REPLACE INTO user_weather_location (uid, city, state, country, latitude, longitude, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    Object.entries(locs).forEach(([uid, loc]) => {
+      if (!uid || !loc || loc.latitude == null || loc.longitude == null) return;
+      const lat = Number(loc.latitude);
+      const lon = Number(loc.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      stmt.run(
+        uid,
+        loc.city || '',
+        loc.state || '',
+        loc.country || '',
+        lat,
+        lon,
+        loc.last_updated || new Date().toISOString()
+      );
+    });
+    stmt.finalize();
+  } catch (e) {
+    // Ignore migration failures.
+  }
+
   return db;
 }
 
@@ -387,7 +428,31 @@ async function getUserWeatherLocationPref(uid) {
   const userId = String(uid || "").trim();
   if (!userId) return null;
 
-  // Prefer Supabase if configured + table exists.
+  // 1) Canonical: SQLite (persistent per user on the server DB file).
+  try {
+    const row = await dbGetAsync(
+      `SELECT city, state, country, latitude, longitude, updated_at FROM user_weather_location WHERE uid = ?`,
+      [userId]
+    );
+    if (row && row.latitude != null && row.longitude != null) {
+      const lat = Number(row.latitude);
+      const lon = Number(row.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        return {
+          city: row.city || "",
+          state: row.state || "",
+          country: row.country || "",
+          latitude: lat,
+          longitude: lon,
+          last_updated: row.updated_at || null,
+        };
+      }
+    }
+  } catch (_) {
+    // continue to fallbacks
+  }
+
+  // 2) Optional Supabase (legacy); migrate row into SQLite when found.
   if (supabaseAdmin) {
     try {
       const { data, error } = await supabaseAdmin
@@ -399,28 +464,52 @@ async function getUserWeatherLocationPref(uid) {
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (row && row.latitude != null && row.longitude != null) {
-        return {
-          city: row.location_name || "",
-          state: "",
-          country: "",
-          latitude: Number(row.latitude),
-          longitude: Number(row.longitude),
-          last_updated: row.created_at || null,
-        };
+        const lat = Number(row.latitude);
+        const lon = Number(row.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          const loc = {
+            city: row.location_name || "",
+            state: "",
+            country: "",
+            latitude: lat,
+            longitude: lon,
+            last_updated: row.created_at || null,
+          };
+          const now = new Date().toISOString();
+          dbRunAsync(
+            `INSERT OR REPLACE INTO user_weather_location (uid, city, state, country, latitude, longitude, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, loc.city, loc.state, loc.country, lat, lon, row.created_at || now]
+          ).catch(() => {});
+          if (!store.locations) store.locations = {};
+          store.locations[userId] = {
+            city: loc.city,
+            state: loc.state,
+            country: loc.country,
+            latitude: lat,
+            longitude: lon,
+            last_updated: loc.last_updated,
+          };
+          saveUserData();
+          return loc;
+        }
       }
     } catch (_) {
-      // Fall back to JSON/SQLite in-memory store.
+      // Fall back to JSON store.
     }
   }
 
   const loc = (store.locations || {})[userId];
-  if (!loc) return null;
+  if (!loc || loc.latitude == null || loc.longitude == null) return null;
+  const lat = Number(loc.latitude);
+  const lon = Number(loc.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   return {
     city: loc.city || "",
     state: loc.state || "",
     country: loc.country || "",
-    latitude: loc.latitude,
-    longitude: loc.longitude,
+    latitude: lat,
+    longitude: lon,
     last_updated: loc.last_updated || null,
   };
 }
@@ -436,7 +525,28 @@ async function saveUserWeatherLocationPref(uid, body) {
   const longitude = Number(body?.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
 
-  // Always persist to the existing in-memory + JSON store for backward compatibility.
+  const now = new Date().toISOString();
+
+  // Primary: SQLite (one row per user; only updated when the user saves location).
+  try {
+    await dbRunAsync(
+      `INSERT INTO user_weather_location (uid, city, state, country, latitude, longitude, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(uid) DO UPDATE SET
+         city = excluded.city,
+         state = excluded.state,
+         country = excluded.country,
+         latitude = excluded.latitude,
+         longitude = excluded.longitude,
+         updated_at = excluded.updated_at`,
+      [userId, city, state, country, latitude, longitude, now]
+    );
+  } catch (e) {
+    console.warn('user_weather_location save failed:', e.message);
+    return false;
+  }
+
+  // Mirror to JSON store for backward compatibility / local tooling.
   if (!store.locations) store.locations = {};
   store.locations[userId] = {
     city,
@@ -444,15 +554,14 @@ async function saveUserWeatherLocationPref(uid, body) {
     country,
     latitude,
     longitude,
-    last_updated: new Date().toISOString(),
+    last_updated: now,
   };
   saveUserData();
 
-  // Also persist to Supabase (if configured + table exists).
+  // Optional Supabase mirror (if configured + table accepts this user_id type).
   if (supabaseAdmin) {
     try {
       const location_name = makeLocationName(city, state, country);
-      // delete+insert keeps schema simple and avoids needing unique constraints.
       await supabaseAdmin.from("user_weather_preferences").delete().eq("user_id", userId);
       await supabaseAdmin.from("user_weather_preferences").insert([
         {
@@ -3338,9 +3447,14 @@ app.get('/api/users/:uid/location', async (req, res) => {
 
 app.put('/api/users/:uid/location', async (req, res) => {
   try {
-    const ok = await saveUserWeatherLocationPref(req.params.uid, req.body || {});
+    const paramUid = String(req.params.uid || '').trim();
+    const tokenUid = await optionalFirebaseUid(req);
+    if (tokenUid && tokenUid !== paramUid) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const ok = await saveUserWeatherLocationPref(paramUid, req.body || {});
     if (!ok) return res.status(400).json({ error: 'Invalid location payload' });
-    const loc = await getUserWeatherLocationPref(req.params.uid);
+    const loc = await getUserWeatherLocationPref(paramUid);
     res.json(loc);
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to save location' });

@@ -432,7 +432,7 @@ function initWeatherLocationPromptUI() {
             latitude: lat,
             longitude: lon,
           };
-          const putRes = await fetch(`${API}/api/users/${encodeURIComponent(uid)}/location`, {
+          const putRes = await authFetch(`${API}/api/users/${encodeURIComponent(uid)}/location`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
