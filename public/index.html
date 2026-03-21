@@ -275,9 +275,9 @@
             <div class="card">
               <div class="card-header">
                 <h2><i class="ri-notification-3-line"></i> Activity</h2>
-                <div class="tab-row">
-                  <div class="tab active">All</div>
-                  <div class="tab">Alerts</div>
+                <div class="tab-row" id="activityListTabs">
+                  <div class="tab active" data-activity-filter="all" id="activityTabAll" role="tab" aria-selected="true">All</div>
+                  <div class="tab" data-activity-filter="alerts" id="activityTabAlerts" role="tab" aria-selected="false">Alerts</div>
                 </div>
               </div>
               <ul class="activity-list" id="activityList"></ul>
@@ -301,11 +301,17 @@
                 Loading sensor overview…
               </p>
               <details class="plant-fleet-uid-setup" id="plantFleetDeviceSetup" hidden>
-                <summary>Plant Bot · device token (auto-created for your account)</summary>
-                <p class="plant-fleet-uid-hint" id="plantFleetIngestStatus">
-                  A secret token is created when you first open the dashboard. Add it to your ESP32 or script as JSON
-                  <code>"ingestToken"</code> or header <code>X-DEW-Ingest-Token</code> on <code>POST /api/telemetry</code>.
-                </p>
+                <summary>How to connect your plant sensor</summary>
+                <div class="plant-fleet-simple-help">
+                  <p><strong>1. Your private key.</strong> DEW creates this for you when you open the dashboard. You don’t need to set anything up by hand.</p>
+                  <p><strong>2. Copy once.</strong> Tap <strong>Copy</strong> and paste the key into your Wi‑Fi plant device (or the DEW test tool on your computer). You only need to do this <em>once</em> per device.</p>
+                  <p><strong>3. See your plants here.</strong> When your device sends readings, your plants show up in the table above.</p>
+                  <p><strong>Lost the key?</strong> Tap <strong>Regenerate</strong> to get a new one, then paste the new key into your device. The old key will stop working.</p>
+                  <p class="plant-fleet-tech-note">
+                    Technical note: devices send this value as <code>ingestToken</code> when posting sensor data to DEW.
+                  </p>
+                </div>
+                <p class="plant-fleet-uid-hint" id="plantFleetIngestStatus">Preparing your key…</p>
                 <div class="plant-fleet-uid-row">
                   <code id="plantFleetIngestTokenValue" class="plant-fleet-uid-code" title="Device ingest token">—</code>
                   <button

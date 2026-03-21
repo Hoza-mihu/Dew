@@ -26,6 +26,9 @@ const PLANT_FLEET_PREVIEW = 5;
 let sensorChart = null;
 let plantFleetPollTimer = null;
 const PLANT_FLEET_POLL_MS = 20000;
+/** Dashboard activity list (from GET /api/users/:uid/activity-feed). */
+let activityFeed = [];
+let activityFilter = 'all';
 
 const WEATHER_CACHE_MS = 15 * 60 * 1000;
 let weatherCache = { data: null, at: 0, locKey: null };
@@ -537,6 +540,15 @@ function getPlantImageUrl(p) {
   return '/images/plants/' + encodeURIComponent(p.image);
 }
 
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function formatRelativeTime(iso) {
   if (!iso) return '—';
   try {
@@ -578,8 +590,8 @@ function renderPlantFleetSummary() {
   }
   if (!plants.length) {
     el.textContent = window.__dewUid
-      ? 'No plants linked to your account yet. When your ESP32 sends telemetry (or you use Desk Bot), they will appear here with overall conditions.'
-      : 'Sign in to see plants linked to your sensors.';
+      ? 'No plants here yet. Connect your Wi‑Fi plant device using the steps below, or save Desk Bot while you’re signed in — then your plants and their overall condition will show up here.'
+      : 'Sign in to see plants linked to your account.';
     if (btn) btn.style.display = 'none';
     return;
   }
@@ -610,7 +622,7 @@ function renderPlantTable(plants) {
     btn.setAttribute('aria-expanded', plantFleetExpanded ? 'true' : 'false');
   }
   if (!plants.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="plant-fleet-empty">No plants linked yet. Use the <strong>device token</strong> above in <code>POST /api/telemetry</code> as <code>ingestToken</code>, or save Desk Bot while signed in.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="plant-fleet-empty">No plants here yet. Open <strong>How to connect your plant sensor</strong> above, paste your key into your device once, or save <strong>Desk Bot</strong> below while you’re signed in.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(p => {
@@ -647,13 +659,54 @@ function renderPlantTable(plants) {
 
 function renderActivity(list) {
   const ul = document.getElementById('activityList');
-  ul.innerHTML = (list || []).map(a => `
+  if (!ul) return;
+  if (!list || !list.length) {
+    ul.innerHTML = `<li class="activity-item activity-empty">
+      <div class="activity-icon"><i class="ri-inbox-line"></i></div>
+      <div class="activity-text"><strong>No recent activity</strong><span>Weather alerts, sensor alerts, and device syncs will appear here.</span></div>
+      <div class="activity-time"></div>
+    </li>`;
+    return;
+  }
+  ul.innerHTML = list.map((a) => {
+    const time = a.at ? formatRelativeTime(a.at) : (a.time || '');
+    const title = escapeHtml(a.title || '—');
+    const desc = escapeHtml(a.desc || '');
+    const icon = a.icon || 'ri-circle-line';
+    return `
     <li class="activity-item">
-      <div class="activity-icon"><i class="${a.icon || 'ri-circle-line'}"></i></div>
-      <div class="activity-text"><strong>${a.title || '—'}</strong><span>${a.desc || ''}</span></div>
-      <div class="activity-time">${a.time || ''}</div>
+      <div class="activity-icon"><i class="${icon}"></i></div>
+      <div class="activity-text"><strong>${title}</strong><span>${desc}</span></div>
+      <div class="activity-time">${escapeHtml(time)}</div>
     </li>
-  `).join('');
+  `;
+  }).join('');
+}
+
+function renderActivityFiltered() {
+  const list =
+    activityFilter === 'alerts'
+      ? activityFeed.filter((a) => a.kind === 'alert' || a.source === 'weather' || a.source === 'sensor')
+      : activityFeed;
+  renderActivity(list);
+}
+
+function initActivityTabs() {
+  const row = document.getElementById('activityListTabs');
+  if (!row || row.dataset.wired) return;
+  row.dataset.wired = '1';
+  row.querySelectorAll('.tab[data-activity-filter]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      row.querySelectorAll('.tab').forEach((t) => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      activityFilter = tab.getAttribute('data-activity-filter') || 'all';
+      renderActivityFiltered();
+    });
+  });
 }
 
 function buildChart(plants, metricKey = 'moisture') {
@@ -865,6 +918,11 @@ async function refreshPlantFleetFromServer() {
     renderPlantFleetSummary();
     renderPlantTable(plants);
     buildChart(plants, chartMetricFromActiveTab());
+    const ar = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/activity-feed');
+    if (ar.ok) {
+      activityFeed = await ar.json();
+      renderActivityFiltered();
+    }
   } catch (_) {}
 }
 
@@ -891,7 +949,7 @@ async function ensurePlantIngestToken() {
   const statusEl = document.getElementById('plantFleetIngestStatus');
   if (!uid || !wrap) return;
   wrap.hidden = false;
-  if (codeEl) codeEl.textContent = 'Creating…';
+  if (codeEl) codeEl.textContent = 'Loading…';
   try {
     const gr = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/ingest-token');
     const gj = await gr.json().catch(() => ({}));
@@ -900,15 +958,15 @@ async function ensurePlantIngestToken() {
       if (statusEl) {
         statusEl.textContent =
           gr.status === 503
-            ? 'Server auth not configured, or sign in again.'
-            : 'Could not load device token. Check that you are signed in.';
+            ? 'Sign-in isn’t available on the server right now. Try again later or ask your host to turn on secure sign-in.'
+            : 'We couldn’t load your key. Make sure you’re signed in, then refresh the page.';
       }
       return;
     }
     if (gj.exists) {
       if (statusEl) {
         statusEl.textContent =
-          'Device token is active. Paste it into your Plant Bot as ingestToken (or regenerate for a new secret).';
+          'Your key is active. Tap Copy if you need to paste it into your plant device again, or Regenerate for a new key.';
       }
       let show = '••••••••••••••••••••••••••••••••••••••••••••••••••';
       try {
@@ -927,14 +985,14 @@ async function ensurePlantIngestToken() {
         if (codeEl) codeEl.textContent = pj.token;
         if (statusEl) {
           statusEl.textContent =
-            'Token created. Save it in your Plant Bot once (shown here and in session until you refresh).';
+            'Your key is ready below. Copy it now and keep it somewhere safe — after you leave or refresh, we only show dots here.';
         }
         try {
           sessionStorage.setItem(DEW_INGEST_SESSION_KEY, pj.token);
         } catch (_) {}
       } else {
         if (codeEl) codeEl.textContent = '—';
-        if (statusEl) statusEl.textContent = 'Could not create device token.';
+        if (statusEl) statusEl.textContent = 'We couldn’t create a key. Refresh the page or try signing in again.';
       }
     }
   } catch (_) {
@@ -958,7 +1016,7 @@ function wirePlantFleetIngestActions() {
       } catch (_) {}
     }
     if (!toCopy || toCopy.includes('•')) {
-      alert('Regenerate to create a new token you can copy, or copy right after it appears.');
+      alert('Tap Regenerate to show a new key you can copy, or copy right after a new key appears.');
       return;
     }
     try {
@@ -985,7 +1043,7 @@ function wirePlantFleetIngestActions() {
       const pj = await pr.json().catch(() => ({}));
       if (pr.ok && pj.token) {
         if (codeEl) codeEl.textContent = pj.token;
-        if (statusEl) statusEl.textContent = 'New token — update your Plant Bot and store it safely.';
+        if (statusEl) statusEl.textContent = 'You have a new key — paste it into your device and keep it somewhere safe.';
         try {
           sessionStorage.setItem(DEW_INGEST_SESSION_KEY, pj.token);
         } catch (_) {}
@@ -1024,11 +1082,23 @@ async function load() {
     plants = fleetPlants;
     plantFleetSummary = summary;
 
+    activityFilter = 'all';
+    const activityTabAll = document.getElementById('activityTabAll');
+    const activityTabAlerts = document.getElementById('activityTabAlerts');
+    if (activityTabAll && activityTabAlerts) {
+      activityTabAll.classList.add('active');
+      activityTabAlerts.classList.remove('active');
+      activityTabAll.setAttribute('aria-selected', 'true');
+      activityTabAlerts.setAttribute('aria-selected', 'false');
+    }
+
     const [activityRes, configRes] = await Promise.all([
-      fetch(API + '/api/activity'),
+      uid
+        ? authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/activity-feed')
+        : fetch(API + '/api/activity'),
       fetch(API + '/api/deskbot-config'),
     ]);
-    const activity = await activityRes.json();
+    activityFeed = activityRes.ok ? await activityRes.json() : [];
     const deskbotConfig = await configRes.json();
 
     document.getElementById('plantsOnline').textContent = plants.length;
@@ -1038,7 +1108,8 @@ async function load() {
     renderMetrics(plants);
     renderPlantFleetSummary();
     renderPlantTable(plants);
-    renderActivity(activity);
+    renderActivityFiltered();
+    initActivityTabs();
     buildChart(plants, 'moisture');
     wireSensorTabs(plants);
     initDeskbot(plants, deskbotConfig);

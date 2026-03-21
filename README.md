@@ -40,6 +40,15 @@ DEW Eco Warden is a web app for tracking plants with connected sensors, viewing 
 
 The dashboard **Plant Fleet** lists plants tied to your account after usage is recorded (Desk Bot save, dashboard, or sensor data).
 
+### Simple steps (everyone)
+
+1. **Sign in** to the DEW dashboard in your browser.
+2. In **Plant Fleet**, open **How to connect your plant sensor**.
+3. **Copy** your private key and paste it into your Wi‑Fi plant gadget (or the test script on your computer) **once**.
+4. When the device sends readings, your plants show up in the table. Use **Regenerate** only if you lose the key or replace the device.
+
+### For developers: API and examples
+
 **`POST /api/telemetry`** accepts readings, for example:
 
 ```json
@@ -57,6 +66,8 @@ The dashboard **Plant Fleet** lists plants tied to your account after usage is r
 **Legacy:** JSON **`uid`** with your Firebase user id still works. You can also send **`Authorization: Bearer <Firebase ID token>`** if **Firebase Admin** is configured on the server.
 
 While the dashboard is open, the app **polls your plant fleet** periodically so new bot readings show up without a full page refresh.
+
+The **Activity** panel loads **`GET /api/users/:uid/activity-feed`** (requires sign-in): it merges **weather alerts**, **plant sensor alerts**, and recent **telemetry sync** lines (for plants in your fleet) from SQLite / server state.
 
 ### Weather location (per user)
 

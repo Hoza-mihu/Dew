@@ -3077,7 +3077,98 @@ app.post('/api/deskbot-config', (req, res) => {
   });
 });
 
-// --- API: Activity (optional: append from backend) ---
+function activityIconForWeatherAlertType(t) {
+  const s = String(t || '').toLowerCase();
+  if (s.includes('rain')) return 'ri-rainy-line';
+  if (s.includes('wind')) return 'ri-windy-line';
+  if (s.includes('temp') || s.includes('heat') || s.includes('cold') || s.includes('frost')) return 'ri-temp-hot-line';
+  return 'ri-cloudy-line';
+}
+
+function activityIconForSensorType(t) {
+  const s = String(t || '').toLowerCase();
+  if (s.includes('moisture')) return 'ri-drop-fill';
+  if (s.includes('temp')) return 'ri-temp-hot-line';
+  return 'ri-alarm-warning-line';
+}
+
+// --- API: Activity (merged from DB: weather + sensor alerts + recent telemetry for user's plants) ---
+app.get('/api/users/:uid/activity-feed', async (req, res) => {
+  const paramUid = String(req.params.uid || '').trim();
+  if (!(await requireUidMatchesToken(req, res, paramUid))) return;
+  try {
+    const [weatherRows, sensorRows, plantUsageRows] = await Promise.all([
+      dbAllAsync(
+        `SELECT id, alert_type, alert_message, weather_condition, created_at, is_read, status
+         FROM weather_alerts WHERE user_id = ? ORDER BY datetime(created_at) DESC LIMIT 25`,
+        [paramUid]
+      ),
+      dbAllAsync(
+        `SELECT id, plant_id, plant_name, alert_type, message, severity, created_at, is_read, status
+         FROM sensor_alerts WHERE user_id = ? ORDER BY datetime(created_at) DESC LIMIT 25`,
+        [paramUid]
+      ),
+      dbAllAsync(`SELECT plant_id FROM user_plant_usage WHERE uid = ?`, [paramUid]),
+    ]);
+
+    const plantUsageIds = new Set((plantUsageRows || []).map((r) => r.plant_id));
+    const merged = [];
+
+    (weatherRows || []).forEach((r) => {
+      merged.push({
+        id: `w-${r.id}`,
+        source: 'weather',
+        icon: activityIconForWeatherAlertType(r.alert_type),
+        title: r.alert_message || 'Weather alert',
+        desc: [r.weather_condition, r.alert_type].filter(Boolean).join(' · ') || '',
+        at: r.created_at,
+        kind: 'alert',
+      });
+    });
+
+    (sensorRows || []).forEach((r) => {
+      merged.push({
+        id: `s-${r.id}`,
+        source: 'sensor',
+        icon: activityIconForSensorType(r.alert_type),
+        title: r.message || 'Sensor alert',
+        desc: [r.plant_name, r.plant_id].filter(Boolean).join(' · ') || '',
+        at: r.created_at,
+        kind: 'alert',
+        severity: r.severity,
+      });
+    });
+
+    if (plantUsageIds.size && store.telemetry && store.telemetry.length) {
+      const plantById = new Map((store.plants || []).map((p) => [p.id, p]));
+      const recent = [...store.telemetry].filter((t) => t && plantUsageIds.has(t.plantId));
+      recent.sort((a, b) => new Date(b.at) - new Date(a.at));
+      recent.slice(0, 15).forEach((t) => {
+        const name = plantById.get(t.plantId)?.name || t.plantId;
+        const bits = [];
+        if (t.moisture != null) bits.push(`${Math.round(Number(t.moisture))}% moisture`);
+        if (t.temp != null) bits.push(`${Number(t.temp).toFixed(1)}°C`);
+        if (t.lux != null) bits.push(`${Number(t.lux).toLocaleString()} lx`);
+        merged.push({
+          id: `t-${t.plantId}-${t.at}`,
+          source: 'telemetry',
+          icon: 'ri-wifi-line',
+          title: 'Sensor data synced',
+          desc: `${name}${bits.length ? ' · ' + bits.join(' · ') : ''}`,
+          at: t.at,
+          kind: 'telemetry',
+        });
+      });
+    }
+
+    merged.sort((a, b) => new Date(b.at) - new Date(a.at));
+    res.json(merged.slice(0, 50));
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Activity feed failed' });
+  }
+});
+
+// --- API: Activity (demo fallback when not using user feed) ---
 app.get('/api/activity', (req, res) => {
   res.json(store.activity);
 });
