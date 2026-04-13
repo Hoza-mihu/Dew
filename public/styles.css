@@ -397,12 +397,14 @@ textarea {
   box-shadow: 0 0 20px rgba(126, 242, 191, 0.25);
 }
 .logo-mark--brand-img {
-  width: auto;
-  height: auto;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  width: 44px;
+  height: 44px;
+  padding: 5px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.2) 0, #134030 42%, #0d2820 100%);
+  box-shadow: 0 0 18px rgba(126, 242, 191, 0.22);
 }
 /* Shared raster logo: public/images/symbols/dew-logo.png */
 .dew-app-logo-img {
@@ -412,7 +414,8 @@ textarea {
   object-fit: contain;
 }
 .dew-app-logo-img--sidebar {
-  max-height: 44px;
+  max-height: 100%;
+  max-width: 100%;
   width: auto;
 }
 .dew-app-logo-img--nav {
@@ -3675,13 +3678,31 @@ body.community-page .community-top-nav {
   color: #fff;
 }
 .about-nav-logo {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-weight: 700; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase;
-  color: #fff; text-decoration: none; transition: opacity var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.18) 0, #1a4a38 45%, #0d2820 100%);
+  box-shadow: 0 0 16px rgba(126, 242, 191, 0.2);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
 }
 .about-nav-logo:hover { opacity: 0.9; }
 .about-nav-logo .dew-app-logo-img--nav {
   display: block;
+  max-width: 68%;
+  max-height: 68%;
+  width: auto;
+  height: auto;
 }
 .about-nav-links { display: flex; align-items: center; gap: 28px; }
 .about-nav-link {
@@ -3707,6 +3728,14 @@ body.community-page .community-top-nav {
 .about-scrolly-spacer {
   position: relative;
   height: var(--about-scrolly-vh, 360vh);
+}
+/* Fills the tall scroll track below the sticky viewport so the scrub area never reads as an empty black slab. */
+.about-view--eco-story .about-scrolly-spacer {
+  background:
+    radial-gradient(ellipse 120% 90% at 50% -15%, rgba(34, 197, 94, 0.12), transparent 52%),
+    radial-gradient(ellipse 55% 45% at 92% 58%, rgba(16, 85, 60, 0.22), transparent 50%),
+    radial-gradient(ellipse 45% 55% at 6% 72%, rgba(25, 110, 75, 0.14), transparent 48%),
+    linear-gradient(165deg, #0c1812 0%, #040807 38%, #060d0a 100%);
 }
 .about-scrolly-sticky {
   position: sticky;
@@ -4605,8 +4634,29 @@ body.community-page .community-top-nav {
   padding: 24px 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   font-size: 13px;
 }
-.about-footer-logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: #7ef2bf; font-size: 15px; }
-.about-footer-logo .dew-app-logo-img--footer { opacity: 0.95; }
+.about-footer-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.14) 0, #134030 48%, #0d2820 100%);
+  box-shadow: 0 0 14px rgba(126, 242, 191, 0.18);
+  gap: 8px;
+  font-weight: 700;
+  color: #7ef2bf;
+  font-size: 15px;
+}
+.about-footer-logo .dew-app-logo-img--footer {
+  opacity: 0.95;
+  max-width: 70%;
+  max-height: 70%;
+  width: auto;
+  height: auto;
+}
 .about-footer-copy { opacity: 0.85; }
 
 /* Profile section */
@@ -5410,6 +5460,23 @@ body.reduce-motion .card:hover {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.community-nav-card-title--brand {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 12px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.16) 0, #134030 45%, #0d2820 100%);
+  box-shadow: 0 0 14px rgba(126, 242, 191, 0.16);
+}
+.community-nav-card-title--brand .dew-app-logo-img--community-nav {
+  max-width: 72%;
+  max-height: 72%;
+  width: auto;
+  height: auto;
 }
 .community-nav-card-link {
   display: flex;

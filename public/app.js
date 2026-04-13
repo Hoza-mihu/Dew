@@ -312,7 +312,10 @@ async function loadDashboardWeather() {
   // Server-side weather endpoint handles caching + open-meteo calls.
   try {
     const res = await authFetch(`${API}/api/weather?user_id=${encodeURIComponent(uid)}`);
-    if (res.status === 404) {
+    if (!res.ok) throw new Error('Weather request failed');
+
+    const data = await res.json();
+    if (!data.ok || !data.location || !data.weather) {
       areaTodayAverages = null;
       hero.style.display = 'none';
       if (wrap) wrap.style.display = 'none';
@@ -321,9 +324,6 @@ async function loadDashboardWeather() {
       renderMetrics(typeof plants !== 'undefined' ? plants : []);
       return;
     }
-    if (!res.ok) throw new Error('Weather request failed');
-
-    const data = await res.json();
     const loc = data.location;
     const weather = data.weather;
     areaTodayAverages = data.areaToday || null;

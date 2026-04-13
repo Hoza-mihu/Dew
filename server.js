@@ -4244,11 +4244,15 @@ app.get('/api/weather', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
     const loc = await getUserWeatherLocationPref(userId);
-    if (!loc || loc.latitude == null || loc.longitude == null) return res.status(404).json({ error: 'Location not set' });
+    if (!loc || loc.latitude == null || loc.longitude == null) {
+      return res.status(200).json({ ok: false, error: 'Location not set' });
+    }
 
     const lat = Number(loc.latitude);
     const lon = Number(loc.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(404).json({ error: 'Invalid location' });
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return res.status(200).json({ ok: false, error: 'Invalid location' });
+    }
 
     const cacheKey = `v2:${lat},${lon}`;
     const now = Date.now();
