@@ -396,6 +396,37 @@ textarea {
   color: var(--accent-strong); font-size: 20px;
   box-shadow: 0 0 20px rgba(126, 242, 191, 0.25);
 }
+.logo-mark--brand-img {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+/* Shared raster logo: public/images/symbols/dew-logo.png */
+.dew-app-logo-img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+.dew-app-logo-img--sidebar {
+  max-height: 44px;
+  width: auto;
+}
+.dew-app-logo-img--nav {
+  max-height: 34px;
+  width: auto;
+}
+.dew-app-logo-img--footer {
+  max-height: 30px;
+  width: auto;
+}
+.dew-app-logo-img--community-nav {
+  max-height: 32px;
+  width: auto;
+}
 .logo-text { display: flex; flex-direction: column; }
 .logo-text span:first-child { font-weight: 700; letter-spacing: 0.12em; font-size: 11px; text-transform: uppercase; color: var(--accent-strong); }
 .logo-text span:last-child { font-weight: 600; font-size: 16px; color: var(--text-main); }
@@ -3648,7 +3679,9 @@ body.community-page .community-top-nav {
   color: #fff; text-decoration: none; transition: opacity var(--transition-fast);
 }
 .about-nav-logo:hover { opacity: 0.9; }
-.about-nav-logo i { font-size: 20px; color: #7ef2bf; }
+.about-nav-logo .dew-app-logo-img--nav {
+  display: block;
+}
 .about-nav-links { display: flex; align-items: center; gap: 28px; }
 .about-nav-link {
   font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -3859,9 +3892,8 @@ body.community-page .community-top-nav {
 }
 
 /* —— DEW eco scrollytelling (nature + tech) —— */
-.about-view--eco-story .about-nav-logo i {
-  color: #22c55e;
-  filter: drop-shadow(0 0 14px rgba(34, 197, 94, 0.4));
+.about-view--eco-story .about-nav-logo .dew-app-logo-img--nav {
+  filter: drop-shadow(0 0 12px rgba(34, 197, 94, 0.45));
 }
 .about-scrolly-sticky--eco {
   background: linear-gradient(165deg, #050505 0%, #0a1610 45%, #050505 100%);
@@ -4538,7 +4570,7 @@ body.community-page .community-top-nav {
   font-size: 13px;
 }
 .about-footer-logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: #7ef2bf; font-size: 15px; }
-.about-footer-logo i { font-size: 20px; }
+.about-footer-logo .dew-app-logo-img--footer { opacity: 0.95; }
 .about-footer-copy { opacity: 0.85; }
 
 /* Profile section */

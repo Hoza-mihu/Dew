@@ -458,24 +458,10 @@
   margin-left: 0;
 }
 
-.login-panel-right .login-brand-top .login-brand-icon {
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 10px;
-  background: rgba(126, 242, 191, 0.12);
-  border-radius: 14px;
-  font-size: 24px;
-  color: var(--accent-strong);
-  border: 1px solid rgba(126, 242, 191, 0.25);
-}
-
-.login-panel-right .login-brand-top .login-brand-title {
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-main);
-  margin: 0 0 4px;
+.login-panel-right .login-brand-top .dew-app-logo-img--auth {
+  margin: 0 auto 12px;
+  max-height: 56px;
+  width: auto;
 }
 
 .login-panel-right .login-brand-top .login-brand-subtitle {
@@ -609,6 +595,16 @@
   margin-top: auto;
   padding-top: 10px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.login-panel-footer .dew-app-logo-img--auth-footer {
+  max-height: 22px;
+  width: auto;
+  opacity: 0.88;
 }
 
 /* Right panel */
@@ -1053,16 +1049,15 @@
   100% { transform: translate(32px, -32px); }
 }
 
-/* Brand icon: gentle breathe + float */
-.login-brand-icon {
+/* Brand mark: gentle breathe (raster logo) */
+.login-panel-right .login-brand-top .dew-app-logo-img--auth {
   animation: dewLeafBreathe 4s ease-in-out infinite;
-  box-shadow: 0 0 30px rgba(126, 242, 191, 0.25);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: transform 0.3s ease, filter 0.3s ease;
 }
 
-.login-brand-icon:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 40px rgba(126, 242, 191, 0.4);
+.login-panel-right .login-brand-top .dew-app-logo-img--auth:hover {
+  transform: scale(1.04);
+  filter: drop-shadow(0 0 18px rgba(126, 242, 191, 0.35));
 }
 
 @keyframes dewLeafBreathe {
@@ -1070,12 +1065,14 @@
   50% { transform: scale(1.03); opacity: 0.95; }
 }
 
-.login-brand-title {
-  animation: dewFadeInUp 0.8s ease-out 0.2s both;
+@media (prefers-reduced-motion: reduce) {
+  .login-panel-right .login-brand-top .dew-app-logo-img--auth {
+    animation: none;
+  }
 }
 
 .login-brand-subtitle {
-  animation: dewFadeInUp 0.8s ease-out 0.35s both;
+  animation: dewFadeInUp 0.8s ease-out 0.2s both;
 }
 
 @keyframes dewFadeInUp {
