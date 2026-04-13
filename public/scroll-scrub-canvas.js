@@ -36,17 +36,22 @@ export function drawCover(ctx, img, cw, ch) {
 }
 
 export function fitCanvas(canvas, ctx) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const rawDpr = window.devicePixelRatio || 1;
+  const dpr = Math.min(Math.max(rawDpr, 1), 3);
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   if (w <= 0 || h <= 0) return;
-  const nw = Math.max(1, Math.floor(w * dpr));
-  const nh = Math.max(1, Math.floor(h * dpr));
+  const nw = Math.max(1, Math.round(w * dpr));
+  const nh = Math.max(1, Math.round(h * dpr));
   if (canvas.width !== nw || canvas.height !== nh) {
     canvas.width = nw;
     canvas.height = nh;
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  if ("imageSmoothingQuality" in ctx) {
+    ctx.imageSmoothingQuality = "high";
+  }
 }
 
 export async function loadImagesBatched(urls, batchSize, onProgress) {
@@ -91,7 +96,7 @@ export function getScrollProgress01(trackEl) {
  */
 export function mountCanvasScrollScrub(trackEl, canvasEl, opts) {
   const { urls, reducedMotion, onScrub, onFirstDraw } = opts;
-  const ctx = canvasEl.getContext("2d");
+  const ctx = canvasEl.getContext("2d", { alpha: false });
   if (!ctx) return () => {};
 
   const ac = new AbortController();
@@ -100,12 +105,27 @@ export function mountCanvasScrollScrub(trackEl, canvasEl, opts) {
   let ready = false;
   let drewOnce = false;
 
+  const resolveFrameIndex = (idx) => {
+    const last = frames.length - 1;
+    const safe = clamp(Math.round(idx), 0, Math.max(0, last));
+    if (frames[safe]?.naturalWidth) return safe;
+    for (let d = 1; d <= frames.length; d += 1) {
+      const lo = safe - d;
+      const hi = safe + d;
+      if (lo >= 0 && frames[lo]?.naturalWidth) return lo;
+      if (hi <= last && frames[hi]?.naturalWidth) return hi;
+    }
+    return safe;
+  };
+
   const renderFrame = (idx) => {
     fitCanvas(canvasEl, ctx);
     const w = canvasEl.clientWidth;
     const h = canvasEl.clientHeight;
+    if (w <= 0 || h <= 0) return;
     ctx.clearRect(0, 0, w, h);
-    const img = frames[idx];
+    const i = resolveFrameIndex(idx);
+    const img = frames[i];
     if (img?.naturalWidth) {
       drawCover(ctx, img, w, h);
       if (!drewOnce) {
@@ -139,15 +159,24 @@ export function mountCanvasScrollScrub(trackEl, canvasEl, opts) {
     { signal },
   );
 
+  const ro =
+    typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => {
+          onScroll();
+        })
+      : null;
+  ro?.observe(canvasEl);
+
   (async () => {
     if (!urls.length) return;
     frames = await loadImagesBatched(urls, 12);
     ready = true;
-    tick();
+    requestAnimationFrame(() => requestAnimationFrame(tick));
   })();
 
   return () => {
     ac.abort();
+    ro?.disconnect();
     cancelAnimationFrame(raf);
   };
 }
