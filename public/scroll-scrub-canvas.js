@@ -1,5 +1,8 @@
 /** Shared helpers: scroll-linked canvas image scrub (Apple-style scrollytelling). */
 
+/** Edge color sampled from sequence (seamless with frame backgrounds). */
+const SCRUB_CANVAS_BG = "#050908";
+
 export function padIndex(n, width) {
   const s = String(n);
   return s.length >= width ? s : "0".repeat(width - s.length) + s;
@@ -37,7 +40,8 @@ export function drawCover(ctx, img, cw, ch) {
 
 export function fitCanvas(canvas, ctx) {
   const rawDpr = window.devicePixelRatio || 1;
-  const dpr = Math.min(Math.max(rawDpr, 1), 3);
+  const narrow = typeof window !== "undefined" && window.innerWidth < 768;
+  const dpr = Math.min(Math.max(rawDpr, 1), narrow ? 2 : 3);
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   if (w <= 0 || h <= 0) return;
@@ -144,20 +148,53 @@ export function mountCanvasScrollScrub(trackEl, canvasEl, opts) {
     return safe;
   };
 
-  const renderFrame = (idx) => {
+  /** Fractional scrub + crossfade between frames (smooth bidirectional scroll). */
+  const renderFrame = (p) => {
     fitCanvas(canvasEl, ctx);
     const w = canvasEl.clientWidth;
     const h = canvasEl.clientHeight;
     if (w <= 0 || h <= 0) return;
-    ctx.clearRect(0, 0, w, h);
-    const i = resolveFrameIndex(idx);
-    const img = frames[i];
-    if (img?.naturalWidth) {
-      drawCover(ctx, img, w, h);
+    ctx.fillStyle = SCRUB_CANVAS_BG;
+    ctx.fillRect(0, 0, w, h);
+
+    const last = Math.max(0, frames.length - 1);
+    if (last < 0) return;
+
+    if (reducedMotion) {
+      const i = resolveFrameIndex(0);
+      const img = frames[i];
+      if (img?.naturalWidth) {
+        drawCover(ctx, img, w, h);
+        if (!drewOnce) {
+          drewOnce = true;
+          onFirstDraw?.();
+        }
+      }
+      return;
+    }
+
+    const fi = clamp(p, 0, 1) * last;
+    const i0 = Math.floor(fi);
+    const i1 = Math.min(i0 + 1, last);
+    const t = fi - i0;
+
+    const idx0 = resolveFrameIndex(i0);
+    const idx1 = resolveFrameIndex(i1);
+    const img0 = frames[idx0];
+    const img1 = frames[idx1];
+
+    if (img0?.naturalWidth) {
+      drawCover(ctx, img0, w, h);
       if (!drewOnce) {
         drewOnce = true;
         onFirstDraw?.();
       }
+    }
+    if (img1?.naturalWidth && t > 0.008 && idx1 !== idx0) {
+      ctx.save();
+      ctx.globalAlpha = clamp(t, 0, 1);
+      drawCover(ctx, img1, w, h);
+      ctx.restore();
     }
   };
 
@@ -166,7 +203,7 @@ export function mountCanvasScrollScrub(trackEl, canvasEl, opts) {
     const p = getScrollProgress01(trackEl);
     const last = frames.length - 1;
     const idx = reducedMotion ? 0 : Math.round(p * last);
-    renderFrame(idx);
+    renderFrame(p);
     onScrub?.(p, idx, frames.length);
   };
 
@@ -207,9 +244,31 @@ export function mountCanvasScrollScrub(trackEl, canvasEl, opts) {
 
   (async () => {
     if (!urls.length) return;
-    frames = await loadImagesBatched(urls, 12);
+    frames = new Array(urls.length);
+    const prime = Math.min(28, urls.length);
+    for (let i = 0; i < prime; i += 1) {
+      const img = await loadImageElement(urls[i]);
+      try {
+        if (img.decode) await img.decode();
+      } catch (_) {}
+      frames[i] = img;
+    }
     ready = true;
     requestAnimationFrame(() => requestAnimationFrame(tick));
+    const batch = 12;
+    for (let i = prime; i < urls.length; i += batch) {
+      const slice = urls.slice(i, i + batch);
+      await Promise.all(
+        slice.map(async (url, j) => {
+          const idx = i + j;
+          const img = await loadImageElement(url);
+          try {
+            if (img.decode) await img.decode();
+          } catch (_) {}
+          frames[idx] = img;
+        }),
+      );
+    }
   })();
 
   return () => {

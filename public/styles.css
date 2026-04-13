@@ -3573,6 +3573,7 @@ body.about-page .app {
 /* Flex `body` + tall About scrub: use block layout so `document.scrollingElement` tracks the full page scroll reliably. */
 body.about-page {
   display: block;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 body.about-page .sidebar { display: none; }
 body.about-page .main {
@@ -3896,10 +3897,11 @@ body.community-page .community-top-nav {
   filter: drop-shadow(0 0 12px rgba(34, 197, 94, 0.45));
 }
 .about-scrolly-sticky--eco {
-  background: linear-gradient(165deg, #050505 0%, #0a1610 45%, #050505 100%);
+  /* Matches canvas SCRUB_CANVAS_BG / frame edges (#050908) for seamless blend */
+  background: #050908;
 }
 .about-view--eco-story .about-scrolly-fallback-bg {
-  background-color: #050505;
+  background-color: #050908;
   background-image: url("/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-001.jpg");
   background-size: cover;
   background-position: center;
@@ -3968,6 +3970,13 @@ body.community-page .community-top-nav {
   text-transform: uppercase;
   color: rgba(34, 197, 94, 0.92);
 }
+.about-story-float--cinematic {
+  font-size: clamp(19px, 3.6vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+  color: rgba(255, 255, 255, 0.9);
+}
 .about-dew-story-hero {
   position: relative;
   z-index: 5;
@@ -3982,21 +3991,21 @@ body.community-page .community-top-nav {
 }
 .about-dew-display-title {
   font-size: clamp(40px, 8vw, 76px);
-  font-weight: 650;
-  letter-spacing: -0.03em;
+  font-weight: 600;
+  letter-spacing: -0.035em;
   text-transform: none;
   line-height: 1.02;
   margin: 0 0 12px;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.9);
 }
 .about-hero--scrolly .about-dew-story-hero .about-hero-tagline {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   font-size: clamp(12px, 1.8vw, 14px);
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.6);
 }
 .about-dew-hero-sub {
-  color: rgba(255, 255, 255, 0.52);
+  color: rgba(255, 255, 255, 0.6);
   max-width: 38ch;
   margin-left: auto;
   margin-right: auto;
@@ -8207,7 +8216,7 @@ body.syncdata-page main.main {
 
 /* Eco story fallback: block legacy plant art even if an older styles.css was cached */
 body.about-page .about-view--eco-story .about-scrolly-fallback-bg {
-  background-color: #050505 !important;
+  background-color: #050908 !important;
   background-image: url("/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-001.jpg") !important;
   background-size: cover !important;
   background-position: center !important;
