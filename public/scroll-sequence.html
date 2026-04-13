@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DEW · Scroll sequence demo</title>
+    <!--
+      Pipeline (The AI Surfer–style): Whisk (start/end) → Veo (frames to video) → EZGif (~30fps) → ZIP of images.
+      Unzip into public/scroll-sequence-frames/
+
+      EZGif names vary. Examples:
+        ezgif-frame-001.png … ezgif-frame-240.png  → data-index-start="1" data-index-pad="3"
+        frame_0001.webp …                           → data-url-template + pad4
+
+      Match this background to your frames (eyedropper) so edges disappear.
+    -->
+    <style>
+      :root {
+        --bg: #050505;
+        --fg: rgba(255, 255, 255, 0.9);
+        --muted: rgba(255, 255, 255, 0.55);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      a {
+        color: #9dd6ff;
+      }
+      .top {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        background: linear-gradient(to bottom, rgba(5, 5, 5, 0.92), transparent);
+        pointer-events: none;
+      }
+      .top a {
+        pointer-events: auto;
+        text-decoration: none;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .top a:hover {
+        color: var(--fg);
+      }
+      .sequence {
+        position: relative;
+        height: var(--sequence-scroll-vh, 450vh);
+      }
+      .sequence__sticky {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+      #seq-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        vertical-align: middle;
+      }
+      .sequence__hero {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        z-index: 1;
+      }
+      .sequence__hero h1 {
+        margin: 0;
+        font-size: clamp(28px, 5vw, 52px);
+        font-weight: 650;
+        letter-spacing: -0.03em;
+        text-align: center;
+        max-width: 14ch;
+        line-height: 1.05;
+      }
+      .sequence__hero p {
+        margin: 14px 0 0;
+        font-size: 15px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .hud {
+        position: absolute;
+        left: 18px;
+        bottom: 18px;
+        z-index: 2;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+        max-width: min(420px, calc(100vw - 36px));
+      }
+      .after {
+        min-height: 40vh;
+        padding: 48px 20px 80px;
+        max-width: 640px;
+        margin: 0 auto;
+      }
+      .after h2 {
+        font-size: 22px;
+        margin: 0 0 12px;
+      }
+      .after p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <span style="font-size: 13px; color: var(--muted)">Scroll sequence</span>
+      <a href="/">← DEW app</a>
+    </div>
+
+    <section
+      id="sequence"
+      class="sequence"
+      data-frame-count="0"
+      data-index-start="1"
+      data-index-pad="3"
+      data-url-template="/scroll-sequence-frames/ezgif-frame-{index}.png"
+      data-scroll-vh="450"
+    >
+      <div class="sequence__sticky">
+        <canvas id="seq-canvas" width="800" height="600" aria-hidden="true"></canvas>
+        <div class="sequence__hero">
+          <div>
+            <h1 id="seq-hero-text">Scroll to explore</h1>
+            <p>Add your frame sequence to unlock the effect.</p>
+          </div>
+        </div>
+        <div id="seq-hud" class="hud" hidden>
+          <div id="seq-status">Preparing…</div>
+          <div id="seq-progress"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="after">
+      <h2>How this maps to your reel</h2>
+      <p>
+        This page scrubs through a pre-rendered image sequence on a full-viewport canvas—the same idea as the
+        CubeSat-style demos in the tutorial. Replace <code>data-frame-count</code>, <code>data-url-template</code>,
+        and padding so filenames match your EZGif export, then tune <code>data-scroll-vh</code> for how long the
+        scroll “travel” should feel.
+      </p>
+    </section>
+
+    <script type="module" src="/scroll-sequence.js"></script>
+  </body>
+</html>

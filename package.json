@@ -8,7 +8,10 @@
     "dev": "vite",
     "dev:api": "node --watch server.js",
     "build": "vite build && node scripts/copy-static-assets.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:prod": "npm run build && vite preview",
+    "deploy": "npm run build && npx vercel --prod",
+    "deploy:preview": "npm run build && npx vercel"
   },
   "keywords": [
     "iot",

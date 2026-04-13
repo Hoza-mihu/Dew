@@ -7,6 +7,18 @@ const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 const multer = require('multer');
 
+// Optional: map plant-bot device_id -> { plantId, uid }.
+// Example:
+//   DEW_PLANTBOT_DEVICE_MAP_JSON='{"plant_bot_01":{"plantId":"pothos","uid":"<firebase_uid>"}}'
+let PLANTBOT_DEVICE_MAP = {};
+try {
+  if (process.env.DEW_PLANTBOT_DEVICE_MAP_JSON) {
+    PLANTBOT_DEVICE_MAP = JSON.parse(process.env.DEW_PLANTBOT_DEVICE_MAP_JSON);
+  }
+} catch (e) {
+  console.warn('Invalid DEW_PLANTBOT_DEVICE_MAP_JSON; continuing with empty map.');
+}
+
 let firebaseAdmin = null;
 let supabaseAdmin = null;
 try {
@@ -122,6 +134,16 @@ function initDbAndMigrateFromJson() {
         uid TEXT NOT NULL PRIMARY KEY,
         token_hash TEXT NOT NULL,
         created_at TEXT NOT NULL
+      )`
+    );
+
+    // Plant Bot "what plant should this device report to?" user preference
+    // (set from the web app dropdown before the bot uploads telemetry).
+    db.run(
+      `CREATE TABLE IF NOT EXISTS plantbot_user_choice (
+        uid TEXT NOT NULL PRIMARY KEY,
+        plant_id TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       )`
     );
 
@@ -444,6 +466,28 @@ async function findUidByIngestToken(raw) {
   const h = hashIngestTokenSecret(raw);
   const row = await dbGetAsync('SELECT uid FROM user_ingest_token WHERE token_hash = ?', [h]);
   return row && row.uid ? String(row.uid) : null;
+}
+
+async function getPlantbotChoicePlantId(uid) {
+  if (!uid) return null;
+  const row = await dbGetAsync('SELECT plant_id FROM plantbot_user_choice WHERE uid = ?', [uid]);
+  if (!row || !row.plant_id) return null;
+  const pid = String(row.plant_id).trim();
+  return pid || null;
+}
+
+async function upsertPlantbotChoicePlantId(uid, plantId) {
+  if (!uid || !plantId) return;
+  const p = String(plantId).trim();
+  if (!p) return;
+  await dbRunAsync(
+    `INSERT INTO plantbot_user_choice (uid, plant_id, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(uid) DO UPDATE SET
+       plant_id = excluded.plant_id,
+       updated_at = excluded.updated_at`,
+    [String(uid).trim(), p, new Date().toISOString()]
+  );
 }
 
 function dbGetAsync(sql, params = []) {
@@ -1406,9 +1450,12 @@ const store = {
     plantId: 'pothos',
     line: 'Pothos: Moisture at 72% · comfy 🌱',
     theme: 'mint',
-    show: { moisture: true, temp: false, light: false },
+    mood: 'happy',
+    show: { moisture: false, temp: false, light: false, humidity: false, weather: false, health: false },
     updatedAt: new Date().toISOString(),
   },
+  /** Last POST /api/device/status payload per device_id (memory only; optional UI/debug). */
+  deskbotDeviceReports: {},
   /** Per-user favourite plant IDs (uid -> plantIds[]). Persisted to disk; maintained until user changes. */
   favourites: (() => { const d = loadUserData(); return d.favourites; })(),
   /** DEW Community: follow relationships. Persisted to disk. */
@@ -1979,7 +2026,19 @@ function insertSensorAlert(alert, done) {
 }
 
 app.use(cors());
-app.use(express.json());
+// ESP32-CAM uploads hourly images as base64 inside JSON.
+// Default Express JSON limit can be too small for this, so we bump it.
+app.use(express.json({ limit: '25mb' }));
+// Avoid stale index.html / styles.css during local dev (browser disk cache).
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    const p = req.path;
+    if (p === '/' || p === '/index.html' || p.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
+    }
+    next();
+  });
+}
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- API: User directory (for moderator search) ---
@@ -2980,7 +3039,7 @@ app.get('/api/plants/catalog/:id', (req, res) => {
 // --- API: Telemetry (ESP32 Plant Bot POST) ---
 // Links readings to a user via: (1) Bearer Firebase ID token, (2) JSON ingestToken (auto-created per user), or (3) legacy JSON uid.
 app.post('/api/telemetry', async (req, res) => {
-  const { plantId, moisture, temp, lux, humidity, battery, uid: bodyUid, ingestToken: bodyIngest } = req.body || {};
+  const { plantId, moisture, temp, lux, humidity, battery, status: bodyStatus, uid: bodyUid, ingestToken: bodyIngest } = req.body || {};
   const headerIngest = req.headers['x-dew-ingest-token'] || req.headers['x-dew-device-token'];
   const rawIngest =
     bodyIngest != null && String(bodyIngest).trim() !== ''
@@ -3024,7 +3083,11 @@ app.post('/api/telemetry', async (req, res) => {
     plant.temp = reading.temp;
     plant.lux = reading.lux;
     plant.updatedAt = reading.at;
-    plant.status = reading.moisture < 40 ? 'Moisture low' : reading.moisture < 50 ? 'Drying' : 'Healthy';
+    if (bodyStatus != null && String(bodyStatus).trim() !== '') {
+      plant.status = String(bodyStatus).trim();
+    } else {
+      plant.status = reading.moisture < 40 ? 'Moisture low' : reading.moisture < 50 ? 'Drying' : 'Healthy';
+    }
     if (uid) {
       upsertUserPlantUsage(uid, [plantId], 'telemetry', (err) => {
         if (!err) saveUserData();
@@ -3051,6 +3114,268 @@ app.post('/api/telemetry', async (req, res) => {
     res.json({ ok: true, plant });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Telemetry failed' });
+  }
+});
+
+// --- API: Plant Bot selection (which plant this device reports to) ---
+// Web app calls this when the user picks a plant in Bots -> Plant Bot.
+// The Plant Bot firmware does not call this; it uploads telemetry using the
+// user's ingest token so the server can apply the stored selection.
+app.post('/api/plantbot-choice', async (req, res) => {
+  try {
+    const uid = await optionalFirebaseUid(req);
+    if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+
+    const body = req.body || {};
+    const plantId = String(body.plantId || body.plant_id || '').trim();
+    if (!plantId) return res.status(400).json({ error: 'plantId required' });
+
+    // Validate against known catalog plants.
+    const plant = (store.plants || []).find((p) => p.id === plantId);
+    if (!plant) return res.status(404).json({ error: 'Plant not found' });
+
+    await upsertPlantbotChoicePlantId(String(uid).trim(), plantId);
+    res.json({ ok: true, plantId });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Could not save plant choice' });
+  }
+});
+
+app.get('/api/plantbot-choice', async (req, res) => {
+  try {
+    const uid = await optionalFirebaseUid(req);
+    if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+    const plantId = await getPlantbotChoicePlantId(uid);
+    res.json({ plantId: plantId || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Could not load plant choice' });
+  }
+});
+
+// --- API: Plant Bot sensor ingestion (ESP32-CAM JSON) ---
+// Firmware posts:
+// {
+//   device_id, timestamp,
+//   temperature, humidity,
+//   soil_moisture, light,
+//   battery
+// }
+// We map device_id -> plantId (and optionally uid) using DEW_PLANTBOT_DEVICE_MAP_JSON.
+app.post('/api/sensor-data', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const deviceId = String(body.device_id || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+
+    const temperature = body.temperature;
+    const humidity = body.humidity;
+    const moisture = body.soil_moisture;
+    const lux = body.light;
+    const battery = body.battery;
+    const timestamp = body.timestamp || new Date().toISOString();
+    const bodyStatus = body.status || '';
+
+    const resolved = PLANTBOT_DEVICE_MAP[deviceId] || {};
+    // Attempt to derive plantId from device_id if env map not provided.
+    const derivedPlantId =
+      typeof resolved.plantId === 'string' && resolved.plantId.trim()
+        ? String(resolved.plantId).trim()
+        : /^plant[-_]?(.+)$/i.test(deviceId)
+          ? String(deviceId).replace(/^plant[-_]?/i, '').trim()
+          : null;
+
+    let plantId =
+      derivedPlantId ||
+      (store?.deskbotConfig?.plantId ? String(store.deskbotConfig.plantId) : null) ||
+      (Array.isArray(store?.plants) && store.plants[0] ? store.plants[0].id : null);
+
+    if (!plantId) return res.status(400).json({ error: 'Could not resolve plantId for device_id' });
+
+    let plant = (store.plants || []).find((p) => p.id === plantId);
+    if (!plant) return res.status(404).json({ error: 'Plant not found' });
+
+    // Determine uid for user_plant_usage linking
+    let uid = null;
+    const headerUid = await optionalFirebaseUid(req);
+    if (headerUid) uid = String(headerUid).trim();
+    if (!uid && resolved.uid) uid = String(resolved.uid).trim();
+    if (!uid && body.uid) uid = String(body.uid).trim();
+    if (!uid) {
+      const headerIngest = req.headers['x-dew-ingest-token'] || req.headers['x-dew-device-token'];
+      if (headerIngest && String(headerIngest).trim() !== '') {
+        const u = await findUidByIngestToken(String(headerIngest).trim());
+        if (!u) return res.status(401).json({ error: 'Invalid ingest token' });
+        uid = u;
+      }
+    }
+
+    // If the user selected a specific plant for this bot, override the plantId.
+    // This is how the web app "Plants -> Plant Bot dropdown" binds telemetry to the correct plant.
+    if (uid) {
+      const chosenPlantId = await getPlantbotChoicePlantId(uid);
+      if (chosenPlantId && chosenPlantId !== plantId) {
+        plantId = chosenPlantId;
+        plant = (store.plants || []).find((p) => p.id === plantId);
+        if (!plant) return res.status(404).json({ error: 'Chosen plant not found' });
+      }
+    }
+
+    const reading = {
+      plantId,
+      moisture: moisture != null ? Number(moisture) : plant.moisture,
+      temp: temperature != null ? Number(temperature) : plant.temp,
+      lux: lux != null ? Number(lux) : plant.lux,
+      humidity: humidity != null ? Number(humidity) : 52,
+      battery,
+      at: timestamp,
+    };
+
+    if (![reading.moisture, reading.temp, reading.lux, reading.humidity].every((n) => Number.isFinite(Number(n)))) {
+      return res.status(400).json({ error: 'Invalid sensor values' });
+    }
+
+    // Update in-memory plant + telemetry history (so dashboard charts can show immediately)
+    store.telemetry.push(reading);
+    if (store.telemetry.length > 500) store.telemetry = store.telemetry.slice(-400);
+
+    plant.moisture = reading.moisture;
+    plant.temp = reading.temp;
+    plant.lux = reading.lux;
+    plant.updatedAt = reading.at;
+    if (bodyStatus != null && String(bodyStatus).trim()) plant.status = String(bodyStatus).trim();
+    else plant.status = reading.moisture < 40 ? 'Moisture low' : reading.moisture < 50 ? 'Drying' : 'Healthy';
+
+    // Link to user plant usage if we know uid
+    if (uid) upsertUserPlantUsage(uid, [plantId], 'telemetry', () => {});
+
+    // Optional alert when moisture low
+    if (reading.moisture < 40 && (store.plants || []).find((p) => p.id === plantId)) {
+      const alert = {
+        id: String(alertIdCounter++),
+        userId: uid || null,
+        plantId,
+        plantName: plant.name,
+        type: 'moisture',
+        message: `Low moisture: ${reading.moisture}% — ${plant.name} needs water`,
+        severity: reading.moisture < 25 ? 'error' : 'warning',
+        at: reading.at,
+        read: false,
+        resolved: false,
+        snoozedUntil: null,
+      };
+      insertSensorAlert(alert);
+    }
+
+    res.json({ ok: true, plantId, deviceId });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Sensor ingest failed' });
+  }
+});
+
+// --- API: Plant Bot image upload (ESP32-CAM base64 JSON) ---
+// Firmware posts:
+// { device_id, timestamp, image_b64 }
+app.post('/api/upload-image', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const deviceId = String(body.device_id || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+
+    const b64 = body.image_b64;
+    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'image_b64 required' });
+
+    // Strip possible data URL prefix
+    const cleanB64 = b64.includes(',') ? b64.split(',').pop() : b64;
+    const buf = Buffer.from(cleanB64, 'base64');
+    if (!buf || !buf.length) return res.status(400).json({ error: 'Invalid base64 image' });
+
+    if (!fs.existsSync(path.join(DATA_DIR, 'device-images'))) fs.mkdirSync(path.join(DATA_DIR, 'device-images'), { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `${deviceId}-${ts}.jpg`;
+    const outPath = path.join(DATA_DIR, 'device-images', filename);
+    fs.writeFileSync(outPath, buf);
+
+    res.json({ ok: true, stored: true, filename });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Image upload failed' });
+  }
+});
+
+// --- API: Plant Bot battery alert (JSON) ---
+// Firmware posts:
+// { device_id, battery, battery_pct, timestamp }
+app.post('/api/battery-alert', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const deviceId = String(body.device_id || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+
+    const batteryV = body.battery != null ? Number(body.battery) : null;
+    const batteryPct = body.battery_pct != null ? Number(body.battery_pct) : null;
+    const timestamp = body.timestamp || new Date().toISOString();
+
+    if (batteryPct == null || !Number.isFinite(batteryPct)) return res.status(400).json({ error: 'battery_pct required' });
+
+    const resolved = PLANTBOT_DEVICE_MAP[deviceId] || {};
+    const derivedPlantId =
+      typeof resolved.plantId === 'string' && resolved.plantId.trim()
+        ? String(resolved.plantId).trim()
+        : /^plant[-_]?(.+)$/i.test(deviceId)
+          ? String(deviceId).replace(/^plant[-_]?/i, '').trim()
+          : null;
+
+    let plantId =
+      derivedPlantId ||
+      (store?.deskbotConfig?.plantId ? String(store.deskbotConfig.plantId) : null) ||
+      (Array.isArray(store?.plants) && store.plants[0] ? store.plants[0].id : 'unknown');
+
+    let plant = (store.plants || []).find((p) => p.id === plantId) || null;
+    let plantName = plant?.name || 'Sensor Device';
+
+    // Determine uid for display
+    let uid = null;
+    const headerUid = await optionalFirebaseUid(req);
+    if (headerUid) uid = String(headerUid).trim();
+    if (!uid && resolved.uid) uid = String(resolved.uid).trim();
+    if (!uid && body.uid) uid = String(body.uid).trim();
+    if (!uid) {
+      const headerIngest = req.headers['x-dew-ingest-token'] || req.headers['x-dew-device-token'];
+      if (headerIngest && String(headerIngest).trim() !== '') {
+        const u = await findUidByIngestToken(String(headerIngest).trim());
+        if (!u) return res.status(401).json({ error: 'Invalid ingest token' });
+        uid = u;
+      }
+    }
+
+    // Override plantId based on the user-selected Plant Bot binding.
+    if (uid) {
+      const chosenPlantId = await getPlantbotChoicePlantId(uid);
+      if (chosenPlantId && chosenPlantId !== plantId) {
+        plantId = chosenPlantId;
+        plant = (store.plants || []).find((p) => p.id === plantId) || null;
+        plantName = plant?.name || 'Sensor Device';
+      }
+    }
+
+    const severity = batteryPct <= 10 ? 'error' : 'warning';
+    const alert = {
+      id: String(alertIdCounter++),
+      userId: uid || null,
+      plantId,
+      plantName,
+      type: 'battery',
+      message: `Low battery: ${batteryPct}%${batteryV != null ? ` (${batteryV.toFixed(2)}V)` : ''}`,
+      severity,
+      at: timestamp,
+      read: false,
+      resolved: false,
+      snoozedUntil: null,
+    };
+    insertSensorAlert(alert);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Battery alert failed' });
   }
 });
 
@@ -3095,11 +3420,85 @@ app.get('/api/deskbot-config', (req, res) => {
   res.json(store.deskbotConfig);
 });
 
+// --- API: Desk Bot device config (used by ESP32-C3 firmware poll) ---
+// Firmware expects:
+// {
+//   mode: "expression" | "data",
+//   mood: "happy" | "neutral" | "sad" | "angry",
+//   plant_data: { temperature, humidity, light, soil }
+// }
+// Also returns legacy fields used by older firmware:
+// - expression, display_mode, plant_data.health
+app.get('/api/device/config', (req, res) => {
+  const deviceId = String(req.query.device_id || '').trim();
+  if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+
+  const cfg = store.deskbotConfig || {};
+  const show = cfg.show || {};
+
+  const mood = String(cfg.mood || 'happy').toLowerCase();
+
+  // If any "show sensor" toggle is enabled, we treat the device as in "data" mode.
+  const wantsData = !!(
+    show.temp || show.humidity || show.light || show.moisture || show.health || show.weather
+  );
+  const mode = wantsData ? 'data' : 'expression';
+
+  const plantId = cfg.plantId || (store.plants && store.plants[0] ? store.plants[0].id : null);
+  const plant = plantId ? (store.plants || []).find((p) => p.id === plantId) : null;
+
+  const soil = plant && plant.moisture != null ? Number(plant.moisture) : null;
+  const plant_data = {
+    temperature: plant && plant.temp != null ? Number(plant.temp) : null,
+    humidity: plant && plant.humidity != null ? Number(plant.humidity) : null,
+    light: plant && plant.lux != null ? Number(plant.lux) : null,
+    soil,
+    // legacy
+    health: soil,
+  };
+
+  // Legacy mapping: pick a single display_mode for older firmware.
+  let displayMode = 'temperature';
+  if (show.temp) displayMode = 'temperature';
+  else if (show.humidity) displayMode = 'humidity';
+  else if (show.light) displayMode = 'light';
+  else if (show.moisture || show.health) displayMode = 'health';
+
+  res.json({
+    mode,
+    mood,
+    plant_data,
+    // Preferred by newer Desk Bot firmware (same values as plant_data)
+    data: plant_data,
+    expression: mood,
+
+    // legacy fields (older firmware)
+    display_mode: displayMode,
+    theme: cfg.theme || null,
+    plant_id: plantId,
+  });
+});
+
+// Desk Bot telemetry (firmware POST; used for presence / debugging)
+app.post('/api/device/status', (req, res) => {
+  const deviceId = String(req.body?.device_id || req.query.device_id || '').trim();
+  if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+  if (!store.deskbotDeviceReports || typeof store.deskbotDeviceReports !== 'object') {
+    store.deskbotDeviceReports = {};
+  }
+  store.deskbotDeviceReports[deviceId] = {
+    ...req.body,
+    receivedAt: new Date().toISOString(),
+  };
+  res.json({ ok: true });
+});
+
 app.post('/api/deskbot-config', (req, res) => {
-  const { plantId, line, theme, show } = req.body;
+  const { plantId, line, theme, mood, show } = req.body;
   if (plantId !== undefined) store.deskbotConfig.plantId = plantId;
   if (line !== undefined) store.deskbotConfig.line = line;
   if (theme !== undefined) store.deskbotConfig.theme = theme;
+  if (mood !== undefined) store.deskbotConfig.mood = mood;
   if (show !== undefined) store.deskbotConfig.show = { ...store.deskbotConfig.show, ...show };
   store.deskbotConfig.updatedAt = new Date().toISOString();
   const effectivePlantId = store.deskbotConfig.plantId;
@@ -3111,6 +3510,127 @@ app.post('/api/deskbot-config', (req, res) => {
     }
     res.json(store.deskbotConfig);
   });
+});
+
+// --- API: Sensor sync (mirror Plant Bot readings to Supabase) ---
+// Some browsers / tools issue GET /api/sensors/sync (prefetch); avoid noisy 404 on dashboards.
+app.get('/api/sensors/sync', (req, res) => {
+  res.status(200).json({
+    ok: true,
+    message: 'Use POST with Authorization: Bearer <Firebase ID token> to sync sensor readings.',
+  });
+});
+app.post('/api/sensors/sync', async (req, res) => {
+  const uid = await optionalFirebaseUid(req);
+  if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+  const syncedAt = new Date().toISOString();
+  if (!supabaseAdmin) {
+    return res.json({
+      ok: true,
+      stored: false,
+      syncedAt,
+      message: 'Supabase not configured on server; live data still loads from the dashboard store.',
+    });
+  }
+  try {
+    const rows = await dbAllAsync(`SELECT plant_id FROM user_plant_usage WHERE uid = ?`, [uid]);
+    const plantIds = [...new Set((rows || []).map((r) => r.plant_id).filter(Boolean))];
+    const plantsById = new Map((store.plants || []).map((p) => [p.id, p]));
+    const plants = plantIds.map((id) => plantsById.get(id)).filter(Boolean);
+    if (plants.length === 0) {
+      return res.json({
+        ok: true,
+        stored: false,
+        syncedAt,
+        plantsProcessed: 0,
+        warning: 'No plants linked yet — connect a Plant Bot or open Bots to get started.',
+      });
+    }
+
+    const metricDefs = [
+      { sensor_type: 'temperature', unit: '°C', pick: (p) => p.temp },
+      { sensor_type: 'humidity', unit: '%', pick: (p) => p.humidity },
+      { sensor_type: 'moisture', unit: '%', pick: (p) => p.moisture },
+      { sensor_type: 'light', unit: 'lux', pick: (p) => p.lux },
+    ];
+
+    for (const plant of plants) {
+      const deviceId = `plant-${plant.id}`;
+      for (const t of metricDefs) {
+        const raw = t.pick(plant);
+        if (raw == null || Number.isNaN(Number(raw))) continue;
+        const { data: selRows, error: selErr } = await supabaseAdmin
+          .from('sensors')
+          .select('id')
+          .eq('user_id', uid)
+          .eq('sensor_type', t.sensor_type)
+          .eq('device_id', deviceId)
+          .limit(1);
+        if (selErr) throw selErr;
+        let sensorId = Array.isArray(selRows) && selRows[0] ? selRows[0].id : null;
+        if (!sensorId) {
+          const { data: ins, error: insErr } = await supabaseAdmin
+            .from('sensors')
+            .insert({
+              user_id: uid,
+              sensor_type: t.sensor_type,
+              device_id: deviceId,
+              plant_id: plant.id,
+            })
+            .select('id')
+            .single();
+          if (insErr) throw insErr;
+          sensorId = ins.id;
+        }
+        const { error: readErr } = await supabaseAdmin.from('sensor_readings').insert({
+          sensor_id: sensorId,
+          value: Number(raw),
+          unit: t.unit,
+          recorded_at: syncedAt,
+        });
+        if (readErr) throw readErr;
+      }
+    }
+
+    await supabaseAdmin.from('sync_logs').insert({
+      user_id: uid,
+      status: 'success',
+      synced_at: syncedAt,
+    });
+
+    res.json({
+      ok: true,
+      stored: true,
+      syncedAt,
+      plantsProcessed: plants.length,
+    });
+  } catch (e) {
+    const msg = e && e.message ? String(e.message) : 'Sync failed';
+    try {
+      await supabaseAdmin.from('sync_logs').insert({
+        user_id: uid,
+        status: 'failed',
+        message: msg.slice(0, 500),
+        synced_at: syncedAt,
+      });
+    } catch (_) {}
+    res.status(500).json({ error: msg, syncedAt });
+  }
+});
+
+app.get('/api/sensors/last-sync', async (req, res) => {
+  const uid = await optionalFirebaseUid(req);
+  if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+  if (!supabaseAdmin) return res.json({ lastSync: null, status: null });
+  const { data, error } = await supabaseAdmin
+    .from('sync_logs')
+    .select('synced_at, status')
+    .eq('user_id', uid)
+    .order('synced_at', { ascending: false })
+    .limit(1);
+  if (error) return res.status(500).json({ error: error.message });
+  const row = data && data[0];
+  res.json({ lastSync: row?.synced_at || null, status: row?.status || null });
 });
 
 function activityIconForWeatherAlertType(t) {
@@ -3159,6 +3679,8 @@ app.get('/api/users/:uid/activity-feed', async (req, res) => {
         desc: [r.weather_condition, r.alert_type].filter(Boolean).join(' · ') || '',
         at: r.created_at,
         kind: 'alert',
+        read: !!r.is_read,
+        status: r.status || 'active',
       });
     });
 
@@ -3172,6 +3694,8 @@ app.get('/api/users/:uid/activity-feed', async (req, res) => {
         at: r.created_at,
         kind: 'alert',
         severity: r.severity,
+        read: !!r.is_read,
+        status: r.status || 'active',
       });
     });
 
@@ -3193,6 +3717,8 @@ app.get('/api/users/:uid/activity-feed', async (req, res) => {
           desc: `${name}${bits.length ? ' · ' + bits.join(' · ') : ''}`,
           at: t.at,
           kind: 'telemetry',
+          read: false,
+          status: 'active',
         });
       });
     }

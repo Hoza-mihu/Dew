@@ -1,4 +1,5 @@
 // Profile section: view, edit, and save user profile (Supabase Storage for photos)
+import { isDrawerMode, closeDrawer } from "./app-shell.js";
 import { authReady } from "./firebase-config.js";
 import { onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -55,6 +56,11 @@ const myPlantsView = document.getElementById("myPlantsView");
 const plantDetailView = document.getElementById("plantDetailView");
 const aboutView = document.getElementById("aboutView");
 const communityView = document.getElementById("communityView");
+const botsHubView = document.getElementById("botsHubView");
+const syncDataView = document.getElementById("syncDataView");
+
+/** Tear down scroll scrub + observers when leaving About. */
+let aboutPageMotionTeardown = null;
 
 /** App settings (theme, notifications, profile privacy) */
 let dewSettings = {};
@@ -84,6 +90,8 @@ let lastPlantsSection = "plants";
 let currentPlantDetailId = null;
 let addFavouriteFromDetail = null;
 let suppressCommunityRoutePush = false;
+let suppressBotsRoutePush = false;
+let suppressSyncRoutePush = false;
 const LAST_VIEW_STORAGE_KEY = "dewLastView";
 const PERSISTED_VIEWS = new Set([
   "dashboard",
@@ -95,6 +103,10 @@ const PERSISTED_VIEWS = new Set([
   "myplants",
   "about",
   "community",
+  "bots",
+  "bots-plant",
+  "bots-desk",
+  "syncdata",
 ]);
 
 async function upsertUserDirectoryEntry(user) {
@@ -404,8 +416,48 @@ function bindCommunityPostMediaLightbox() {
   document.getElementById("communityFeed")?.addEventListener("click", onPostClick);
 }
 
+let botsPagesModulePromise = null;
+function loadBotsPagesModule(v) {
+  if (!botsPagesModulePromise) botsPagesModulePromise = import("./bots-pages.js");
+  botsPagesModulePromise
+    .then((m) => {
+      if ((v === "bots" || v === "bots-plant" || v === "bots-desk") && m.initBotsPage) m.initBotsPage();
+    })
+    .catch((err) => console.error("Bots pages", err));
+}
+
+let syncDataModulePromise = null;
+function loadSyncDataModule() {
+  if (!syncDataModulePromise) syncDataModulePromise = import("./sync-data-page.js");
+  syncDataModulePromise
+    .then((m) => {
+      if (m.initSyncDataPage) m.initSyncDataPage();
+    })
+    .catch((err) => console.error("Sync Data page", err));
+}
+
+function botsPathForView(v) {
+  if (v === "bots") return "/bots";
+  if (v === "bots-plant") return "/bots/plant-bot";
+  if (v === "bots-desk") return "/bots/desk-bot";
+  return null;
+}
+
 function showView(view) {
   const v = view;
+  // Reset scroll lock from modals/lightboxes so the page can scroll again after route changes.
+  try {
+    document.documentElement.style.removeProperty("overflow");
+    document.body.style.removeProperty("overflow");
+  } catch (_) {}
+
+  if (aboutPageMotionTeardown) {
+    try {
+      aboutPageMotionTeardown();
+    } catch (_) {}
+    aboutPageMotionTeardown = null;
+  }
+
   dashboardView.style.display = v === "dashboard" ? "block" : "none";
   profileView.style.display = v === "profile" ? "block" : "none";
   if (alertsView) alertsView.style.display = v === "alerts" ? "block" : "none";
@@ -422,10 +474,17 @@ function showView(view) {
   }
   if (aboutView) aboutView.style.display = v === "about" ? "block" : "none";
   if (communityView) communityView.style.display = v === "community" ? "block" : "none";
+  if (botsHubView) botsHubView.style.display = v === "bots" || v === "bots-plant" || v === "bots-desk" ? "block" : "none";
+  if (syncDataView) syncDataView.style.display = v === "syncdata" ? "block" : "none";
   document.body.classList.toggle("about-page", v === "about");
   document.body.classList.toggle("community-page", v === "community");
+  document.body.classList.toggle("bots-subpage", v === "bots-plant" || v === "bots-desk");
+  document.body.classList.toggle("syncdata-page", v === "syncdata");
   document.querySelectorAll(".nav-item").forEach((el) => {
-    el.classList.toggle("active", el.dataset.view === view);
+    const nv = el.dataset.view;
+    if (!nv) el.classList.remove("active");
+    else if (nv === "bots") el.classList.toggle("active", v === "bots" || v === "bots-plant" || v === "bots-desk");
+    else el.classList.toggle("active", nv === v);
   });
   if ((v === "profile" || v === "community") && currentProfileUser) refreshProfileStats(currentProfileUser.uid);
   if (v === "community") {
@@ -439,9 +498,76 @@ function showView(view) {
   if (v === "analytics") loadAnalyticsView();
   if (v === "plants") loadPlantsCatalog();
   if (v === "myplants") loadMyPlantsUsed();
-  if (v === "about") refreshAboutPlantTypesCount();
+  if (v === "about") {
+    refreshAboutPlantTypesCount();
+    requestAnimationFrame(() => {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      } catch (_) {}
+    });
+    import("./about-animations.js")
+      .then((m) => {
+        if (typeof m.mountAboutPage === "function") {
+          aboutPageMotionTeardown = m.mountAboutPage();
+        }
+      })
+      .catch((err) => console.error("About page motion:", err));
+  }
   if (v === "dashboard" && typeof window.refreshDashboardWeather === "function") window.refreshDashboardWeather();
+
+  const bp = botsPathForView(v);
+  if (!suppressBotsRoutePush && !suppressSyncRoutePush && typeof history !== "undefined" && history.pushState) {
+    if (bp) {
+      try {
+        history.pushState({ view: v }, "", bp);
+      } catch (_) {}
+    } else if (v === "syncdata") {
+      try {
+        history.pushState({ view: v }, "", "/sync-data");
+      } catch (_) {}
+    } else if (window.location.pathname.startsWith("/bots")) {
+      try {
+        history.replaceState({ view: v }, "", "/");
+      } catch (_) {}
+    } else if (window.location.pathname === "/sync-data") {
+      try {
+        history.replaceState({ view: v }, "", "/");
+      } catch (_) {}
+    }
+  }
+
+  if (v === "bots" || v === "bots-plant" || v === "bots-desk") loadBotsPagesModule(v);
+  if (v === "syncdata") loadSyncDataModule();
+
+  if (v === "syncdata") {
+    requestAnimationFrame(() => {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        document.querySelector("main.main")?.scrollTo?.(0, 0);
+      } catch (_) {}
+    });
+  }
+
+  if (v === "bots" || v === "bots-plant" || v === "bots-desk") {
+    const part = v === "bots-plant" ? "plant" : v === "bots-desk" ? "desk" : "hub";
+    setTimeout(() => scrollBotsSection(part), 90);
+  }
+
   saveLastView(v);
+}
+
+/** Scroll within unified Bots page (hero vs Plant vs Desk section). */
+function scrollBotsSection(part) {
+  if (typeof window === "undefined") return;
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const behavior = reduce ? "instant" : "smooth";
+  if (part === "plant") {
+    document.getElementById("bots-section-plant")?.scrollIntoView({ behavior, block: "start" });
+  } else if (part === "desk") {
+    document.getElementById("bots-section-desk")?.scrollIntoView({ behavior, block: "start" });
+  } else {
+    document.querySelector(".bots-hero")?.scrollIntoView({ behavior, block: "start" });
+  }
 }
 
 function refreshAboutPlantTypesCount() {
@@ -816,6 +942,31 @@ function renderRatings(ratings) {
     .join("");
 }
 
+/** Label + tone for plant detail sensor chip; uses Plant Bot `status` when present, else derives from readings. */
+function dewPlantHealthFromLive(live) {
+  if (!live) return { text: "—", tone: "unknown" };
+  const raw = live.status != null && String(live.status).trim();
+  if (raw) {
+    const lower = raw.toLowerCase();
+    let tone = "neutral";
+    if (/(healthy|good|great|ok|fine|optimal|comfy|stable)/i.test(lower)) tone = "good";
+    else if (/(critical|urgent|severe|emergency|fault)/i.test(lower)) tone = "alert";
+    else if (/(low|high|dry|wet|stress|warn|needs|check|moisture|temp|light)/i.test(lower)) tone = "warn";
+    return { text: raw, tone };
+  }
+  const m = live.moisture != null ? Number(live.moisture) : null;
+  const lux = live.lux != null ? Number(live.lux) : null;
+  const temp = live.temp != null ? Number(live.temp) : null;
+  if (m == null && lux == null && temp == null) return { text: "Waiting for sensor data", tone: "unknown" };
+  if (m != null && m < 32) return { text: "Needs water", tone: "warn" };
+  if (m != null && m > 82) return { text: "Soil very wet", tone: "warn" };
+  if (lux != null && lux < 320) return { text: "Low light", tone: "warn" };
+  if (lux != null && lux > 3400) return { text: "Strong light", tone: "warn" };
+  if (temp != null && temp < 14) return { text: "Quite cool", tone: "warn" };
+  if (temp != null && temp > 30) return { text: "Quite warm", tone: "warn" };
+  return { text: "Looking good", tone: "good" };
+}
+
 function loadPlantDetail(plantId) {
   const nameEl = document.getElementById("plantDetailName");
   const speciesEl = document.getElementById("plantDetailSpecies");
@@ -919,6 +1070,12 @@ function loadPlantDetail(plantId) {
               return;
             }
             const chips = [];
+            const health = dewPlantHealthFromLive(live);
+            chips.push(
+              `<div class="plant-detail-sensor-chip plant-detail-sensor-chip--health-${health.tone}"><span class="plant-detail-sensor-chip-label">Plant health</span><span class="plant-detail-sensor-chip-value">${escapeHtml(
+                health.text
+              )}</span></div>`
+            );
             if (live.moisture != null) {
               chips.push(
                 `<div class="plant-detail-sensor-chip"><span class="plant-detail-sensor-chip-label">Moisture</span><span class="plant-detail-sensor-chip-value">${escapeHtml(
@@ -938,13 +1095,6 @@ function loadPlantDetail(plantId) {
                 `<div class="plant-detail-sensor-chip"><span class="plant-detail-sensor-chip-label">Light</span><span class="plant-detail-sensor-chip-value">${escapeHtml(
                   String(live.lux)
                 )} lux</span></div>`
-              );
-            }
-            if (live.zone) {
-              chips.push(
-                `<div class="plant-detail-sensor-chip"><span class="plant-detail-sensor-chip-label">Zone</span><span class="plant-detail-sensor-chip-value">${escapeHtml(
-                  String(live.zone)
-                )}</span></div>`
               );
             }
             const metricsHtml = chips.length
@@ -968,9 +1118,38 @@ function loadPlantDetail(plantId) {
     });
 }
 
+/** Same as app-shell closeDrawer — single source for overflow + aria (Chrome mobile). */
+function closeMobileNavDrawer() {
+  try {
+    if (!isDrawerMode()) return;
+    closeDrawer();
+  } catch (_) {}
+}
+
+let navWired = false;
 function initNav() {
+  if (navWired) return;
+  navWired = true;
   document.querySelectorAll(".nav-item[data-view]").forEach((el) => {
-    el.addEventListener("click", () => showView(el.dataset.view));
+    el.addEventListener("click", () => {
+      const v = el.dataset.view;
+      if (v) showView(v);
+      closeMobileNavDrawer();
+    });
+  });
+  document.querySelectorAll("[data-bots-back]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const dest = btn.getAttribute("data-bots-back");
+      if (dest === "dashboard") showView("dashboard");
+      else if (dest === "bots") showView("bots");
+    });
+  });
+  document.querySelectorAll("[data-go-bot]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const dest = btn.getAttribute("data-go-bot");
+      if (dest === "plant-bot") showView("bots-plant");
+      else if (dest === "desk-bot") showView("bots-desk");
+    });
   });
   document.querySelectorAll(".about-nav-link, .about-nav-logo[data-view]").forEach((el) => {
     el.addEventListener("click", (e) => { e.preventDefault(); showView(el.dataset.view); });
@@ -982,7 +1161,9 @@ function initNav() {
       showView(a.dataset.view);
     }
   });
-  document.getElementById("aboutCtaDashboard")?.addEventListener("click", () => showView("dashboard"));
+  document.querySelectorAll(".js-about-cta-dashboard").forEach((btn) => {
+    btn.addEventListener("click", () => showView("dashboard"));
+  });
   initAlertsFilters();
   initAnalytics();
   updateAlertsBadge();
@@ -1731,6 +1912,28 @@ function initNav() {
     });
   });
   window.addEventListener("popstate", () => {
+    const botsV = viewFromBotsPath(window.location.pathname);
+    if (botsV) {
+      suppressBotsRoutePush = true;
+      showView(botsV);
+      suppressBotsRoutePush = false;
+      return;
+    }
+    if (window.location.pathname === "/sync-data") {
+      suppressSyncRoutePush = true;
+      showView("syncdata");
+      suppressSyncRoutePush = false;
+      return;
+    }
+    const pathOnly = String(window.location.pathname || "").replace(/\/$/, "") || "/";
+    if (pathOnly === "/") {
+      suppressBotsRoutePush = true;
+      suppressSyncRoutePush = true;
+      showView("dashboard");
+      suppressBotsRoutePush = false;
+      suppressSyncRoutePush = false;
+      return;
+    }
     const slug = parseCommunitySlugFromPath();
     if (window.location.pathname === "/community" || slug) {
       communitySelectedSlug = slug;
@@ -2014,6 +2217,15 @@ function parseCommunitySlugFromPath() {
   // Backward compatible slug route: /community/<slug>
   const legacy = path.match(/^\/community\/([a-z0-9-]+)$/i);
   if (legacy) return legacy[1].toLowerCase();
+  return null;
+}
+
+/** Map URL path to bots SPA view name (or null). */
+function viewFromBotsPath(pathname) {
+  const p = String(pathname || "").replace(/\/$/, "") || "/";
+  if (p === "/bots") return "bots";
+  if (p === "/bots/plant-bot") return "bots-plant";
+  if (p === "/bots/desk-bot") return "bots-desk";
   return null;
 }
 
@@ -4377,16 +4589,37 @@ function showViewIfDefined(view) {
   if (v === "settings" && settingsView) settingsView.style.display = "block";
 }
 
+/** Pick a human-readable place label from Nominatim address (mobile + desktop). */
+function nominatimPickCity(addr) {
+  if (!addr || typeof addr !== "object") return "";
+  return (
+    addr.city ||
+    addr.town ||
+    addr.village ||
+    addr.municipality ||
+    addr.city_district ||
+    addr.suburb ||
+    addr.neighbourhood ||
+    addr.quarter ||
+    addr.hamlet ||
+    addr.residential ||
+    addr.county ||
+    ""
+  );
+}
+
 /** Reverse geocode: coords -> city, state, country using OpenStreetMap Nominatim. */
 async function reverseGeocode(lat, lon) {
-  const url = `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&format=json`;
+  const url =
+    `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}` +
+    `&format=json&addressdetails=1&zoom=18`;
   const res = await fetch(url, { headers: { "Accept-Language": "en", "User-Agent": NOMINATIM_UA } });
   if (!res.ok) throw new Error("Geocoding failed");
   const data = await res.json();
   const addr = data.address || {};
   return {
-    city: addr.city || addr.town || addr.village || addr.municipality || addr.county || "",
-    state: addr.state || "",
+    city: nominatimPickCity(addr),
+    state: addr.state || addr.state_district || "",
     country: addr.country || "",
     latitude: lat,
     longitude: lon,
@@ -4436,7 +4669,11 @@ function updateLocationDisplay(loc) {
     return;
   }
   const parts = [loc.city, loc.state, loc.country].filter(Boolean);
-  display.textContent = parts.length ? parts.join(", ") : `${loc.latitude?.toFixed(2)}°, ${loc.longitude?.toFixed(2)}°`;
+  display.textContent = parts.length
+    ? parts.join(", ")
+    : loc.latitude != null && loc.longitude != null
+      ? `${Number(loc.latitude).toFixed(4)}°, ${Number(loc.longitude).toFixed(4)}°`
+      : "Not set";
   if (meta) meta.textContent = loc.last_updated ? "Updated " + new Date(loc.last_updated).toLocaleDateString() : "";
 }
 
@@ -4477,6 +4714,16 @@ function initLocationSettings() {
       showLocationMessage("Please sign in to save your location.", "error");
       return;
     }
+    if (typeof window.isSecureContext !== "undefined" && !window.isSecureContext) {
+      const h = window.location.hostname || "";
+      if (h !== "localhost" && h !== "127.0.0.1") {
+        showLocationMessage(
+          "Precise GPS location on phones requires HTTPS. Open the app with https:// or set your city manually below.",
+          "error"
+        );
+        return;
+      }
+    }
     showLocationMessage("Detecting your location…");
     if (!navigator.geolocation) {
       showLocationMessage("Your browser does not support location. Set location manually.", "error");
@@ -4504,9 +4751,10 @@ function initLocationSettings() {
       (err) => {
         if (err.code === 1) showLocationMessage("Location permission denied. You can set your location manually.", "error");
         else if (err.code === 2) showLocationMessage("Location unavailable. Try setting your location manually.", "error");
+        else if (err.code === 3) showLocationMessage("Location request timed out. Try again outdoors or set manually.", "error");
         else showLocationMessage("Could not detect location. Try manual entry.", "error");
       },
-      { timeout: 12000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
     );
   });
 
@@ -4841,8 +5089,10 @@ async function loadAnalyticsView(spinnerBtn) {
     }
     if (emptyEl) emptyEl.style.display = "none";
     const SENSOR_LABELS = ["Temperature", "Humidity", "Soil moisture", "Light"];
+    const analyticsImgFallback =
+      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%231a2e28' width='64' height='64'/%3E%3Ctext x='32' y='38' font-size='24' fill='%237ef2bf' text-anchor='middle'%3E🌱%3C/text%3E%3C/svg%3E";
     cardsEl.innerHTML = plants.map((p) => {
-      const img = p.image ? `/images/plants/${encodeURIComponent(p.image)}` : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%231a2e28' width='64' height='64'/%3E%3Ctext x='32' y='38' font-size='24' fill='%237ef2bf' text-anchor='middle'%3E🌱%3C/text%3E%3C/svg%3E";
+      const img = getPlantImageCandidates(p.image, p.id)[0] || analyticsImgFallback;
       return `
         <div class="analytics-card" data-plant-id="${escapeHtml(p.id)}" data-plant-name="${escapeHtml(p.name || p.id)}">
           <img class="analytics-card-image" src="${img}" alt="" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect fill=%22%231a2e28%22 width=%2264%22 height=%2264%22/%3E%3Ctext x=%2232%22 y=%2238%22 font-size=%2224%22 fill=%22%237ef2bf%22 text-anchor=%22middle%22%3E🌱%3C/text%3E%3C/svg%3E'">
@@ -5103,6 +5353,9 @@ async function loadAnalyticsDetail(plantId, plantName, hours) {
     }).join("");
     if (typeof window.Chart !== "undefined") {
       const yOpts = _analyticsYAxisOptions;
+      const isCompact =
+        typeof window !== "undefined" &&
+        (window.matchMedia("(max-width: 640px)").matches || (window.innerWidth || 0) < 640);
       chartConfigs.forEach((cfg, i) => {
         const ctx = document.getElementById(`analyticsChart${i}`)?.getContext("2d");
         if (!ctx) return;
@@ -5139,15 +5392,22 @@ async function loadAnalyticsDetail(plantId, plantName, hours) {
             },
             scales: {
               x: {
-                title: { display: true, text: agg.xTitle, color: "#8fa99f", font: { size: 11 } },
-                ticks: { color: "#8fa99f", font: { size: 10 }, maxRotation: 45 },
-                grid: { color: "rgba(126, 242, 191, 0.08)" },
+                title: { display: !isCompact, text: agg.xTitle, color: "#8fa99f", font: { size: 11 } },
+                ticks: {
+                  color: "#8fa99f",
+                  font: { size: isCompact ? 9 : 10 },
+                  maxRotation: isCompact ? 30 : 45,
+                  minRotation: isCompact ? 0 : 20,
+                  autoSkip: true,
+                  maxTicksLimit: isCompact ? 5 : 9,
+                },
+                grid: { color: isCompact ? "rgba(126, 242, 191, 0.05)" : "rgba(126, 242, 191, 0.08)" },
               },
               y: {
                 ...yScale,
-                title: { display: true, text: cfg.yLabel, color: "#8fa99f", font: { size: 11 } },
-                ticks: { color: "#8fa99f", font: { size: 10 } },
-                grid: { color: "rgba(126, 242, 191, 0.08)" },
+                title: { display: !isCompact, text: cfg.yLabel, color: "#8fa99f", font: { size: 11 } },
+                ticks: { color: "#8fa99f", font: { size: isCompact ? 9 : 10 }, maxTicksLimit: isCompact ? 5 : 8 },
+                grid: { color: isCompact ? "rgba(126, 242, 191, 0.05)" : "rgba(126, 242, 191, 0.08)" },
               },
             },
           },
@@ -5246,6 +5506,14 @@ function initProfileForm(user) {
   const actions = document.getElementById("profileActions");
   const btnEditPhoto = document.getElementById("btnEditPhoto");
   const photoInput = document.getElementById("photoInput");
+
+  if (window.__dewDemoMode) {
+    btnEdit?.style.setProperty("display", "none");
+    document.getElementById("btnEditProfileHeader")?.style.setProperty("display", "none");
+    btnEditPhoto?.style.setProperty("display", "none");
+    initFavouritePlants(user);
+    return;
+  }
 
   function setEditMode(editing) {
     nameInput.disabled = !editing;
@@ -5468,12 +5736,24 @@ async function resizeImage(file, maxSize = 400) {
   });
 }
 
+/* Wire sidebar nav as soon as this module runs (DOM is ready). Do not wait for Firebase —
+ * on slow mobile networks authReady can delay for seconds and nav would appear broken. */
+initNav();
+
 authReady.then((auth) => {
-  initNav();
   const initialSlug = parseCommunitySlugFromPath();
+  const botsInitial = viewFromBotsPath(window.location.pathname);
   // Always land on dashboard after refresh, even if user refreshed /community.
   // (Direct community links will still work when navigating normally.)
-  if (isReloadNavigation() && window.location.pathname.startsWith("/community")) {
+  if (botsInitial) {
+    suppressBotsRoutePush = true;
+    showView(botsInitial);
+    suppressBotsRoutePush = false;
+  } else if (window.location.pathname === "/sync-data") {
+    suppressSyncRoutePush = true;
+    showView("syncdata");
+    suppressSyncRoutePush = false;
+  } else if (isReloadNavigation() && window.location.pathname.startsWith("/community")) {
     try {
       history.replaceState({ view: "dashboard" }, "", "/");
     } catch (_) {}
@@ -5496,6 +5776,11 @@ authReady.then((auth) => {
       renderProfile(user);
       initProfileForm(user);
       refreshProfileStats(user.uid);
+    } else if (window.__dewDemoMode && window.__dewDemoUser) {
+      currentProfileUser = window.__dewDemoUser;
+      renderProfile(window.__dewDemoUser);
+      initProfileForm(window.__dewDemoUser);
+      refreshProfileStats(window.__dewDemoUser.uid);
     } else {
       currentProfileUser = null;
     }

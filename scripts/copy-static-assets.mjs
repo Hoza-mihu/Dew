@@ -11,6 +11,14 @@ const copies = [
     from: path.join(root, "public", "images"),
     to: path.join(root, "dist", "images"),
   },
+  {
+    from: path.join(root, "public", "about-scroll-frames"),
+    to: path.join(root, "dist", "about-scroll-frames"),
+  },
+  {
+    from: path.join(root, "public", "about-reference.mp4"),
+    to: path.join(root, "dist", "about-reference.mp4"),
+  },
 ];
 
 for (const { from, to } of copies) {

@@ -265,6 +265,13 @@ async function signInWithProvider(providerName, provider) {
 btnGoogle?.addEventListener("click", () => signInWithProvider("Google", new GoogleAuthProvider()));
 btnGitHub?.addEventListener("click", () => signInWithProvider("GitHub", new GithubAuthProvider()));
 
+document.getElementById("btnTryDemo")?.addEventListener("click", () => {
+  try {
+    sessionStorage.setItem("dewDemoMode", "1");
+  } catch (_) {}
+  window.location.href = "/?mode=demo";
+});
+
 // Petals
 function createPetals() {
   const layer = document.getElementById("petalLayer");

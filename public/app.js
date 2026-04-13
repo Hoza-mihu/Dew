@@ -24,6 +24,7 @@ let plantFleetExpanded = false;
 let plantFleetSummary = null;
 const PLANT_FLEET_PREVIEW = 5;
 let sensorChart = null;
+let botsPlantChartInstance = null;
 let plantFleetPollTimer = null;
 const PLANT_FLEET_POLL_MS = 20000;
 /** Dashboard activity list (from GET /api/users/:uid/activity-feed). */
@@ -332,6 +333,9 @@ async function loadDashboardWeather() {
     renderWeatherHero(loc, weather);
     maybeHideWeatherLocationPrompt();
     renderMetrics(typeof plants !== 'undefined' ? plants : []);
+    if (typeof plants !== 'undefined' && plants.length) {
+      renderDailySummary(plants).catch(() => {});
+    }
   } catch (e) {
     console.warn('Dashboard weather failed:', e.message);
     areaTodayAverages = null;
@@ -412,29 +416,49 @@ function initWeatherLocationPromptUI() {
     if (settingsNav) settingsNav.click();
   });
 
+  function nominatimPickCity(a) {
+    if (!a || typeof a !== "object") return "";
+    return (
+      a.city ||
+      a.town ||
+      a.village ||
+      a.municipality ||
+      a.city_district ||
+      a.suburb ||
+      a.neighbourhood ||
+      a.quarter ||
+      a.hamlet ||
+      a.residential ||
+      a.county ||
+      ""
+    );
+  }
+
   async function reverseGeocode(lat, lon) {
-    // Nominatim reverse geocoding for city/country labels.
     const ua = "dew-weather-system/1.0";
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&format=json&addressdetails=1&zoom=10`;
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&format=json&addressdetails=1&zoom=18`;
     const res = await fetch(url, { headers: { "User-Agent": ua } });
     if (!res.ok) throw new Error("Reverse geocode failed");
     const json = await res.json();
     const a = json?.address || {};
-    const city =
-      a.city ||
-      a.town ||
-      a.village ||
-      a.hamlet ||
-      a.municipality ||
-      "";
-    const state = a.state || "";
-    const country = a.country || "";
-    return { city, state, country };
+    return {
+      city: nominatimPickCity(a),
+      state: a.state || a.state_district || "",
+      country: a.country || "",
+    };
   }
 
   detectBtn.addEventListener("click", async () => {
     const uid = window.__dewUid;
     if (!uid) return;
+
+    if (typeof window.isSecureContext !== "undefined" && !window.isSecureContext) {
+      const h = window.location.hostname || "";
+      if (h !== "localhost" && h !== "127.0.0.1") {
+        setStatus("On phones, precise location needs HTTPS. Open the site with https:// or set your city in Settings.", "error");
+        return;
+      }
+    }
 
     disableModalButtons(true);
     setStatus("Requesting your location…", "info");
@@ -475,14 +499,13 @@ function initWeatherLocationPromptUI() {
         }
       },
       (err) => {
-        const msg =
-          err && err.code === 1
-            ? "Location permission denied. You can still search manually."
-            : "Could not access your location. Try again.";
+        let msg = "Could not access your location. Try again.";
+        if (err && err.code === 1) msg = "Location permission denied. You can still search manually.";
+        else if (err && err.code === 3) msg = "Location timed out. Try again with GPS on or set manually.";
         setStatus(msg, "error");
         disableModalButtons(false);
       },
-      { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
     );
   });
 
@@ -546,6 +569,41 @@ function valueInRangeStatus(val, min, max) {
   return 'bad';
 }
 
+/**
+ * Card quality class + short hint for dashboard metric tiles.
+ * Green = inside optimal, yellow = just outside (soft margin), red = far outside.
+ */
+function metricConditionQuality(val, min, max) {
+  if (val == null || min == null || max == null) {
+    return { status: 'warn', qClass: 'metric-card--q-warn', hint: 'Waiting for data…' };
+  }
+  const st = valueInRangeStatus(val, min, max);
+  const span = Math.max(1e-6, max - min);
+  const margin = span * 0.12;
+  let hint = 'Optimal conditions ✓';
+  if (st === 'optimal') {
+    return { status: st, qClass: 'metric-card--q-optimal', hint };
+  }
+  if (val < min) {
+    const gap = min - val;
+    if (gap > margin) hint = 'Too low — action needed';
+    else hint = 'Slightly low — monitor ⚠';
+  } else {
+    const gap = val - max;
+    if (gap > margin) hint = 'Too high — check environment';
+    else hint = 'Slightly high — monitor ⚠';
+  }
+  const qClass = st === 'warn' ? 'metric-card--q-warn' : 'metric-card--q-bad';
+  return { status: st, qClass, hint };
+}
+
+/** Garden health index 0–100 → quality buckets for card tint + hint. */
+function gardenHealthQuality(healthPct) {
+  if (healthPct >= 82) return { qClass: 'metric-card--q-optimal', hint: 'Optimal conditions ✓' };
+  if (healthPct >= 58) return { qClass: 'metric-card--q-warn', hint: 'Good — watch moisture on a few plants ⚠' };
+  return { qClass: 'metric-card--q-bad', hint: 'Several plants need care' };
+}
+
 function fleetAvgRange(plants, key) {
   if (!plants.length) return { min: null, max: null };
   let minSum = 0;
@@ -563,9 +621,10 @@ function fleetAvgRange(plants, key) {
   return { min: minSum / n, max: maxSum / n };
 }
 
-function metricBarRow(label, valueStr, unit, range, rawVal, min, max, status, rightTag = 'Fleet avg') {
-  const fillClass =
-    status === 'optimal' ? 'metric-bar-fill--optimal' : status === 'warn' ? 'metric-bar-fill--warn' : 'metric-bar-fill--bad';
+function metricBarRow(label, valueStr, unit, range, rawVal, min, max, rightTag = 'Fleet avg', hintOverride = null) {
+  const q = metricConditionQuality(rawVal, min, max);
+  const hint = hintOverride != null && String(hintOverride).trim() !== '' ? hintOverride : q.hint;
+  const qClass = hintOverride != null && rawVal == null ? 'metric-card--q-warn' : q.qClass;
   let pct = 50;
   if (rawVal != null && min != null && max != null) {
     const lo = min - (max - min) * 0.5;
@@ -575,15 +634,17 @@ function metricBarRow(label, valueStr, unit, range, rawVal, min, max, status, ri
   const zoneLeft = min != null && max != null ? 35 : 25;
   const zoneW = min != null && max != null ? 30 : 50;
   return `
-    <div class="metric-card">
+    <div class="metric-card ${qClass} metric-card--condition">
       <div class="metric-label"><span>${label}</span><span class="right">${rightTag}</span></div>
-      <div class="metric-value"><span>${valueStr}</span><span class="metric-unit">${unit}</span></div>
+      <div class="metric-value"><span class="metric-value-num">${valueStr}</span><span class="metric-unit">${unit}</span></div>
       <div class="metric-optimal">Optimal ${range}</div>
-      <div class="metric-bar-wrap">
+      <div class="metric-bar-wrap" aria-hidden="true">
+        <div class="metric-bar-track"></div>
         <div class="metric-bar-zone" style="left:${zoneLeft}%;width:${zoneW}%"></div>
-        <div class="metric-bar-fill ${fillClass}" style="width:${pct}%"></div>
+        <div class="metric-bar-fill" style="width:${pct}%"></div>
         <div class="metric-bar-dot" style="left:${pct}%"></div>
       </div>
+      <div class="metric-condition-hint">${escapeHtml(hint)}</div>
       <div class="metric-tag">DEW Warden</div>
     </div>`;
 }
@@ -594,7 +655,7 @@ function telemetryPlantsList(plants) {
 }
 
 /**
- * Top row: temp / humidity / light = **today’s averages for the user’s saved map area** (weather API), not sensors.
+ * Top row tiles: saved-area weather (not live sensors). Garden health: Plant Bot telemetry only.
  * Garden health: **average index from Plant Bot (telemetry) plants only**.
  */
 function renderMetrics(plants) {
@@ -613,9 +674,8 @@ function renderMetrics(plants) {
   const avgHum = a && a.avgHumidityPct != null ? Number(a.avgHumidityPct) : null;
   const avgLux = a && a.avgLuxApprox != null ? Number(a.avgLuxApprox) : null;
 
-  const st = valueInRangeStatus(avgTemp, o.temp.min, o.temp.max);
-  const sh = avgHum != null ? valueInRangeStatus(avgHum, o.humidity.min, o.humidity.max) : 'warn';
-  const sl = avgLux != null ? valueInRangeStatus(avgLux, o.lux.min, o.lux.max) : 'warn';
+  const hintNoArea =
+    window.__dewUid && !a ? 'Add a location in Settings to load area weather for this row.' : null;
 
   const cards = [
     metricBarRow(
@@ -626,8 +686,8 @@ function renderMetrics(plants) {
       avgTemp,
       o.temp.min,
       o.temp.max,
-      st,
-      'Area · today'
+      'Area · today',
+      avgTemp == null ? hintNoArea : null
     ),
     metricBarRow(
       'Air humidity',
@@ -637,8 +697,8 @@ function renderMetrics(plants) {
       avgHum,
       o.humidity.min,
       o.humidity.max,
-      sh,
-      'Area · today'
+      'Area · today',
+      avgHum == null ? hintNoArea : null
     ),
     metricBarRow(
       'Avg light',
@@ -648,8 +708,8 @@ function renderMetrics(plants) {
       avgLux,
       o.lux.min,
       o.lux.max,
-      sl,
-      'Area · today'
+      'Area · today',
+      avgLux == null ? hintNoArea : null
     ),
   ];
 
@@ -662,16 +722,18 @@ function renderMetrics(plants) {
   const nt = tp.length;
   if (nt === 0) {
     cards.push(`
-    <div class="metric-card">
+    <div class="metric-card metric-card--q-bad metric-card--condition metric-card--garden-health">
       <div class="metric-label"><span>Garden health</span><span class="right">Plant Bots</span></div>
-      <div class="metric-value"><span>—</span><span class="metric-unit">%</span></div>
+      <div class="metric-value"><span class="metric-value-num">—</span><span class="metric-unit">%</span></div>
       <div class="metric-optimal">Optimal ${moistRangeDefault} soil moisture (sensor plants)</div>
-      <div class="metric-bar-wrap">
+      <div class="metric-bar-wrap" aria-hidden="true">
+        <div class="metric-bar-track"></div>
         <div class="metric-bar-zone" style="left:35%;width:30%"></div>
-        <div class="metric-bar-fill metric-bar-fill--warn" style="width:50%"></div>
+        <div class="metric-bar-fill" style="width:50%"></div>
         <div class="metric-bar-dot" style="left:50%"></div>
       </div>
-      <div class="metric-delta negative"><i class="ri-robot-2-line"></i> No Plant Bot sensors linked yet</div>
+      <div class="metric-condition-hint">No Plant Bot sensors linked — open <strong>Bots</strong> to connect</div>
+      <div class="metric-delta negative"><i class="ri-robot-2-line"></i> Link a device to score garden health</div>
       <div class="metric-tag">DEW Warden</div>
     </div>`);
   } else {
@@ -679,25 +741,22 @@ function renderMetrics(plants) {
     const lowMoisture = tp.filter((p) => p.moisture < 45).length;
     const health = Math.round(100 - (lowMoisture / nt) * 22);
     const sm = valueInRangeStatus(avgMoist, mrMin, mrMax);
-    const healthStatus = health >= 75 ? 'optimal' : health >= 50 ? 'warn' : 'bad';
-    const healthFill =
-      healthStatus === 'optimal'
-        ? 'metric-bar-fill--optimal'
-        : healthStatus === 'warn'
-          ? 'metric-bar-fill--warn'
-          : 'metric-bar-fill--bad';
+    const gq = gardenHealthQuality(health);
     const hp = Math.max(0, Math.min(100, health));
+    const moistHint = sm === 'optimal' ? 'Soil moisture on target' : sm === 'warn' ? 'Soil moisture borderline' : 'Soil moisture needs attention';
     cards.push(`
-    <div class="metric-card">
+    <div class="metric-card ${gq.qClass} metric-card--condition metric-card--garden-health">
       <div class="metric-label"><span>Garden health</span><span class="right">Plant Bots</span></div>
-      <div class="metric-value"><span>${health}</span><span class="metric-unit">%</span></div>
+      <div class="metric-value"><span class="metric-value-num">${health}</span><span class="metric-unit">%</span></div>
       <div class="metric-optimal">Optimal ${moistRangeFleet} soil moisture (${nt} sensor plant${nt === 1 ? '' : 's'})</div>
-      <div class="metric-bar-wrap">
+      <div class="metric-bar-wrap" aria-hidden="true">
+        <div class="metric-bar-track"></div>
         <div class="metric-bar-zone" style="left:35%;width:30%"></div>
-        <div class="metric-bar-fill ${healthFill}" style="width:${hp}%"></div>
+        <div class="metric-bar-fill" style="width:${hp}%"></div>
         <div class="metric-bar-dot" style="left:${hp}%"></div>
       </div>
-      <div class="metric-delta ${sm === 'optimal' ? '' : 'negative'}"><i class="ri-arrow-${sm === 'optimal' ? 'up' : 'down'}-s-line"></i>moisture ${sm === 'optimal' ? 'on target' : 'check plants'}</div>
+      <div class="metric-condition-hint">${escapeHtml(gq.hint)} · ${escapeHtml(moistHint)}</div>
+      <div class="metric-delta ${sm === 'optimal' ? '' : 'negative'}"><i class="ri-plant-line"></i>${nt} sensor plant${nt === 1 ? '' : 's'} · ${avgMoist}% avg moisture</div>
       <div class="metric-tag">DEW Warden</div>
     </div>`);
   }
@@ -705,12 +764,41 @@ function renderMetrics(plants) {
   let hint = '';
   if (window.__dewUid && !a) {
     hint =
-      '<p class="metric-row-hint">Save a location in <strong>Settings</strong> to load <strong>today’s area averages</strong> (weather) for the top row. Garden health uses <strong>Plant Bot</strong> sensors only.</p>';
+      '<p class="dashboard-data-hint"><strong>Add a location</strong> in Settings to show weather in the row above. <strong>Garden health</strong> uses your Plant Bot plants only. The other tiles use forecast-style weather, not readings from your devices.</p>';
   } else if (window.__dewUid && a) {
     hint =
-      '<p class="metric-row-hint">Top row = your saved map area for <strong>today</strong> (weather). Light is approximated from sun energy. Garden health = <strong>Plant Bot</strong> plants only.</p>';
+      '<p class="dashboard-data-hint"><strong>Weather row:</strong> today’s snapshot for your saved area (temp, humidity, estimated light from sunlight). <strong>Garden health</strong> includes Plant Bot plants only. These values are area weather—not live sensor readings from your home.</p>';
   }
   row.innerHTML = cards.join('') + hint;
+}
+
+/** Fleet health for a single plant (Good / Warning / Critical). */
+function plantHealthLevel(p) {
+  const o = plantOptimal(p);
+  let worst = 'good';
+  const bump = (to) => {
+    if (to === 'critical') worst = 'critical';
+    else if (to === 'warning' && worst === 'good') worst = 'warning';
+  };
+  const m = Number(p.moisture);
+  const t = Number(p.temp);
+  const lx = Number(p.lux);
+  if (!Number.isNaN(m) && o.moisture) {
+    if (m < o.moisture.min || m > o.moisture.max) bump('warning');
+  }
+  if (!Number.isNaN(t) && o.temp) {
+    if (t > o.temp.max || t < o.temp.min) bump(t > o.temp.max ? 'critical' : 'warning');
+  }
+  if (!Number.isNaN(lx) && o.lux) {
+    if (lx < o.lux.min || lx > o.lux.max) bump('warning');
+  }
+  return worst;
+}
+
+function insightTrendLabel(level) {
+  if (level === 'critical') return '↓ Review sensors soon';
+  if (level === 'warning') return '→ Watch trends';
+  return '↑ Stable';
 }
 
 function computeSmartInsight(plants) {
@@ -786,12 +874,17 @@ function renderSmartInsight(plants) {
   const label =
     level === 'critical' ? 'Critical — needs attention' : level === 'warning' ? 'Warning — review' : 'Good';
   const icon = level === 'critical' ? 'ri-alarm-warning-fill' : level === 'warning' ? 'ri-alarm-warning-line' : 'ri-leaf-fill';
+  const trend = insightTrendLabel(level);
+  const trendIcon = level === 'critical' ? 'ri-arrow-down-line' : level === 'warning' ? 'ri-arrow-right-line' : 'ri-arrow-up-line';
   el.innerHTML = `
-    <div class="dew-insight-status ${cls}"><i class="${icon}"></i> Plant Health Status: ${label}</div>
+    <div class="dew-insight-top">
+      <div class="dew-insight-status ${cls}"><i class="${icon}"></i> ${label}</div>
+      <span class="dew-insight-trend"><i class="${trendIcon}"></i> ${trend}</span>
+    </div>
     <ul class="dew-insight-lines">${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`;
 }
 
-function renderDailySummary(plants) {
+async function renderDailySummary(plants) {
   const el = document.getElementById('dailySummaryBody');
   if (!el) return;
   if (!plants.length) {
@@ -799,84 +892,136 @@ function renderDailySummary(plants) {
     return;
   }
   const { level, lines } = computeSmartInsight(plants);
-  const happy = level === 'good';
+  const alertSnips = (activityFeed || [])
+    .filter((a) => a.kind === 'alert' || a.source === 'weather' || a.source === 'sensor')
+    .slice(0, 2);
+
+  let avgT = null;
+  let avgM = null;
+  const tps = plants.map((p) => p.temp).filter((v) => v != null && !Number.isNaN(Number(v)));
+  const mps = plants.map((p) => p.moisture).filter((v) => v != null && !Number.isNaN(Number(v)));
+  if (tps.length) avgT = tps.reduce((a, b) => a + Number(b), 0) / tps.length;
+  if (mps.length) avgM = mps.reduce((a, b) => a + Number(b), 0) / mps.length;
+
+  let avgH = null;
+  if (lastWeatherForTips && lastWeatherForTips.weather && lastWeatherForTips.weather.humidity != null) {
+    avgH = Number(lastWeatherForTips.weather.humidity);
+  } else if (areaTodayAverages && areaTodayAverages.avgHumidityPct != null) {
+    avgH = Number(areaTodayAverages.avgHumidityPct);
+  }
+
+  let telAvgM = null;
+  let telAvgT = null;
+  try {
+    const ids = plants.slice(0, 4).map((p) => p.id);
+    const results = await Promise.all(ids.map((id) => fetchTelemetryCached(id, chartRange)));
+    let sumM = 0;
+    let cM = 0;
+    let sumT = 0;
+    let cT = 0;
+    results.forEach((arr) => {
+      arr.forEach((r) => {
+        if (r.moisture != null) {
+          sumM += Number(r.moisture);
+          cM += 1;
+        }
+        if (r.temp != null) {
+          sumT += Number(r.temp);
+          cT += 1;
+        }
+      });
+    });
+    if (cM) telAvgM = sumM / cM;
+    if (cT) telAvgT = sumT / cT;
+  } catch (_) {}
+
+  const para =
+    level === 'good'
+      ? 'Your plants look healthy today with stable readings across the fleet.'
+      : level === 'warning'
+        ? 'Some readings are outside the comfort zone — check alerts and trends below.'
+        : 'Critical conditions detected on one or more plants — review immediately.';
+
   const recs = computeWaterRecommendations(plants);
   const recBlock =
     recs.length > 0
-      ? `<p class="dew-daily-rec" style="margin-top:10px"><strong>Recommendations</strong></p><ul class="dew-insight-lines">${recs
+      ? `<p class="dew-daily-rec">Recommendations</p><ul class="dew-insight-lines">${recs
           .slice(0, 2)
           .map((r) => `<li>${escapeHtml(r)}</li>`)
           .join('')}</ul>`
       : '';
-  el.innerHTML = `<p>${happy ? '✨ Your plants are doing well today.' : '⚠️ Check smart insights — some readings need attention.'}</p>
-    <p class="dew-muted" style="margin-top:8px">${lines.length ? escapeHtml(lines[0]) : ''}</p>${recBlock}`;
-}
 
-async function latestBatteryFromFleet(plants) {
-  const tp = plants.filter((p) => String(p.usage?.last_source || '') === 'telemetry');
-  if (!tp.length) return null;
-  for (const p of tp) {
-    try {
-      const arr = await fetchTelemetryCached(p.id, '24h');
-      for (let i = arr.length - 1; i >= 0; i--) {
-        const b = arr[i].battery;
-        if (b != null && !Number.isNaN(Number(b))) {
-          return { pct: Math.round(Number(b)), plant: p.name || p.id };
-        }
-      }
-    } catch (_) {}
-  }
-  return null;
-}
+  const alertBlock =
+    alertSnips.length > 0
+      ? `<p class="dew-daily-rec">Key alerts</p><ul class="dew-daily-alert-snips">${alertSnips
+          .map(
+            (a) =>
+              `<li><i class="${escapeHtml(a.icon || 'ri-notification-3-line')}"></i>` +
+              `<span>${escapeHtml(a.title || '')}</span></li>`
+          )
+          .join('')}</ul>`
+      : '';
 
-async function renderDeviceStatus(plants) {
-  const el = document.getElementById('deviceStatusBody');
-  if (!el) return;
-  const telemetryPlants = plants.filter((p) => String(p.usage?.last_source || '') === 'telemetry');
-  let lastMs = 0;
-  plants.forEach((p) => {
-    const t = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
-    if (t > lastMs) lastMs = t;
-  });
-  const online = lastMs && Date.now() - lastMs < ONLINE_MS;
-  let batteryHtml = '';
-  if (telemetryPlants.length) {
-    const bat = await latestBatteryFromFleet(plants);
-    if (bat) {
-      batteryHtml = `<p class="dew-muted" style="margin-top:8px">Battery: ~${bat.pct}% <span class="dew-battery-plant">(${escapeHtml(bat.plant)})</span></p>`;
-    } else {
-      batteryHtml =
-        '<p class="dew-muted" style="margin-top:8px">Battery: not reported — send <code>battery</code> (0–100) in telemetry to show.</p>';
-    }
-  }
+  const mDisplay = telAvgM != null ? telAvgM.toFixed(1) : avgM != null ? avgM.toFixed(1) : '—';
+  const tDisplay = telAvgT != null ? telAvgT.toFixed(1) : avgT != null ? avgT.toFixed(1) : '—';
+  const hDisplay = avgH != null ? String(Math.round(avgH)) : '—';
+
   el.innerHTML = `
-    <div class="dew-device-row">
-      <span class="dew-device-name">ESP32 Sensor Hub</span>
-      <span class="dew-device-pill ${online ? 'dew-device-pill--on' : 'dew-device-pill--off'}">${online ? '🟢 Online' : '🔴 Offline / idle'}</span>
+    <p class="dew-daily-lead">${escapeHtml(para)}</p>
+    <p class="dew-muted dew-daily-secondary">${lines.length ? escapeHtml(lines[0]) : ''}</p>
+    <div class="dew-daily-metrics">
+      <div class="dew-daily-metric"><span class="dew-daily-metric-label">🌡 Avg temp</span><strong>${tDisplay}${tDisplay !== '—' ? '°C' : ''}</strong><span class="dew-daily-metric-hint">fleet · ${chartRangeLabel(chartRange)}</span></div>
+      <div class="dew-daily-metric"><span class="dew-daily-metric-label">💧 Avg moisture</span><strong>${mDisplay}${mDisplay !== '—' ? '%' : ''}</strong><span class="dew-daily-metric-hint">sensors</span></div>
+      <div class="dew-daily-metric"><span class="dew-daily-metric-label">💨 Humidity</span><strong>${hDisplay}${hDisplay !== '—' ? '%' : ''}</strong><span class="dew-daily-metric-hint">area weather</span></div>
     </div>
-    <p class="dew-muted">Last sensor sync: ${lastMs ? formatRelativeTime(new Date(lastMs).toISOString()) : '—'}</p>
-    ${batteryHtml}`;
-  const chip = document.getElementById('dashboardLiveChip');
-  const dot = document.getElementById('dashboardLiveDot');
-  if (chip) chip.classList.toggle('offline', !online);
-  if (dot && !online) dot.classList.remove('chip-dot--pulse');
-  else if (dot && online) dot.classList.add('chip-dot--pulse');
+    ${alertBlock}
+    ${recBlock}`;
+}
+
+function alertSeverityClass(a) {
+  if (a.kind === 'telemetry' || String(a.source || '') === 'telemetry') return 'dew-alert-item--info';
+  const sev = String(a.severity || '').toLowerCase();
+  if (sev.includes('crit') || sev === 'high' || sev === 'severe') return 'dew-alert-item--crit';
+  if (sev.includes('warn') || sev === 'medium') return 'dew-alert-item--warn';
+  if (a.source === 'weather') return 'dew-alert-item--warn';
+  return 'dew-alert-item--info';
+}
+
+function alertStatusLabel(a) {
+  if (a.kind === 'telemetry') return 'Logged';
+  const st = String(a.status || '').toLowerCase();
+  if (st === 'resolved' || a.read) return 'Resolved';
+  return 'Active';
 }
 
 function renderAlertsPreview() {
   const ul = document.getElementById('alertsPreviewList');
   if (!ul) return;
-  const alerts = (activityFeed || []).filter(
-    (a) => a.kind === 'alert' || a.source === 'weather' || a.source === 'sensor'
-  );
+  const sorted = [...(activityFeed || [])].sort((a, b) => {
+    const ta = new Date(a.at || 0).getTime();
+    const tb = new Date(b.at || 0).getTime();
+    return tb - ta;
+  });
+  const alerts = sorted.filter((a) => a && (a.title || a.desc));
   if (!alerts.length) {
-    ul.innerHTML = '<li class="dew-muted">No recent alerts.</li>';
+    ul.innerHTML = '<li class="dew-alerts-empty dew-muted">No alerts yet. Weather, sensor, and device activity will appear here.</li>';
     return;
   }
-  ul.innerHTML = alerts.slice(0, 3).map((a) => {
+  ul.innerHTML = alerts.slice(0, 14).map((a) => {
     const t = escapeHtml(a.title || 'Alert');
-    const d = escapeHtml((a.desc || '').slice(0, 80));
-    return `<li class="dew-alerts-preview-item" data-nav-alerts="1" role="button" tabindex="0"><i class="ri-notification-3-line"></i><div><strong>${t}</strong>${d}</div></li>`;
+    const d = escapeHtml((a.desc || '').slice(0, 96));
+    const time = a.at ? formatRelativeTime(a.at) : escapeHtml(a.time || '');
+    const sev = alertSeverityClass(a);
+    const badge = escapeHtml(alertStatusLabel(a));
+    const ic = escapeHtml(a.icon || 'ri-notification-3-line');
+    return `<li class="dew-alerts-preview-item dew-alert-item ${sev}" data-nav-alerts="1" role="button" tabindex="0">
+      <i class="${ic}"></i>
+      <div class="dew-alert-item-body">
+        <div class="dew-alert-item-title-row"><strong>${t}</strong><span class="dew-alert-badge">${badge}</span></div>
+        <span class="dew-alert-item-desc">${d}</span>
+        <span class="dew-alert-item-time">${escapeHtml(time)}</span>
+      </div>
+    </li>`;
   });
   ul.querySelectorAll('[data-nav-alerts]').forEach((node) => {
     const go = () => document.querySelector('.nav-item[data-view="alerts"]')?.click();
@@ -900,6 +1045,8 @@ async function renderUsageStats(plants) {
   let total = 0;
   let sumM = 0;
   let countM = 0;
+  let sumT = 0;
+  let countT = 0;
   let firstHalf = [];
   let secondHalf = [];
   try {
@@ -911,6 +1058,10 @@ async function renderUsageStats(plants) {
           sumM += Number(r.moisture);
           countM += 1;
         }
+        if (r.temp != null) {
+          sumT += Number(r.temp);
+          countT += 1;
+        }
       });
     });
     const merged = results.flat().sort((a, b) => new Date(a.at) - new Date(b.at));
@@ -919,6 +1070,7 @@ async function renderUsageStats(plants) {
     secondHalf = merged.slice(mid);
   } catch (_) {}
   const avgM = countM ? (sumM / countM).toFixed(1) : '—';
+  const avgT = countT ? (sumT / countT).toFixed(1) : '—';
   const mFirst =
     firstHalf.length && firstHalf.some((r) => r.moisture != null)
       ? firstHalf
@@ -944,23 +1096,58 @@ async function renderUsageStats(plants) {
         ? `<span class="dew-trend dew-trend--down">↓ vs earlier in ${spanHint}</span>`
         : '<span class="dew-trend">→ steady</span>';
   }
+  const tFirst =
+    firstHalf.length && firstHalf.some((r) => r.temp != null)
+      ? firstHalf.filter((r) => r.temp != null).reduce((s, r) => s + Number(r.temp), 0) /
+        firstHalf.filter((r) => r.temp != null).length
+      : null;
+  const tSecond =
+    secondHalf.length && secondHalf.some((r) => r.temp != null)
+      ? secondHalf.filter((r) => r.temp != null).reduce((s, r) => s + Number(r.temp), 0) /
+        secondHalf.filter((r) => r.temp != null).length
+      : null;
+  let trendT = '';
+  if (tFirst != null && tSecond != null) {
+    const up = tSecond > tFirst + 0.5;
+    const down = tSecond < tFirst - 0.5;
+    trendT = up ? '<span class="dew-trend dew-trend--up">↑</span>' : down ? '<span class="dew-trend dew-trend--down">↓</span>' : '<span class="dew-trend">→</span>';
+  }
+  let hum = '—';
+  if (lastWeatherForTips && lastWeatherForTips.weather && lastWeatherForTips.weather.humidity != null) {
+    hum = String(Math.round(Number(lastWeatherForTips.weather.humidity)));
+  } else if (areaTodayAverages && areaTodayAverages.avgHumidityPct != null) {
+    hum = String(Math.round(Number(areaTodayAverages.avgHumidityPct)));
+  }
   const rlab = chartRangeLabel(range);
+  const moistPct = avgM !== '—' ? Math.min(100, Math.max(0, Number(avgM))) : 0;
+  const tempPct = avgT !== '—' ? Math.min(100, Math.max(0, ((Number(avgT) - 10) / 30) * 100)) : 0;
   el.innerHTML = `
-    <div class="dew-stat-grid">
-      <div class="dew-stat-pill"><span>Readings (${rlab})</span><strong class="dew-count-up">${total}</strong></div>
-      <div class="dew-stat-pill"><span>Avg moisture (${rlab})</span><strong>${avgM}${avgM !== '—' ? '%' : ''}</strong>${trend}</div>
+    <div class="dew-activity-grid">
+      <div class="dew-stat-pill dew-stat-pill--wide"><span>Readings <span class="dew-stat-range">(${rlab})</span></span><strong class="dew-count-up">${total}</strong></div>
+      <div class="dew-stat-pill dew-stat-pill--wide"><span>Avg moisture</span><strong>${avgM}${avgM !== '—' ? '%' : ''}</strong>${trend}</div>
+      <div class="dew-stat-pill dew-stat-pill--wide"><span>Avg temp</span><strong>${avgT}${avgT !== '—' ? '°C' : ''}</strong>${trendT}</div>
+      <div class="dew-stat-pill dew-stat-pill--wide"><span>Area humidity</span><strong>${hum}${hum !== '—' ? '%' : ''}</strong><span class="dew-trend dew-trend--dim">outdoor</span></div>
+    </div>
+    <div class="dew-activity-bars" aria-hidden="true">
+      <div class="dew-mini-bar"><span>Moisture</span><div class="dew-mini-bar-track"><div class="dew-mini-bar-fill dew-mini-bar-fill--moist" style="width:${moistPct}%"></div></div></div>
+      <div class="dew-mini-bar"><span>Temp</span><div class="dew-mini-bar-track"><div class="dew-mini-bar-fill dew-mini-bar-fill--temp" style="width:${tempPct}%"></div></div></div>
     </div>`;
 }
 
 function updateLiveChip(plants) {
   const label = document.getElementById('lastSyncLabel');
-  if (!label) return;
   let lastMs = 0;
   plants.forEach((p) => {
     const t = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
     if (t > lastMs) lastMs = t;
   });
-  label.textContent = lastMs ? formatRelativeTime(new Date(lastMs).toISOString()) : '—';
+  if (label) label.textContent = lastMs ? formatRelativeTime(new Date(lastMs).toISOString()) : '—';
+  const online = lastMs && Date.now() - lastMs < ONLINE_MS;
+  const chip = document.getElementById('dashboardLiveChip');
+  const dot = document.getElementById('dashboardLiveDot');
+  if (chip) chip.classList.toggle('offline', !online);
+  if (dot && !online) dot.classList.remove('chip-dot--pulse');
+  else if (dot && online) dot.classList.add('chip-dot--pulse');
 }
 
 function applyWeatherPlantTips(loc, weather, plants) {
@@ -994,8 +1181,7 @@ function applyWeatherPlantTips(loc, weather, plants) {
 
 async function refreshDashboardPanels(plants) {
   renderSmartInsight(plants);
-  renderDailySummary(plants);
-  await renderDeviceStatus(plants);
+  await renderDailySummary(plants);
   renderAlertsPreview();
   updateLiveChip(plants);
   renderUsageStats(plants).catch(() => {});
@@ -1153,14 +1339,20 @@ function minMaxIndices(arr) {
   return { minIdx: minI, maxIdx: maxI };
 }
 
-async function buildChart(plants, metricKey = 'moisture') {
-  const canvas = document.getElementById('sensorChart');
+async function buildChart(plants, metricKey = 'moisture', chartOpts = {}) {
+  const canvasId = chartOpts.canvasId || 'sensorChart';
+  const rangeOverride = chartOpts.rangeOverride;
+  const isBotsCanvas = canvasId === 'botsPlantChartCanvas';
+  const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  if (sensorChart) sensorChart.destroy();
+  if (isBotsCanvas) {
+    if (botsPlantChartInstance) botsPlantChartInstance.destroy();
+  } else if (sensorChart) sensorChart.destroy();
 
-  const range = chartRange;
-  const plantList = (plants || []).slice(0, 4);
+  const range = rangeOverride != null ? rangeOverride : chartRange;
+  const maxPlants = chartOpts.maxPlants != null ? chartOpts.maxPlants : 4;
+  const plantList = (plants || []).slice(0, maxPlants);
   let labels = [];
   let datasets = [];
   /** Mid-timestamp per bucket for rich tooltips (real data only). */
@@ -1218,6 +1410,18 @@ async function buildChart(plants, metricKey = 'moisture') {
   const yLabel =
     metricKey === 'temperature' ? '°C' : metricKey === 'light' ? 'lux' : '%';
 
+  const isNarrow =
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
+  const tickFont = isNarrow ? 9 : 11;
+  const legendSize = isNarrow ? 9 : 11;
+  if (isNarrow) {
+    datasets = datasets.map((ds) => ({
+      ...ds,
+      borderWidth: 2.6,
+      pointHoverRadius: Math.max(7, Number(ds.pointHoverRadius || 0)),
+    }));
+  }
+
   const fmtTooltipTitle = (dataIndex) => {
     if (bucketMidMs.length && bucketMidMs[dataIndex] != null) {
       return new Date(bucketMidMs[dataIndex]).toLocaleString([], {
@@ -1230,7 +1434,7 @@ async function buildChart(plants, metricKey = 'moisture') {
     return labels[dataIndex] != null ? String(labels[dataIndex]) : '';
   };
 
-  sensorChart = new Chart(ctx, {
+  const chartBuilt = new Chart(ctx, {
     type: 'line',
     data: { labels, datasets },
     options: {
@@ -1242,9 +1446,20 @@ async function buildChart(plants, metricKey = 'moisture') {
         active: { animation: { duration: 450 } },
       },
       maintainAspectRatio: false,
+      layout: {
+        padding: {
+          top: isNarrow ? 4 : 6,
+          right: isNarrow ? 2 : 4,
+          bottom: isNarrow ? 2 : 4,
+          left: isNarrow ? 0 : 2,
+        },
+      },
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: true, labels: { boxWidth: 10, color: '#8fa99f', font: { size: 11 } } },
+        legend: {
+          display: true,
+          labels: { boxWidth: isNarrow ? 8 : 10, color: '#8fa99f', font: { size: legendSize } },
+        },
         tooltip: {
           callbacks: {
             label(ctx) {
@@ -1262,17 +1477,63 @@ async function buildChart(plants, metricKey = 'moisture') {
       },
       scales: {
         x: {
-          ticks: { color: '#8fa99f', font: { size: 11 }, maxRotation: 0 },
+          ticks: {
+            color: '#8fa99f',
+            font: { size: tickFont },
+            maxRotation: isNarrow ? 40 : 0,
+            minRotation: isNarrow ? 25 : 0,
+            autoSkip: true,
+            maxTicksLimit: isNarrow ? 6 : 12,
+          },
           grid: { color: 'rgba(126, 242, 191, 0.12)' },
-          title: { display: true, text: 'Time', color: '#6d887a', font: { size: 10 } },
+          title: { display: !isNarrow, text: 'Time', color: '#6d887a', font: { size: 10 } },
         },
         y: {
-          ticks: { color: '#8fa99f', font: { size: 11 } },
+          position: 'left',
+          grace: '6%',
+          ticks: {
+            color: '#8fa99f',
+            font: { size: tickFont, lineHeight: 1.1 },
+            padding: isNarrow ? 4 : 8,
+            crossAlign: 'center',
+            mirror: false,
+            maxTicksLimit: isNarrow ? 6 : 12,
+          },
           grid: { color: 'rgba(126, 242, 191, 0.12)' },
-          title: { display: true, text: yLabel, color: '#6d887a', font: { size: 10 } },
+          border: { display: false },
+          title: { display: true, text: yLabel, color: '#6d887a', font: { size: isNarrow ? 9 : 10 } },
         },
       },
     },
+  });
+  if (isBotsCanvas) botsPlantChartInstance = chartBuilt;
+  else sensorChart = chartBuilt;
+}
+
+let chartResizeObserver = null;
+/** Keep Chart.js in sync when the chart container width changes (rotation, split view, drawer). */
+function initChartResizeHandling() {
+  if (typeof ResizeObserver === 'undefined' || chartResizeObserver) return;
+  const onResize = () => {
+    try {
+      sensorChart?.resize();
+      botsPlantChartInstance?.resize();
+    } catch (_) {}
+  };
+  chartResizeObserver = new ResizeObserver(onResize);
+  const w1 = document.getElementById('sensorChartWrap');
+  const w2 = document.getElementById('plantBotChartWrap');
+  if (w1) chartResizeObserver.observe(w1);
+  if (w2) chartResizeObserver.observe(w2);
+  window.addEventListener('orientationchange', onResize, { passive: true });
+}
+
+/** Used by Bots → Plant Bot page (lazy-loaded module). */
+async function dewBuildBotsPlantChart({ plants: plantList, metricKey, range }) {
+  await buildChart(plantList || [], metricKey || 'moisture', {
+    canvasId: 'botsPlantChartCanvas',
+    rangeOverride: range || '24h',
+    maxPlants: 1,
   });
 }
 
@@ -1422,7 +1683,7 @@ function renderPlantTable(plants) {
     btn.setAttribute('aria-expanded', plantFleetExpanded ? 'true' : 'false');
   }
   if (!plants.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="plant-fleet-empty">No plants here yet. Open <strong>How to connect your plant sensor</strong> above, paste your key into your bot once, or save <strong>Desk Bot</strong> below while you’re signed in.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="plant-fleet-empty">No plants here yet. Open <strong>How to connect your plant sensor</strong> above, paste your key into your bot once, or save <strong>Desk Bot</strong> below while you’re signed in.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(p => {
@@ -1433,6 +1694,9 @@ function renderPlantTable(plants) {
     const last = p.usage?.last_used_at ? formatRelativeTime(p.usage.last_used_at) : formatRelativeTime(p.updatedAt);
     const badge = sourceBadge(p.usage);
     const syncLine = p.updatedAt ? `<span class="fleet-sync">${formatRelativeTime(p.updatedAt)} reading</span>` : '';
+    const hl = plantHealthLevel(p);
+    const healthClass = hl === 'critical' ? 'plant-health plant-health--bad' : hl === 'warning' ? 'plant-health plant-health--warn' : 'plant-health plant-health--good';
+    const healthLabel = hl === 'critical' ? 'Critical' : hl === 'warning' ? 'Warning' : 'Healthy';
     return `
     <tr class="plant-row" data-id="${p.id}">
       <td>
@@ -1444,6 +1708,7 @@ function renderPlantTable(plants) {
           </div>
         </div>
       </td>
+      <td><span class="${healthClass}">${healthLabel}</span></td>
       <td><span class="status-pill ${/low|dry/i.test(p.status || '') ? 'bad' : ''}"><span style="width:7px;height:7px;border-radius:999px;background:${/low|dry/i.test(p.status || '') ? '#ff6d7d' : '#47d58f'};"></span>${p.status || '—'}</span></td>
       <td><div class="bar-track"><div class="bar-fill ${(p.moisture || 0) < 45 ? 'low' : ''}" style="width:${Math.min(100, p.moisture || 0)}%;"></div></div></td>
       <td>${(p.temp != null ? p.temp : '—').toString().replace(/^([\d.]+)$/, '$1°C')}</td>
@@ -1452,39 +1717,22 @@ function renderPlantTable(plants) {
         <div class="fleet-activity-main">${last} ${badge}</div>
         ${syncLine ? `<div class="fleet-activity-sub">${syncLine}</div>` : ''}
       </td>
+      <td><button type="button" class="btn btn-ghost btn-sm btn-plant-view" data-plant-id="${escapeHtml(p.id)}">View</button></td>
     </tr>
   `;
   }).join('');
 }
 
-function renderActivity(list) {
-  const ul = document.getElementById('activityList');
-  if (!ul) return;
-  if (!list || !list.length) {
-    ul.innerHTML = `<li class="activity-item activity-empty">
-      <div class="activity-icon"><i class="ri-inbox-line"></i></div>
-      <div class="activity-text"><strong>No recent activity</strong><span>Weather alerts, sensor alerts, and bot syncs will appear here.</span></div>
-      <div class="activity-time"></div>
-    </li>`;
-    return;
-  }
-  ul.innerHTML = list.map((a) => {
-    const time = a.at ? formatRelativeTime(a.at) : (a.time || '');
-    const title = escapeHtml(a.title || '—');
-    const desc = escapeHtml(a.desc || '');
-    const icon = a.icon || 'ri-circle-line';
-    return `
-    <li class="activity-item">
-      <div class="activity-icon"><i class="${icon}"></i></div>
-      <div class="activity-text"><strong>${title}</strong><span>${desc}</span></div>
-      <div class="activity-time">${escapeHtml(time)}</div>
-    </li>
-  `;
-  }).join('');
-}
-
-function renderActivityFiltered() {
-  renderActivity(activityFeed);
+function initPlantFleetChartLink() {
+  const tbody = document.getElementById('plantTableBody');
+  if (!tbody || tbody.dataset.chartLinkWired) return;
+  tbody.dataset.chartLinkWired = '1';
+  tbody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-plant-view');
+    if (!btn) return;
+    e.preventDefault();
+    document.getElementById('sensorChartWrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
 }
 
 /** Derive weather type from plant sensor data (temp °C, moisture %, lux) for dashboard animation. */
@@ -1543,86 +1791,92 @@ function populateWeatherParticles(weather) {
 }
 
 function updateDeskbotWeather(plants, focusPlantId) {
-  const preview = document.getElementById('deskbotPreview');
-  if (!preview) return;
-  const plant = (plants || []).find(p => p.id === focusPlantId) || (plants || [])[0];
-  const weather = getWeatherFromPlant(plant);
-  preview.setAttribute('data-weather', weather);
-  populateWeatherParticles(weather);
+  // Weather strip removed from Desk Bot preview; plant data still drives theme/sync elsewhere.
 }
 
 function applyDeskbotTheme(theme, el) {
   const preview = document.getElementById('deskbotPreview');
   if (!preview) return;
-  if (theme === 'mint') preview.style.background = 'radial-gradient(circle at 10% 0%, #fff 0, #ddfff3 45%, #bff5ff 100%)';
-  else if (theme === 'sakura') preview.style.background = 'radial-gradient(circle at 10% 0%, #fff0f7 0, #ffd6f1 40%, #ffc0da 100%)';
-  else if (theme === 'midnight') preview.style.background = 'radial-gradient(circle at 10% 0%, #131933 0, #28305b 45%, #3ac6ff 100%)';
-  const meta = document.getElementById('deskbotMeta');
-  if (meta) meta.textContent = theme === 'mint' ? 'Anime theme · Soft mint glow' : theme === 'sakura' ? 'Sakura bloom · Pink aura' : 'Midnight nebula · Cyan pulse';
+  preview.dataset.deskTheme = theme || 'mint';
+  preview.style.background = '';
 }
 
-function initDeskbot(plants, config) {
-  const focusSelect = document.getElementById('deskbotFocus');
-  const lineInput = document.getElementById('deskbotLineInput');
-  const lineEl = document.getElementById('deskbotLine');
-  const statusEl = document.getElementById('deskbotStatus');
-  const themeSwatches = document.getElementById('themeSwatches');
-  if (!focusSelect) return;
+function updateDeskbotHero(plants, config) {
+  const text = document.getElementById('deskbotLivePillText');
+  const pill = document.getElementById('deskbotLivePill');
+  const dot = document.getElementById('deskbotLiveDot');
+  const sync = document.getElementById('deskbotSyncLine');
+  let lastMs = 0;
+  (plants || []).forEach((p) => {
+    const t = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+    if (t > lastMs) lastMs = t;
+  });
+  const cfgMs = config?.updatedAt ? new Date(config.updatedAt).getTime() : 0;
+  const best = Math.max(lastMs, cfgMs);
+  const online = lastMs && Date.now() - lastMs < ONLINE_MS;
+  if (text) text.textContent = online ? '🟢 Active' : '🔴 Offline';
+  if (pill) pill.classList.toggle('deskbot-live-pill--on', online);
+  if (dot) dot.classList.toggle('deskbot-live-dot--pulse', online);
+  if (sync) {
+    sync.textContent = best
+      ? `Updated ${formatRelativeTime(new Date(best).toISOString())} · ${online ? 'sensors live' : 'sensors idle'}`
+      : 'No sync yet — connect a Plant Bot.';
+  }
+}
+
+/** Apply server deskbot config to the preview card (weather, theme) and hero status — no configure UI. */
+function syncDeskbotFromConfig(plants, config) {
   if (!plants || !plants.length) {
-    focusSelect.innerHTML = '<option value="">No plants in fleet yet</option>';
-    if (lineEl) lineEl.textContent = '—';
-    if (lineInput) lineInput.value = '';
     updateDeskbotWeather([], null);
+    updateDeskbotHero([], config);
     return;
   }
-  focusSelect.innerHTML = (plants || []).map(p => `<option value="${p.id}" ${(config && config.plantId === p.id) ? 'selected' : ''}>${p.name || p.id}</option>`).join('');
-  updateDeskbotWeather(plants, config && config.plantId ? config.plantId : (plants && plants[0] && plants[0].id));
-  if (config) {
-    lineEl.textContent = config.line || '—';
-    lineInput.value = config.line || '';
-    themeSwatches.querySelectorAll('.theme-swatch').forEach(s => { s.classList.toggle('active', s.dataset.theme === (config.theme || 'mint')); });
-    applyDeskbotTheme(config.theme || 'mint');
-  }
-  const markDirty = () => { statusEl.textContent = 'Unsaved changes'; };
-  focusSelect.addEventListener('change', () => {
-    const p = plants.find(x => x.id === focusSelect.value);
-    if (p) {
-      lineEl.textContent = `${(p.name || p.id).split(' ')[0]}: ${p.moisture}% · ${p.status}`;
-      lineInput.value = lineEl.textContent;
-      updateDeskbotWeather(plants, focusSelect.value);
-      markDirty();
+  const focusId = config && config.plantId ? config.plantId : (plants[0] && plants[0].id);
+  updateDeskbotWeather(plants, focusId);
+  if (config) applyDeskbotTheme(config.theme || 'mint');
+  updateDeskbotHero(plants, config);
+}
+
+/** Click / keyboard: short “delight” animation on the Desk Bot preview (respects reduced motion). */
+function wireDeskbotPreviewInteractions() {
+  const preview = document.getElementById('deskbotPreview');
+  const eyes = document.getElementById('deskbotEyes');
+  const hint = document.getElementById('deskbotPreviewHint');
+  if (!preview || preview.dataset.interactiveWired === '1') return;
+  preview.dataset.interactiveWired = '1';
+
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const trigger = () => {
+    if (reduceMotion()) {
+      preview.classList.add('deskbot-preview-card--delight');
+      setTimeout(() => preview.classList.remove('deskbot-preview-card--delight'), 180);
+      return;
     }
+    preview.classList.remove('deskbot-preview-card--delight');
+    void preview.offsetWidth;
+    preview.classList.add('deskbot-preview-card--delight');
+    if (eyes) {
+      eyes.classList.remove('deskbot-eyes--delight');
+      void eyes.offsetWidth;
+      eyes.classList.add('deskbot-eyes--delight');
+      setTimeout(() => eyes.classList.remove('deskbot-eyes--delight'), 850);
+    }
+    setTimeout(() => preview.classList.remove('deskbot-preview-card--delight'), 850);
+    if (hint && !hint.dataset.dimmed) {
+      hint.dataset.dimmed = '1';
+      hint.style.opacity = '0.45';
+    }
+  };
+
+  preview.addEventListener('click', (e) => {
+    if (e.button !== 0) return;
+    trigger();
   });
-  lineInput.addEventListener('input', () => { lineEl.textContent = lineInput.value || 'Awaiting status…'; markDirty(); });
-  themeSwatches.addEventListener('click', e => {
-    const s = e.target.closest('.theme-swatch');
-    if (!s) return;
-    themeSwatches.querySelectorAll('.theme-swatch').forEach(x => x.classList.remove('active'));
-    s.classList.add('active');
-    applyDeskbotTheme(s.dataset.theme);
-    markDirty();
-  });
-  document.getElementById('btnSaveDeskbot').addEventListener('click', async () => {
-    const theme = themeSwatches.querySelector('.theme-swatch.active');
-    const body = {
-      plantId: focusSelect.value,
-      line: lineInput.value || lineEl.textContent,
-      theme: theme ? theme.dataset.theme : 'mint',
-      show: {
-        moisture: document.getElementById('toggleMoisture')?.checked ?? true,
-        temp: false,
-        light: false,
-      },
-    };
-    try {
-      const res = await authFetch(API + '/api/deskbot-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (res.ok) {
-        statusEl.textContent = 'Pushed to Desk Bot ✓';
-        setTimeout(() => { statusEl.textContent = 'Synced'; }, 2500);
-        if (body.plantId && window.__dewUid) recordPlantUsage([body.plantId]);
-      }
-    } catch (e) {
-      statusEl.textContent = 'Error: ' + e.message;
+  preview.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      trigger();
     }
   });
 }
@@ -1657,8 +1911,9 @@ async function refreshPlantFleetFromServer() {
     const ar = await authFetch(API + '/api/users/' + encodeURIComponent(uid) + '/activity-feed');
     if (ar.ok) {
       activityFeed = await ar.json();
-      renderActivityFiltered();
+      renderAlertsPreview();
     }
+    syncDeskbotFromConfig(plants, window.__lastDeskbotConfig || {});
   } catch (_) {}
 }
 
@@ -1835,12 +2090,14 @@ async function load() {
     await refreshDashboardPanels(plants);
     renderPlantFleetSummary();
     renderPlantTable(plants);
-    renderActivityFiltered();
     await buildChartAsync(plants, 'moisture');
     wireSensorTabs();
     initChartRangeTabs();
     initAlertsPreviewMore();
-    initDeskbot(plants, deskbotConfig);
+    window.__lastDeskbotConfig = deskbotConfig;
+    syncDeskbotFromConfig(plants, deskbotConfig);
+    wireDeskbotPreviewInteractions();
+    initPlantFleetChartLink();
     loadDashboardWeather();
 
     setTimeout(() => recordPlantUsage(plants.map(p => p.id)), 200);
@@ -1867,8 +2124,17 @@ document.getElementById('btnPlantFleetViewAll')?.addEventListener('click', () =>
 
 // Run dashboard load (and weather) after auth has set __dewUid so location fetch works
 function startApp() {
-  load().then(() => startPlantFleetPolling());
+  load().then(() => {
+    initChartResizeHandling();
+    startPlantFleetPolling();
+  });
 }
+window.__dew = {
+  buildBotsPlantChart: dewBuildBotsPlantChart,
+  getPlants: () => plants,
+  reloadDashboard: load,
+};
+
 if (window.__dewAuthReady && window.__dewUid) {
   startApp();
 } else {

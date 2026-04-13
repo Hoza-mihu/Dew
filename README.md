@@ -8,11 +8,18 @@ DEW Eco Warden is a web app for tracking plants with connected sensors, viewing 
 
 ## Features
 
+- **Responsive layout** – **Breakpoints:** mobile **≤640px**, tablet **641–1023px**, desktop **≥1024px**. Safe-area insets for notched devices, touch-friendly controls (44px+ where it matters), and a **slide-out menu** (☰) below the desktop breakpoint so the sidebar stays off-canvas on phones and tablets. Widen past **1024px** for the full persistent sidebar. Grids (metrics, insights) collapse 4 → 2 → 1 columns; charts resize with the container (`ResizeObserver`).
 - **Dashboard** – Plants, sensor readings, and activity
+- **Bots** – Sidebar **Bots** opens `/bots` (unified Plant Bot + Desk Bot). Routes: `/bots`, `/bots/plant-bot`, `/bots/desk-bot`. Lazy-loaded `bots-pages.js`.
+- **Sync Data** – Sidebar **Sync Data** opens `/sync-data`: sensor cards (temp, humidity, soil, light), sparklines, optimal-range bar, **Sync now** (writes readings to Supabase when configured). Lazy-loaded `sync-data-page.js`.
 - **Plant analytics** – Charts and summaries (24h, 7d, 30d, all time) for plants with devices
 - **Community** – Create communities, post, comment, and browse by topic (public / restricted / private)
 - **Profiles** – User profile, favourites, and settings
-- **Supabase** – Storage for community banners/logos and post images; optional Firebase Auth for admin edit
+- **Supabase** – Storage for community banners/logos and post images; optional Firebase Auth for admin edit. **Sensor sync** (optional): run `supabase/sensors_sync_schema.sql` in the Supabase SQL editor, then `POST /api/sensors/sync` (with Firebase Bearer token) mirrors Plant Bot readings into `sensors`, `sensor_readings`, and `sync_logs`. If you use `weather_preferences.sql` or those sensor tables, also run **`supabase/rls_sensor_and_weather_tables.sql`** so Row Level Security is enabled (clears **“RLS Disabled in Public”** in Supabase advisors; the server uses the service role key and keeps working).
+
+### Demo Mode (no login)
+
+On the **login** page, **Try Demo** opens the full dashboard with **simulated** plants, sensors, charts, bots, sync, and community lists. Data is generated client-side (`sessionStorage` flag `dewDemoMode`); `POST`/`PUT`/`PATCH` requests return success without persisting. Use **Exit Demo** (sidebar, above Sign out) or **Sign Out** to return to login. Firebase config still loads from `/api/config/firebase` when the API is running (or `VITE_FIREBASE_*` in dev).
 
 ---
 
@@ -26,13 +33,38 @@ DEW Eco Warden is a web app for tracking plants with connected sensors, viewing 
    - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (and `SUPABASE_SERVICE_ROLE_KEY` for community create/edit with images)
    - Firebase config (e.g. `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`) if using auth
    - Optional: `GOOGLE_APPLICATION_CREDENTIALS` path to Firebase service account JSON for admin edit
-3. Run the app:
+3. Run the app (pick one):
+
+   **Single server (simplest)** — API + static files on port **3000**:
    ```bash
    npm start
    ```
-   Or for development with auto-reload: `npm run dev`
+   Open [http://localhost:3000](http://localhost:3000).
 
-4. Open [http://localhost:3000](http://localhost:3000).
+   **Vite dev server (HMR on port 5173)** — needs **two** terminals, because Vite only proxies `/api` to the backend:
+   ```bash
+   # Terminal 1 — API on :3000
+   npm run dev:api
+   ```
+   ```bash
+   # Terminal 2 — Vite on :5173
+   npm run dev
+   ```
+   Open [http://localhost:5173](http://localhost:5173). If you see `http proxy error … ECONNREFUSED` or **502** on `/api/...`, start the API in terminal 1 or set **`VITE_FIREBASE_*`** in `.env` (same values as `FIREBASE_*`, see `.env.example`) so login can load Firebase config without the API.
+
+4. **Test a production build on localhost** (minified bundles, same as deploy — still needs the API for `/api` routes):
+
+   ```bash
+   # Terminal 1 — API on :3000
+   npm run dev:api
+   ```
+   ```bash
+   # Terminal 2 — build + Vite preview on :4173 (proxies /api → :3000)
+   npm run preview:prod
+   ```
+   Open [http://localhost:4173](http://localhost:4173).
+
+   Use this before shipping to catch build-only issues. **Sign-in still needs network** (Firebase); “offline” here means **running everything on your machine**, not airplane mode. For fully offline auth you’d use the [Firebase Emulator Suite](https://firebase.google.com/docs/emulator-suite) (not wired in this repo by default).
 
 ---
 
@@ -72,6 +104,33 @@ The **Activity** panel loads **`GET /api/users/:uid/activity-feed`** (requires s
 ### Weather location (per user)
 
 Your saved map location is stored in the server **SQLite** database (`user_weather_location`, **one row per Firebase user id**). User A’s coordinates never overwrite user B’s. It powers the dashboard weather hero, **`GET /api/weather?user_id=...`**, and **weather alerts**. It **only changes** when that user saves location (Settings, “Change location”, or the first-run prompt)—not on every visit. **GET/PUT `/api/users/:uid/location`** require a valid **Firebase Bearer** token matching the URL `uid` whenever Firebase Admin is configured. Requests **without** `Authorization` are rejected (**401**). If Firebase Admin is not configured, the server returns **503** unless you set **`DEW_ALLOW_UNAUTH_LOCATION=1`** (local dev only—never in production).
+
+---
+
+## Deployment (Vercel + Railway)
+
+The production setup uses **`vercel.json`**: the static app is built to **`dist/`** and **`/api/*`** is proxied to the backend on Railway (`dew.up.railway.app`).
+
+| What changed | Where to deploy |
+|--------------|-----------------|
+| Dashboard UI, `public/`, Vite | **Vercel** (static) |
+| `server.js`, API, SQLite logic | **Railway** (or your API host) |
+
+**One-command production deploy (Vercel CLI):**
+
+```bash
+npm run deploy
+```
+
+Requires a one-time `npx vercel login` and `npx vercel link` in this folder (or connect the Git repo in the Vercel dashboard for automatic deploys on push).
+
+Preview (non-prod) URL:
+
+```bash
+npm run deploy:preview
+```
+
+**Cursor:** the project rule *dew-build-and-deploy* tells the assistant to run **`npm run build`** after client changes and to use **`npm run deploy`** when you ask to ship or go live.
 
 ---
 

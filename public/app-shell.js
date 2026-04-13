@@ -1,0 +1,197 @@
+/**
+ * Responsive shell: mobile/tablet nav drawer, backdrop, escape to close.
+ * Drawer layout matches CSS: narrow viewports OR touch devices at "desktop" widths
+ * (e.g. Chrome/Safari "Desktop site" — wide innerWidth but primary touch).
+ *
+ * Chrome Android: debounced toggle + pointer events reduce double-fires; delegated
+ * sidebar pointerup closes drawer before click; pageshow fixes stuck overflow (bfcache).
+ */
+
+/**
+ * @returns {boolean} True when off-canvas drawer + hamburger should be used (see styles.css).
+ */
+export function isDrawerMode() {
+  const w =
+    typeof window !== "undefined"
+      ? window.innerWidth || document.documentElement?.clientWidth || 0
+      : 0;
+  if (w <= 1024) return true;
+  try {
+    const hasTouch = (navigator.maxTouchPoints || 0) > 0;
+    return (
+      (window.matchMedia("(hover: none)").matches ||
+        window.matchMedia("(any-hover: none)").matches ||
+        hasTouch) &&
+      (window.matchMedia("(pointer: coarse)").matches ||
+        window.matchMedia("(any-pointer: coarse)").matches ||
+        hasTouch) &&
+      w < 1600
+    );
+  } catch {
+    return false;
+  }
+}
+
+function syncDrawerModeClass() {
+  document.body.classList.toggle("drawer-mode", isDrawerMode());
+}
+
+function openDrawer() {
+  document.body.classList.add("nav-drawer-open");
+  const btn = document.getElementById("navMenuToggle");
+  if (btn) {
+    btn.setAttribute("aria-expanded", "true");
+    btn.setAttribute("aria-label", "Close navigation menu");
+  }
+  const bd = document.getElementById("sidebarBackdrop");
+  if (bd) bd.setAttribute("aria-hidden", "false");
+  document.documentElement.style.overflow = "hidden";
+  document.body.style.overflow = "hidden";
+}
+
+export function closeDrawer() {
+  document.body.classList.remove("nav-drawer-open");
+  const btn = document.getElementById("navMenuToggle");
+  if (btn) {
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-label", "Open navigation menu");
+  }
+  const bd = document.getElementById("sidebarBackdrop");
+  if (bd) bd.setAttribute("aria-hidden", "true");
+  document.documentElement.style.overflow = "";
+  document.body.style.overflow = "";
+}
+
+const TOGGLE_DEBOUNCE_MS = 380;
+let lastToggleTime = 0;
+
+function toggleDrawer() {
+  if (document.body.classList.contains("nav-drawer-open")) closeDrawer();
+  else openDrawer();
+}
+
+function toggleDrawerDebounced() {
+  const now = Date.now();
+  if (now - lastToggleTime < TOGGLE_DEBOUNCE_MS) return;
+  lastToggleTime = now;
+  toggleDrawer();
+}
+
+/** Chrome: touch can fire both pointerup and click — only toggle once per gesture */
+let toggleTouchConsumed = false;
+
+function wireMenuToggle(toggle) {
+  if (!toggle) return;
+
+  toggle.addEventListener(
+    "pointerup",
+    (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (e.pointerType === "touch" || e.pointerType === "pen") {
+        e.preventDefault();
+        toggleTouchConsumed = true;
+        toggleDrawerDebounced();
+        window.setTimeout(() => {
+          toggleTouchConsumed = false;
+        }, 450);
+      }
+    },
+    { passive: false }
+  );
+
+  toggle.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (toggleTouchConsumed) return;
+    toggleDrawerDebounced();
+  });
+}
+
+function backdropClose() {
+  closeDrawer();
+}
+
+function wireBackdrop(backdrop) {
+  if (!backdrop) return;
+  backdrop.addEventListener("click", backdropClose);
+  backdrop.addEventListener("pointerup", (e) => {
+    if (e.pointerType === "touch" && e.target === backdrop) backdropClose();
+  });
+  /* Chrome: sometimes no click after touchend on fixed overlay */
+  backdrop.addEventListener(
+    "touchend",
+    (e) => {
+      if (e.target === backdrop) {
+        e.preventDefault();
+        backdropClose();
+      }
+    },
+    { passive: false }
+  );
+}
+
+function syncDrawerToViewport() {
+  if (!isDrawerMode() && document.body.classList.contains("nav-drawer-open")) {
+    closeDrawer();
+  }
+}
+
+/** bfcache / tab restore: avoid body overflow stuck "hidden" when drawer wasn't open */
+function recoverScrollLocksFromCache() {
+  if (!document.body.classList.contains("nav-drawer-open")) {
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+  }
+}
+
+function wire() {
+  const toggle = document.getElementById("navMenuToggle");
+  const backdrop = document.getElementById("sidebarBackdrop");
+
+  wireMenuToggle(toggle);
+  wireBackdrop(backdrop);
+
+  document.querySelectorAll(".sidebar .nav-item[data-view]").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (isDrawerMode()) closeDrawer();
+    });
+  });
+
+  document.getElementById("btnSignOut")?.addEventListener("click", () => {
+    if (isDrawerMode()) closeDrawer();
+  });
+  document.getElementById("btnExitDemo")?.addEventListener("click", () => {
+    if (isDrawerMode()) closeDrawer();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.body.classList.contains("nav-drawer-open")) {
+      closeDrawer();
+      toggle?.focus();
+    }
+  });
+
+  window.addEventListener("resize", syncDrawerToViewport, { passive: true });
+  window.addEventListener("resize", syncDrawerModeClass, { passive: true });
+  window.addEventListener("orientationchange", () => {
+    setTimeout(syncDrawerModeClass, 220);
+    setTimeout(syncDrawerToViewport, 320);
+  });
+  window.addEventListener("pageshow", (e) => {
+    recoverScrollLocksFromCache();
+    syncDrawerModeClass();
+    if (e.persisted) syncDrawerToViewport();
+  });
+  try {
+    window.visualViewport?.addEventListener("resize", syncDrawerToViewport, { passive: true });
+    window.visualViewport?.addEventListener("resize", syncDrawerModeClass, { passive: true });
+  } catch (_) {}
+
+  syncDrawerModeClass();
+  syncDrawerToViewport();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", wire);
+} else {
+  wire();
+}

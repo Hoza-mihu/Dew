@@ -15,3 +15,4 @@ create table if not exists public.user_weather_preferences (
 
 create index if not exists idx_user_weather_preferences_user_id on public.user_weather_preferences (user_id);
 
+-- Enable RLS: run ../rls_sensor_and_weather_tables.sql (covers this table and sensor tables).

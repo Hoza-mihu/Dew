@@ -285,10 +285,12 @@
 /* ========== Split layout (DEW Plant Intelligence style) ========== */
 .login-split-body {
   margin: 0;
-  padding: 0;
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0)
+    env(safe-area-inset-left, 0);
   width: 100%;
   height: 100vh;
   min-height: 100vh;
+  min-height: 100dvh;
   font-family: 'Poppins', system-ui, sans-serif;
   overflow: hidden;
 }
@@ -1494,4 +1496,48 @@
 /* Button active state feedback */
 .btn-dashboard:active:not(:disabled) {
   box-shadow: 0 6px 18px rgba(25, 125, 87, 0.35);
+}
+
+/* Try Demo — secondary outline, soft glow on hover */
+.login-form .btn-demo-try {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(126, 242, 191, 0.45);
+  background: rgba(126, 242, 191, 0.06);
+  color: var(--text-main, #e8f5f0);
+  box-shadow: 0 0 0 1px rgba(126, 242, 191, 0.08);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+}
+.login-form .btn-demo-try i {
+  font-size: 18px;
+  opacity: 0.95;
+}
+.login-form .btn-demo-try:hover {
+  transform: translateY(-1px);
+  border-color: rgba(126, 242, 191, 0.65);
+  background: rgba(126, 242, 191, 0.12);
+  box-shadow: 0 0 24px rgba(126, 242, 191, 0.18), 0 8px 22px rgba(0, 0, 0, 0.2);
+}
+.login-form .btn-demo-try:active {
+  transform: translateY(0);
+}
+.login-demo-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-soft, #8fa99f);
+  text-align: center;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
 }

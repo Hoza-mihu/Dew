@@ -15,11 +15,23 @@ export default defineConfig(({ mode }) => {
           main: path.resolve(__dirname, "public/index.html"),
           login: path.resolve(__dirname, "public/login.html"),
           signup: path.resolve(__dirname, "public/signup.html"),
+          scrollSequence: path.resolve(__dirname, "public/scroll-sequence.html"),
         },
       },
     },
     server: {
       port: 5173,
+      proxy: {
+        "/api": {
+          target: apiTarget,
+          changeOrigin: true,
+        },
+      },
+    },
+    // Same API proxy when testing the production build locally (`npm run preview`)
+    preview: {
+      port: 4173,
+      strictPort: false,
       proxy: {
         "/api": {
           target: apiTarget,
