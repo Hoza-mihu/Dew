@@ -11,6 +11,8 @@
     <meta name="theme-color" content="#f5faf7" media="(prefers-color-scheme: light)" />
     <!-- Allow scripts from self and CDNs; unsafe-eval needed by some SDKs (Supabase/Firebase). Remove unsafe-eval if you lock down CSP. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://vercel.live;" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap"
       rel="stylesheet"
@@ -19,7 +21,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css"
     />
-    <link rel="stylesheet" href="/styles.css?v=desk-about-8" />
+    <link rel="stylesheet" href="/styles.css?v=desk-about-9" />
     <link
       rel="preload"
       as="image"
@@ -2162,6 +2164,17 @@
                   </div>
                 </div>
                 <p class="about-scrolly-hint" aria-hidden="true">Scroll to explore</p>
+                <div
+                  class="about-scrolly-progress"
+                  id="aboutScrollyProgress"
+                  role="progressbar"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow="0"
+                  aria-label="Story sequence progress"
+                >
+                  <span class="about-scrolly-progress__fill"></span>
+                </div>
               </div>
             </div>
           </section>

@@ -120,6 +120,7 @@ export function mountAboutPage() {
   const sticky = document.getElementById("aboutScrollySticky");
   const fallbackBg = document.querySelector(".about-scrolly-fallback-bg");
   const hint = document.querySelector(".about-scrolly-hint");
+  const progressBar = document.getElementById("aboutScrollyProgress");
   const heroBlock = section?.querySelector(".about-dew-story-hero");
   const phases = section ? Array.from(section.querySelectorAll(".about-story-phase")) : [];
   const floatNodes = section ? Array.from(section.querySelectorAll(".about-story-float")) : [];
@@ -169,6 +170,11 @@ export function mountAboutPage() {
     }
 
     if (hint) hint.style.opacity = String(1 - clamp(p * 4, 0, 1));
+
+    if (progressBar) {
+      const pct = Math.round(clamp(p, 0, 1) * 100);
+      progressBar.setAttribute("aria-valuenow", String(pct));
+    }
   };
 
   onScrubUi(0);
@@ -264,6 +270,7 @@ export function mountAboutPage() {
       } catch (_) {}
     }
     if (section) section.style.removeProperty("--about-awaken-p");
+    if (progressBar) progressBar.setAttribute("aria-valuenow", "0");
     if (heroBlock) {
       heroBlock.style.opacity = "";
       heroBlock.style.transform = "";

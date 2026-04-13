@@ -3892,6 +3892,33 @@ body.community-page .community-top-nav {
   .about-scrolly-hint { animation: none; opacity: 0.55; }
 }
 
+/* Scroll-synced story progress (ties to --about-awaken-p on #aboutScrolly) */
+.about-scrolly-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  z-index: 8;
+  background: rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+  overflow: hidden;
+}
+.about-scrolly-progress__fill {
+  display: block;
+  height: 100%;
+  width: calc(var(--about-awaken-p, 0) * 100%);
+  background: linear-gradient(90deg, #16a34a, #4ade80);
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.35);
+  transform-origin: left center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-scrolly-progress__fill {
+    background: #22c55e;
+    box-shadow: none;
+  }
+}
+
 /* —— DEW eco scrollytelling (nature + tech) —— */
 .about-view--eco-story .about-nav-logo .dew-app-logo-img--nav {
   filter: drop-shadow(0 0 12px rgba(34, 197, 94, 0.45));
