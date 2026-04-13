@@ -218,10 +218,12 @@ export function mountAboutPage() {
     }
     const urls = hiRes.length ? hiRes : ABOUT_SCRUB_FALLBACK_URLS;
 
+    canvas.style.opacity = "0";
     const destroyScrub = mountCanvasScrollScrub(track, canvas, {
       urls,
       reducedMotion,
       onFirstDraw: () => {
+        canvas.style.opacity = "1";
         if (fallbackBg) fallbackBg.style.opacity = "0";
       },
       onScrub: (p) => onScrubUi(p),
@@ -252,6 +254,7 @@ export function mountAboutPage() {
     if (fallbackBg) fallbackBg.style.opacity = "1";
     if (canvas instanceof HTMLCanvasElement) {
       canvas.style.display = "";
+      canvas.style.opacity = "";
     }
     if (video instanceof HTMLVideoElement) {
       try {

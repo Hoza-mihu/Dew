@@ -3685,6 +3685,65 @@ body.community-page .community-top-nav {
   background: #000;
   isolation: isolate;
 }
+/* Depth stack: atmosphere → poster fallback → canvas scrub → cinematic matte → cursor glow → copy */
+.about-scrolly-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 120% 90% at 50% -15%, rgba(34, 197, 94, 0.14), transparent 52%),
+    radial-gradient(ellipse 55% 45% at 92% 58%, rgba(16, 85, 60, 0.28), transparent 50%),
+    radial-gradient(ellipse 45% 55% at 6% 72%, rgba(25, 110, 75, 0.18), transparent 48%),
+    linear-gradient(165deg, #0c1812 0%, #040807 38%, #060d0a 100%);
+  animation: aboutAtmospherePulse 18s ease-in-out infinite alternate;
+}
+.about-scrolly-atmosphere::before {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  opacity: 0.35;
+  background:
+    repeating-linear-gradient(
+      -12deg,
+      transparent 0,
+      transparent 14px,
+      rgba(255, 255, 255, 0.02) 14px,
+      rgba(255, 255, 255, 0.02) 15px
+    ),
+    repeating-linear-gradient(
+      78deg,
+      transparent 0,
+      transparent 22px,
+      rgba(0, 0, 0, 0.04) 22px,
+      rgba(0, 0, 0, 0.04) 23px
+    );
+  mix-blend-mode: overlay;
+  animation: aboutAtmosphereGrid 48s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-scrolly-atmosphere,
+  .about-scrolly-atmosphere::before {
+    animation: none;
+  }
+}
+@keyframes aboutAtmospherePulse {
+  0% {
+    filter: brightness(0.96) saturate(1.02);
+  }
+  100% {
+    filter: brightness(1.06) saturate(1.12);
+  }
+}
+@keyframes aboutAtmosphereGrid {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-36px, 28px, 0);
+  }
+}
 #aboutSeqCanvas {
   position: absolute;
   inset: 0;
@@ -3693,11 +3752,34 @@ body.community-page .community-top-nav {
   max-width: none;
   min-height: 100%;
   display: block;
-  z-index: 0;
+  z-index: 1;
   /* Global `canvas { height: auto }` can shrink full-bleed scrub canvases; pin to the sticky box. */
   height: 100% !important;
   transform: translateZ(0);
   backface-visibility: hidden;
+  transition: opacity 0.55s ease;
+}
+.about-scrolly-matte {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  box-shadow: inset 0 0 min(22vw, 200px) rgba(0, 0, 0, 0.48);
+  background: radial-gradient(
+    ellipse 88% 72% at 50% 40%,
+    transparent 0%,
+    rgba(0, 0, 0, 0.1) 55%,
+    rgba(0, 0, 0, 0.32) 100%
+  );
+}
+.about-scrolly-matte::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
 }
 .about-scrolly-video {
   position: absolute;
@@ -3729,7 +3811,7 @@ body.community-page .community-top-nav {
 }
 .about-hero--scrolly .about-hero-content {
   position: relative;
-  z-index: 2;
+  z-index: 5;
   max-width: 720px;
   margin: 0 auto;
   padding: 100px 24px 80px;
@@ -3739,7 +3821,7 @@ body.community-page .community-top-nav {
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 5;
+  z-index: 7;
   margin: 0;
   font-size: 11px;
   letter-spacing: 0.28em;
@@ -3764,9 +3846,11 @@ body.community-page .community-top-nav {
   background: linear-gradient(165deg, #050505 0%, #0a1610 45%, #050505 100%);
 }
 .about-view--eco-story .about-scrolly-fallback-bg {
-  background: #050505;
-  background-image: none;
-  filter: none;
+  background-color: #050505;
+  background-image: url("/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-001.jpg");
+  background-size: cover;
+  background-position: center;
+  filter: brightness(0.93) contrast(1.06) saturate(1.08);
 }
 .about-view--eco-story .about-scrolly-fallback-bg::after {
   background: linear-gradient(
@@ -3779,7 +3863,7 @@ body.community-page .community-top-nav {
 .about-scrolly-ambient {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 3;
   pointer-events: none;
   opacity: 0.92;
   mix-blend-mode: screen;
@@ -3800,7 +3884,7 @@ body.community-page .community-top-nav {
 .about-story-floats {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 4;
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -3833,7 +3917,7 @@ body.community-page .community-top-nav {
 }
 .about-dew-story-hero {
   position: relative;
-  z-index: 3;
+  z-index: 5;
   transition: opacity 0.4s ease, transform 0.15s ease-out;
 }
 .about-dew-eyebrow {
@@ -3879,7 +3963,7 @@ body.community-page .community-top-nav {
   left: 50%;
   bottom: min(11vh, 112px);
   transform: translateX(-50%);
-  z-index: 4;
+  z-index: 6;
   width: min(92vw, 520px);
   min-height: 92px;
   text-align: center;
@@ -8071,8 +8155,10 @@ body.syncdata-page main.main {
 /* Eco story fallback: block legacy plant art even if an older styles.css was cached */
 body.about-page .about-view--eco-story .about-scrolly-fallback-bg {
   background-color: #050505 !important;
-  background-image: none !important;
-  filter: none !important;
+  background-image: url("/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-001.jpg") !important;
+  background-size: cover !important;
+  background-position: center !important;
+  filter: brightness(0.93) contrast(1.06) saturate(1.08) !important;
 }
 body.about-page .about-view--eco-story .about-scrolly-fallback-bg::after {
   background: linear-gradient(
