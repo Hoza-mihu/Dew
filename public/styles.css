@@ -3721,7 +3721,7 @@ body.community-page .community-top-nav {
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 2;
+  z-index: 5;
   margin: 0;
   font-size: 11px;
   letter-spacing: 0.28em;
@@ -3737,25 +3737,25 @@ body.community-page .community-top-nav {
   .about-scrolly-hint { animation: none; opacity: 0.55; }
 }
 
-/* —— DEW desk story (scroll awakening) —— */
-.about-view--desk-story .about-nav-logo i {
-  color: #5ee7ff;
-  filter: drop-shadow(0 0 14px rgba(94, 231, 255, 0.35));
+/* —— DEW eco scrollytelling (nature + tech) —— */
+.about-view--eco-story .about-nav-logo i {
+  color: #22c55e;
+  filter: drop-shadow(0 0 14px rgba(34, 197, 94, 0.4));
 }
-.about-scrolly-sticky--dew {
-  background: #050505;
+.about-scrolly-sticky--eco {
+  background: linear-gradient(165deg, #050505 0%, #0a1610 45%, #050505 100%);
 }
-.about-view--desk-story .about-scrolly-fallback-bg {
+.about-view--eco-story .about-scrolly-fallback-bg {
   background: #050505;
   background-image: none;
   filter: none;
 }
-.about-view--desk-story .about-scrolly-fallback-bg::after {
+.about-view--eco-story .about-scrolly-fallback-bg::after {
   background: linear-gradient(
     180deg,
-    rgba(5, 5, 5, 0.15) 0%,
-    rgba(5, 5, 5, 0.65) 55%,
-    rgba(5, 5, 5, 0.88) 100%
+    rgba(10, 22, 16, 0.2) 0%,
+    rgba(5, 8, 7, 0.72) 50%,
+    rgba(5, 5, 5, 0.9) 100%
   );
 }
 .about-scrolly-ambient {
@@ -3767,26 +3767,62 @@ body.community-page .community-top-nav {
   mix-blend-mode: screen;
   background: radial-gradient(
     ellipse 78% 58% at calc(50% + (var(--about-cursor-x, 0) * 26%)) calc(36% + (var(--about-cursor-y, 0) * 20%)),
-    rgba(94, 231, 255, 0.12) 0%,
-    rgba(130, 110, 255, 0.06) 42%,
+    rgba(34, 197, 94, 0.11) 0%,
+    rgba(74, 222, 128, 0.05) 40%,
     transparent 65%
   );
 }
-.about-scrolly-sticky--dew.about-scrolly--presence .about-scrolly-ambient {
-  animation: aboutDewPresenceBreath 5.5s ease-in-out infinite;
+.about-scrolly-sticky--eco.about-scrolly--presence .about-scrolly-ambient {
+  animation: aboutEcoPresenceBreath 5.5s ease-in-out infinite;
 }
-@keyframes aboutDewPresenceBreath {
+@keyframes aboutEcoPresenceBreath {
   0%, 100% { opacity: 0.72; }
   50% { opacity: 1; }
 }
+.about-story-floats {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.about-story-float {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(90vw, 520px);
+  margin: 0;
+  transform: translate3d(-50%, -50%, 0);
+  text-align: center;
+  font-size: clamp(17px, 3.2vw, 26px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.65);
+  opacity: 0;
+  filter: blur(10px);
+  transition: opacity 0.35s ease, filter 0.45s ease, transform 0.2s ease-out;
+  will-change: opacity, filter, transform;
+}
+.about-story-float--accent {
+  font-size: clamp(14px, 2.2vw, 18px);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(34, 197, 94, 0.92);
+}
 .about-dew-story-hero {
+  position: relative;
+  z-index: 3;
   transition: opacity 0.4s ease, transform 0.15s ease-out;
 }
 .about-dew-eyebrow {
   font-size: 11px;
   letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: rgba(94, 231, 255, 0.78);
+  color: rgba(74, 222, 128, 0.85);
   margin: 0 0 16px;
 }
 .about-dew-display-title {
@@ -3814,18 +3850,18 @@ body.community-page .community-top-nav {
   margin-top: 10px;
   background: rgba(255, 255, 255, 0.96);
   color: #050505;
-  border: 1px solid rgba(94, 231, 255, 0.4);
-  box-shadow: 0 0 28px rgba(94, 231, 255, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  box-shadow: 0 0 28px rgba(34, 197, 94, 0.18);
 }
 .about-dew-primary-cta:hover {
-  box-shadow: 0 0 40px rgba(94, 231, 255, 0.26);
+  box-shadow: 0 0 40px rgba(34, 197, 94, 0.3);
 }
 .about-story-phases {
   position: absolute;
   left: 50%;
   bottom: min(11vh, 112px);
   transform: translateX(-50%);
-  z-index: 3;
+  z-index: 4;
   width: min(92vw, 520px);
   min-height: 92px;
   text-align: center;
@@ -3854,7 +3890,7 @@ body.community-page .community-top-nav {
   font-size: 10px;
   letter-spacing: 0.36em;
   text-transform: uppercase;
-  color: rgba(94, 231, 255, 0.72);
+  color: rgba(74, 222, 128, 0.78);
   margin-bottom: 10px;
 }
 .about-story-line {
@@ -3894,8 +3930,8 @@ body.community-page .community-top-nav {
 .about-dew-story-cta {
   padding: 88px 24px 96px;
   text-align: center;
-  background: linear-gradient(180deg, #050505 0%, #0a0c12 100%);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, #050505 0%, #0a1812 55%, #050505 100%);
+  border-top: 1px solid rgba(34, 197, 94, 0.12);
 }
 .about-dew-story-cta-inner {
   max-width: 560px;
@@ -3928,13 +3964,13 @@ body.community-page .community-top-nav {
   cursor: pointer;
   color: #050505;
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(94, 231, 255, 0.42);
-  box-shadow: 0 0 32px rgba(94, 231, 255, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  box-shadow: 0 0 32px rgba(34, 197, 94, 0.14);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .about-dew-story-cta-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 0 44px rgba(94, 231, 255, 0.22);
+  box-shadow: 0 0 44px rgba(34, 197, 94, 0.26);
 }
 @media (prefers-reduced-motion: reduce) {
   .about-story-phase {
@@ -3944,8 +3980,12 @@ body.community-page .community-top-nav {
   .about-dew-story-hero {
     transition: none;
   }
-  .about-scrolly-sticky--dew.about-scrolly--presence .about-scrolly-ambient {
+  .about-scrolly-sticky--eco.about-scrolly--presence .about-scrolly-ambient {
     animation: none;
+  }
+  .about-story-float {
+    filter: none;
+    transition: none;
   }
 }
 .about-hero-bg {
@@ -4085,6 +4125,14 @@ body.community-page .community-top-nav {
   grid-template-columns: repeat(2, 1fr);
   gap: 24px;
   align-items: stretch;
+}
+.about-spec-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 900px) {
+  .about-spec-grid--3 {
+    grid-template-columns: 1fr;
+  }
 }
 .about-spec-card {
   background: rgba(0, 0, 0, 0.35);
@@ -8002,17 +8050,17 @@ body.syncdata-page main.main {
   background: rgba(15, 60, 40, 0.06);
 }
 
-/* Desk story fallback: block legacy plant art even if an older styles.css was cached */
-body.about-page .about-view--desk-story .about-scrolly-fallback-bg {
+/* Eco story fallback: block legacy plant art even if an older styles.css was cached */
+body.about-page .about-view--eco-story .about-scrolly-fallback-bg {
   background-color: #050505 !important;
   background-image: none !important;
   filter: none !important;
 }
-body.about-page .about-view--desk-story .about-scrolly-fallback-bg::after {
+body.about-page .about-view--eco-story .about-scrolly-fallback-bg::after {
   background: linear-gradient(
     180deg,
-    rgba(5, 5, 5, 0.15) 0%,
-    rgba(5, 5, 5, 0.65) 55%,
-    rgba(5, 5, 5, 0.88) 100%
+    rgba(10, 22, 16, 0.2) 0%,
+    rgba(5, 8, 7, 0.72) 50%,
+    rgba(5, 5, 5, 0.9) 100%
   ) !important;
 }

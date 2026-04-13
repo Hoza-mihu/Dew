@@ -2044,7 +2044,7 @@
             <div class="plant-detail-sensor-body" id="plantDetailSensor"></div>
           </section>
         </div>
-        <div class="about-view about-view--desk-story" id="aboutView" style="display: none">
+        <div class="about-view about-view--eco-story" id="aboutView" style="display: none">
           <header class="about-nav">
             <a
               href="#"
@@ -2073,60 +2073,78 @@
             data-about-index-pad="3"
             data-about-url-template="/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-{index}.jpg"
             data-about-scroll-vh="620"
+            data-about-mobile-frame-step="3"
           >
             <div class="about-scrolly-spacer" id="aboutScrollySpacer">
               <div
-                class="about-scrolly-sticky about-scrolly-sticky--dew"
+                class="about-scrolly-sticky about-scrolly-sticky--eco"
                 id="aboutScrollySticky"
               >
                 <canvas id="aboutSeqCanvas" aria-hidden="true"></canvas>
                 <div class="about-scrolly-fallback-bg" aria-hidden="true"></div>
                 <div class="about-scrolly-ambient" aria-hidden="true"></div>
+                <div class="about-story-floats" aria-hidden="true">
+                  <p class="about-story-float" data-float-center="0.08" data-float-span="0.11" data-float-parallax="18">
+                    Plants can speak.
+                  </p>
+                  <p class="about-story-float" data-float-center="0.28" data-float-span="0.12" data-float-parallax="-14">
+                    We learned to listen.
+                  </p>
+                  <p class="about-story-float" data-float-center="0.48" data-float-span="0.11" data-float-parallax="16">
+                    From soil to signal.
+                  </p>
+                  <p class="about-story-float" data-float-center="0.66" data-float-span="0.12" data-float-parallax="-12">
+                    Nature meets intelligence.
+                  </p>
+                  <p class="about-story-float about-story-float--accent" data-float-center="0.86" data-float-span="0.1" data-float-parallax="10">
+                    DEW · Digital Eco Warden
+                  </p>
+                </div>
                 <div class="about-hero-content about-dew-story-hero">
-                  <p class="about-dew-eyebrow">Desk Emotional Widget</p>
-                  <h1 class="about-hero-title about-dew-display-title">Meet DEW</h1>
-                  <p class="about-hero-tagline">More than a device.</p>
+                  <p class="about-dew-eyebrow">Smart eco-tech</p>
+                  <h1 class="about-hero-title about-dew-display-title">DEW</h1>
+                  <p class="about-hero-tagline">Digital Eco Warden</p>
                   <p class="about-hero-sub about-dew-hero-sub">
-                    A calm AI presence on your desk—scroll to wake it.
+                    From a quiet plant to a connected ecosystem—scroll to follow the story.
                   </p>
                   <button
                     type="button"
                     class="btn btn-about-cta about-dew-primary-cta js-about-cta-dashboard"
                     id="aboutCtaDashboard"
                   >
-                    Open dashboard <i class="ri-arrow-right-line"></i>
+                    Get started <i class="ri-arrow-right-line"></i>
                   </button>
                 </div>
                 <div class="about-story-phases" aria-live="polite">
                   <div class="about-story-phase" data-story-phase="0">
-                    <span class="about-story-kicker">Silence</span>
-                    <p class="about-story-line">Not just a device.</p>
+                    <span class="about-story-kicker">Phase 1</span>
+                    <p class="about-story-line">Idle plant — life in the soil.</p>
                   </div>
                   <div class="about-story-phase" data-story-phase="1">
-                    <span class="about-story-kicker">Awakening</span>
-                    <p class="about-story-line">It feels.</p>
+                    <span class="about-story-kicker">Phase 2</span>
+                    <p class="about-story-line">Sensors wake — moisture, light, temperature.</p>
                   </div>
                   <div class="about-story-phase" data-story-phase="2">
-                    <span class="about-story-kicker">Intelligence</span>
-                    <p class="about-story-line">It understands.</p>
+                    <span class="about-story-kicker">Phase 3</span>
+                    <p class="about-story-line">Data flows to your cloud dashboard.</p>
                   </div>
                   <div class="about-story-phase" data-story-phase="3">
-                    <span class="about-story-kicker">Interaction</span>
-                    <p class="about-story-line">It responds.</p>
+                    <span class="about-story-kicker">Phase 4</span>
+                    <p class="about-story-line">Desk bot stirs — face on OLED, voice of the garden.</p>
                   </div>
                   <div class="about-story-phase" data-story-phase="4">
-                    <span class="about-story-kicker">Presence</span>
-                    <p class="about-story-line">It lives with you.</p>
+                    <span class="about-story-kicker">Phase 5</span>
+                    <p class="about-story-line">One ecosystem — plant, bot, and app together.</p>
                   </div>
                 </div>
-                <p class="about-scrolly-hint" aria-hidden="true">Scroll</p>
+                <p class="about-scrolly-hint" aria-hidden="true">Scroll to explore</p>
               </div>
             </div>
           </section>
           <section class="about-dew-philosophy about-reveal">
-            <p class="about-dew-philosophy-quote">Technology should feel human.</p>
+            <p class="about-dew-philosophy-quote">Plants were always talking. Technology just learned the language.</p>
             <p class="about-dew-philosophy-sub">
-              DEW watches, learns, and responds—with warmth, not noise.
+              DEW connects soil, sensors, and people—calmly, clearly, without noise.
             </p>
           </section>
           <section class="about-stats about-reveal">
@@ -2194,58 +2212,27 @@
             class="about-block about-block--dark about-block--interactive about-block--how about-reveal"
           >
             <div class="about-block-inner about-spec-inner">
-              <h2 class="about-block-title">How It Works</h2>
+              <h2 class="about-block-title">The System</h2>
               <p class="about-block-text about-block-lead">
-                Sensors in your pots send data to the cloud. The dashboard shows
-                live readings, trends, and alerts. When moisture drops or
-                conditions change, you get notified.
+                Plant Bot senses the soil. The web app makes sense of the data.
+                Desk Bot gives your space a face and a voice—three parts, one DEW
+                ecosystem.
               </p>
-              <div class="about-spec-grid">
+              <div class="about-spec-grid about-spec-grid--3">
                 <article class="about-spec-card about-reveal">
                   <div
                     class="about-spec-card-img"
                     aria-hidden="true"
-                    data-component="data"
-                  >
-                    <img loading="lazy" decoding="async" src="/images/about%20us/data.jpg" alt="" />
-                  </div>
-                  <div class="about-spec-card-body">
-                    <span class="about-spec-card-label">Telemetry</span>
-                    <h3 class="about-spec-card-title">Data</h3>
-                    <p class="about-spec-card-text">
-                      Moisture, temperature, light.
-                    </p>
-                  </div>
-                </article>
-                <article class="about-spec-card about-reveal">
-                  <div
-                    class="about-spec-card-img"
-                    aria-hidden="true"
-                    data-component="hardware"
+                    data-component="plant-bot"
                   >
                     <img loading="lazy" decoding="async" src="/images/about%20us/hardware.jpg" alt="" />
                   </div>
                   <div class="about-spec-card-body">
-                    <span class="about-spec-card-label">Bots</span>
-                    <h3 class="about-spec-card-title">Hardware</h3>
+                    <span class="about-spec-card-label">In the pot</span>
+                    <h3 class="about-spec-card-title">Plant Bot</h3>
                     <p class="about-spec-card-text">
-                      ESP32-compatible sensors.
-                    </p>
-                  </div>
-                </article>
-                <article class="about-spec-card about-reveal">
-                  <div
-                    class="about-spec-card-img"
-                    aria-hidden="true"
-                    data-component="alerts"
-                  >
-                    <img loading="lazy" decoding="async" src="/images/about%20us/alerts.jpg" alt="" />
-                  </div>
-                  <div class="about-spec-card-body">
-                    <span class="about-spec-card-label">Notifications</span>
-                    <h3 class="about-spec-card-title">Alerts</h3>
-                    <p class="about-spec-card-text">
-                      Threshold-based notifications.
+                      ESP32-class hardware: moisture, temperature, and light at
+                      the root zone.
                     </p>
                   </div>
                 </article>
@@ -2258,10 +2245,28 @@
                     <img loading="lazy" decoding="async" src="/images/about%20us/dashboard.jpg" alt="" />
                   </div>
                   <div class="about-spec-card-body">
-                    <span class="about-spec-card-label">Interface</span>
-                    <h3 class="about-spec-card-title">Dashboard</h3>
+                    <span class="about-spec-card-label">In the browser</span>
+                    <h3 class="about-spec-card-title">Web dashboard</h3>
                     <p class="about-spec-card-text">
-                      Real-time and historical views.
+                      Live charts, history, alerts, and plant context in one calm
+                      control surface.
+                    </p>
+                  </div>
+                </article>
+                <article class="about-spec-card about-reveal">
+                  <div
+                    class="about-spec-card-img"
+                    aria-hidden="true"
+                    data-component="desk-bot"
+                  >
+                    <img loading="lazy" decoding="async" src="/images/anime%20icons/real-time%20iot%20sync.png" alt="" />
+                  </div>
+                  <div class="about-spec-card-body">
+                    <span class="about-spec-card-label">On your desk</span>
+                    <h3 class="about-spec-card-title">Desk Bot</h3>
+                    <p class="about-spec-card-text">
+                      OLED expression, ambient feedback—your garden’s mood,
+                      within reach.
                     </p>
                   </div>
                 </article>
@@ -2429,10 +2434,10 @@
           </section>
           <section class="about-dew-story-cta about-reveal">
             <div class="about-dew-story-cta-inner">
-              <h2 class="about-dew-story-cta-title">Bring DEW to your desk</h2>
+              <h2 class="about-dew-story-cta-title">Bring your plants to life</h2>
               <p class="about-dew-story-cta-sub">
-                The same gentle intelligence powers your plants, your bots, and
-                your day.
+                Plant Bot, Desk Bot, and the DEW dashboard—one loop from soil to
+                signal.
               </p>
               <button
                 type="button"

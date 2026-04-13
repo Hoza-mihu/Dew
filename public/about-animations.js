@@ -41,6 +41,38 @@ function buildHighResUrls(sectionEl) {
   return urls;
 }
 
+function smoothstep01(t) {
+  const x = clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
+function subsampleFrameUrls(urls, step) {
+  if (!urls.length || step <= 1) return urls;
+  return urls.filter((_, i) => i % step === 0);
+}
+
+function updateStoryFloats(section, p, reducedMotion) {
+  const nodes = section?.querySelectorAll(".about-story-float");
+  if (!nodes?.length) return;
+  nodes.forEach((el) => {
+    if (reducedMotion) {
+      el.style.opacity = "0";
+      el.style.filter = "none";
+      el.style.transform = "translate3d(-50%, -50%, 0)";
+      return;
+    }
+    const c = parseFloat(el.getAttribute("data-float-center") || "0.5");
+    const s = Math.max(0.04, parseFloat(el.getAttribute("data-float-span") || "0.12"));
+    const px = parseFloat(el.getAttribute("data-float-parallax") || "0");
+    const d = Math.abs(p - c);
+    const raw = 1 - d / s;
+    const o = smoothstep01(raw);
+    el.style.opacity = String(o);
+    el.style.filter = `blur(${(1 - o) * 9}px)`;
+    el.style.transform = `translate3d(-50%, calc(-50% + ${((p - c) * px).toFixed(2)}px), 0)`;
+  });
+}
+
 function setupRevealAnimations(aboutView) {
   const nodes = aboutView.querySelectorAll(".about-reveal");
   if (!nodes.length) return () => {};
@@ -90,6 +122,7 @@ export function mountAboutPage() {
   const hint = document.querySelector(".about-scrolly-hint");
   const heroBlock = section?.querySelector(".about-dew-story-hero");
   const phases = section ? Array.from(section.querySelectorAll(".about-story-phase")) : [];
+  const floatNodes = section ? Array.from(section.querySelectorAll(".about-story-float")) : [];
 
   if (!aboutView || !track) {
     return () => {};
@@ -128,6 +161,8 @@ export function mountAboutPage() {
     phases.forEach((el, i) => {
       el.classList.toggle("about-story-phase--active", i === phaseIdx);
     });
+
+    updateStoryFloats(section, p, reducedMotion);
 
     if (sticky) {
       sticky.classList.toggle("about-scrolly--presence", !reducedMotion && p > 0.76);
@@ -171,7 +206,16 @@ export function mountAboutPage() {
       } catch (_) {}
     }
 
-    const hiRes = buildHighResUrls(section);
+    let hiRes = buildHighResUrls(section);
+    const mobileStep = readIntAttr(section, "data-about-mobile-frame-step", 1);
+    if (
+      hiRes.length > 48 &&
+      typeof window !== "undefined" &&
+      window.innerWidth < 768 &&
+      mobileStep > 1
+    ) {
+      hiRes = subsampleFrameUrls(hiRes, mobileStep);
+    }
     const urls = hiRes.length ? hiRes : ABOUT_SCRUB_FALLBACK_URLS;
 
     const destroyScrub = mountCanvasScrollScrub(track, canvas, {
@@ -222,6 +266,11 @@ export function mountAboutPage() {
       heroBlock.style.transform = "";
     }
     phases.forEach((el) => el.classList.remove("about-story-phase--active"));
+    floatNodes.forEach((el) => {
+      el.style.opacity = "";
+      el.style.filter = "";
+      el.style.transform = "";
+    });
     sticky?.classList.remove("about-scrolly--presence");
     aboutView.querySelectorAll(".about-reveal--visible").forEach((el) => {
       el.classList.remove("about-reveal--visible");
