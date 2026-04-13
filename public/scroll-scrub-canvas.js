@@ -172,9 +172,10 @@ export function mountVideoScrollScrub(trackEl, videoEl, opts) {
     }
     const d = videoEl.duration;
     if (!d || !isFinite(d)) return;
-    const t = clamp(p * d, 0, Math.max(d - 1 / 24, 0));
+    const t = clamp(p * d, 0, Math.max(d - 1 / 60, 0));
     try {
-      if (Math.abs(videoEl.currentTime - t) > 1 / 48) {
+      // Tight sync to scroll so motion tracks the source clip smoothly.
+      if (Math.abs(videoEl.currentTime - t) > 1 / 120) {
         videoEl.currentTime = t;
       }
     } catch (_) {}
@@ -186,6 +187,9 @@ export function mountVideoScrollScrub(trackEl, videoEl, opts) {
   };
 
   const onMeta = () => {
+    try {
+      videoEl.pause();
+    } catch (_) {}
     onReady?.();
     tick();
   };

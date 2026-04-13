@@ -177,10 +177,13 @@ export function mountAboutPage() {
     video.src = videoSrc;
     video.muted = true;
     video.defaultMuted = true;
+    video.playsInline = true;
+    video.preload = "auto";
     video.setAttribute("playsinline", "");
     video.setAttribute("webkit-playsinline", "");
     try {
       video.pause();
+      video.load();
     } catch (_) {}
     if (canvas instanceof HTMLCanvasElement) {
       canvas.style.display = "none";
