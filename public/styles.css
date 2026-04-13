@@ -3539,6 +3539,10 @@ textarea {
 body.about-page .app {
   grid-template-columns: 1fr; max-width: none; width: 100%; margin: 0; padding: 0; gap: 0;
 }
+/* Flex `body` + tall About scrub: use block layout so `document.scrollingElement` tracks the full page scroll reliably. */
+body.about-page {
+  display: block;
+}
 body.about-page .sidebar { display: none; }
 body.about-page .main {
   max-width: none;
@@ -3685,46 +3689,22 @@ body.community-page .community-top-nav {
   background: #000;
   isolation: isolate;
 }
-/* 3D “stage”: scroll + pointer tilt the whole frame sequence (151 JPEG scrub lives on canvas). */
+/* Stage: mild motion only — strong perspective + overflow:hidden clipped the whole scrub on some viewports. */
 .about-scrolly-stage {
   position: absolute;
-  inset: -6%;
+  inset: 0;
   z-index: 0;
   pointer-events: none;
-  transform-style: preserve-3d;
-  transform:
-    perspective(1180px)
-    rotateX(calc(-5.5deg + var(--about-awaken-p, 0) * 7deg + var(--about-cursor-y, 0) * -7deg))
-    rotateY(calc(var(--about-cursor-x, 0) * 9deg))
-    translateZ(calc(-28px + var(--about-awaken-p, 0) * 52px))
-    scale(calc(1.045 + var(--about-awaken-p, 0) * 0.04));
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: scale(calc(1.01 + var(--about-awaken-p, 0) * 0.028))
+    translate3d(calc(var(--about-cursor-x, 0) * 12px), calc(var(--about-cursor-y, 0) * -10px), 0);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
-}
-/* Parallax planes inside the stage (subtle depth between poster, scrub, and matte). */
-.about-scrolly-stage > .about-scrolly-atmosphere {
-  transform: translateZ(-42px) scale(1.07);
-}
-.about-scrolly-stage > .about-scrolly-fallback-bg {
-  transform: translateZ(-14px);
-}
-.about-scrolly-stage #aboutSeqCanvas {
-  transform: translateZ(8px);
-}
-.about-scrolly-stage > .about-scrolly-matte {
-  transform: translateZ(22px);
 }
 @media (prefers-reduced-motion: reduce) {
   .about-scrolly-stage {
     transform: none;
     transition: none;
     will-change: auto;
-  }
-  .about-scrolly-stage > .about-scrolly-atmosphere,
-  .about-scrolly-stage > .about-scrolly-fallback-bg,
-  .about-scrolly-stage #aboutSeqCanvas,
-  .about-scrolly-stage > .about-scrolly-matte {
-    transform: none;
   }
 }
 /* Depth stack: atmosphere → poster fallback → canvas scrub → cinematic matte → cursor glow → copy */

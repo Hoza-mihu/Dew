@@ -54,6 +54,23 @@ export function fitCanvas(canvas, ctx) {
   }
 }
 
+function loadImageElement(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.decoding = "async";
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve(img);
+    };
+    img.onload = finish;
+    img.onerror = finish;
+    img.src = url;
+    if (img.complete) finish();
+  });
+}
+
 export async function loadImagesBatched(urls, batchSize, onProgress) {
   const images = new Array(urls.length);
   let done = 0;
@@ -62,10 +79,10 @@ export async function loadImagesBatched(urls, batchSize, onProgress) {
     await Promise.all(
       slice.map(async (url, j) => {
         const idx = i + j;
-        const img = new Image();
-        img.decoding = "async";
-        img.src = url;
-        await img.decode().catch(() => {});
+        const img = await loadImageElement(url);
+        try {
+          if (img.decode) await img.decode();
+        } catch (_) {}
         images[idx] = img;
         done += 1;
         onProgress?.(done, urls.length);
@@ -75,13 +92,22 @@ export async function loadImagesBatched(urls, batchSize, onProgress) {
   return images;
 }
 
+/** Root scroll offset (body `display:flex` / Safari can make `window.scrollY` stale). */
+export function getDocumentScrollY() {
+  const sc = document.scrollingElement || document.documentElement || document.body;
+  const y = sc?.scrollTop ?? 0;
+  if (y) return y;
+  return window.scrollY || window.pageYOffset || document.body?.scrollTop || 0;
+}
+
 /** Scroll progress 0..1 through a tall track (sticky scrolly pattern). */
 export function getScrollProgress01(trackEl) {
   if (!trackEl) return 0;
+  const scrollY = getDocumentScrollY();
   const rect = trackEl.getBoundingClientRect();
-  const trackTop = window.scrollY + rect.top;
+  const trackTop = scrollY + rect.top;
   const travel = Math.max(1, trackEl.offsetHeight - window.innerHeight);
-  return clamp((window.scrollY - trackTop) / travel, 0, 1);
+  return clamp((scrollY - trackTop) / travel, 0, 1);
 }
 
 /**
@@ -166,6 +192,18 @@ export function mountCanvasScrollScrub(trackEl, canvasEl, opts) {
         })
       : null;
   ro?.observe(canvasEl);
+  ro?.observe(trackEl);
+
+  let io;
+  if (typeof IntersectionObserver !== "undefined") {
+    io = new IntersectionObserver(
+      () => {
+        onScroll();
+      },
+      { root: null, threshold: [0, 0.01, 0.25, 0.5, 0.75, 1] },
+    );
+    io.observe(trackEl);
+  }
 
   (async () => {
     if (!urls.length) return;
@@ -177,6 +215,7 @@ export function mountCanvasScrollScrub(trackEl, canvasEl, opts) {
   return () => {
     ac.abort();
     ro?.disconnect();
+    io?.disconnect();
     cancelAnimationFrame(raf);
   };
 }
