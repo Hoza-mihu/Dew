@@ -62,11 +62,6 @@ function loadImageElement(url) {
   return new Promise((resolve) => {
     const img = new Image();
     img.decoding = "async";
-    try {
-      if (/^https?:\/\//i.test(url)) {
-        img.crossOrigin = "anonymous";
-      }
-    } catch (_) {}
     let settled = false;
     const finish = () => {
       if (settled) return;

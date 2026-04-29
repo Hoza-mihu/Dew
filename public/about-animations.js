@@ -6,46 +6,16 @@ import {
   parseTemplate,
 } from "./scroll-scrub-canvas.js";
 
-/**
- * Scroll-scrub stills: nature / soil / growth (Unsplash License — unsplash.com/license).
- * Used when no local frame strip is configured (data-about-frame-count="0").
- */
-const U = (id) =>
-  `https://images.unsplash.com/${id}?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=82`;
-
+/** Curated stills — scroll scrub until you add a Whisk/Veo/EZGif sequence. */
 const ABOUT_SCRUB_FALLBACK_URLS = [
-  U("photo-1523348837708-15d4a09cfac2"),
-  U("photo-1574594630333-3a2356d21c7f"),
-  U("photo-1625246333195-78d9c38ad449"),
-  U("photo-1501004318641-b39e6451bec6"),
-  U("photo-1416879595882-3373a0480b5b"),
-  U("photo-1516253594035-291b7e07b1c9"),
-  U("photo-1470058869956-2c04339b0cc8"),
-  U("photo-1591857150577-34012f3df898"),
-  U("photo-1518531933037-91b2f5f22859"),
-  U("photo-1508610041729-e2938f91e029"),
-  U("photo-1483794342453-e9f30c0968e9"),
-  U("photo-1530836366830-596c43bcd27f"),
-  U("photo-1509228468518-180dd4864904"),
-  U("photo-1520412099551-62b6bafb2848"),
-  U("photo-1441974231531-c6227db76b6e"),
-  U("photo-1466692476868-aef1dfb1e705"),
-  U("photo-1464822759023-fed622ff2c3b"),
-  U("photo-1442522778948-6fb85d24d4d3"),
-  U("photo-1490750967868-88aa4486c946"),
-  U("photo-1500382017468-9049fed747ef"),
-  U("photo-1528164344705-9ef36c64f30e"),
-  U("photo-1421780795338-8133299b0a72"),
-  U("photo-1542601906990-b4d3fb778b09"),
-  U("photo-1459156212002-57b53387f413"),
-  U("photo-1463941308760-bf131141d3a8"),
-  U("photo-1563514227147-6d2ff665a1aa"),
-  U("photo-1599686307667-67e5ee3fbce4"),
-  U("photo-1592150620754-046b9f2a8c5f"),
-  U("photo-1530587191325-3db87d004d2b"),
-  U("photo-1558618666-fcd25c85cd64"),
-  U("photo-1465138439038-449470660da0"),
-  U("photo-1491147330743-0c26f4bd168c"),
+  "/images/about%20us/plants%20%26%20beyond.jpg",
+  "/images/about%20us/the%20platform.jpg",
+  "/images/about%20us/why%20dew.jpg",
+  "/images/about%20us/our%20vision.jpg",
+  "/images/about%20us/data.jpg",
+  "/images/about%20us/hardware.jpg",
+  "/images/about%20us/alerts.jpg",
+  "/images/about%20us/dashboard.jpg",
 ];
 
 function readIntAttr(el, name, fallback) {
@@ -216,10 +186,11 @@ export function mountAboutPage() {
     if (section) section.style.setProperty("--about-awaken-p", String(p));
 
     if (!reducedMotion && sticky) {
-      // Scroll + cursor-driven “3D” tilt (CSS perspective on .about-scrolly-stage).
-      const rotY = (p - 0.5) * 18; // degrees
-      const rotX = (0.5 - p) * 8; // degrees
-      const z = p * -22; // px
+      // Premium product-page “3D-ish” drift tied to scroll.
+      // (No heavy WebGL; we tilt the whole stage subtly and keep it readable.)
+      const rotY = (p - 0.5) * 14; // degrees
+      const rotX = (0.5 - p) * 6; // degrees
+      const z = p * -16; // px
       sticky.style.setProperty("--about-rot-y", `${rotY.toFixed(3)}deg`);
       sticky.style.setProperty("--about-rot-x", `${rotX.toFixed(3)}deg`);
       sticky.style.setProperty("--about-z", `${z.toFixed(2)}px`);
