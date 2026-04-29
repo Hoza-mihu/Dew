@@ -3877,25 +3877,6 @@ body.community-page .community-top-nav {
     min-height: 108dvh;
   }
 }
-
-/* Eco scrolly layout: vertical lanes (grid) to prevent overlay collisions */
-.about-view--eco-story .about-scrolly-sticky.about-scrolly-sticky--eco {
-  display: grid;
-  grid-template-rows: 1fr auto auto auto;
-  grid-template-columns: 1fr;
-  align-items: stretch;
-  justify-items: center;
-  row-gap: clamp(14px, 2.2vh, 26px);
-  padding: clamp(18px, 3.2vh, 34px) clamp(14px, 2.2vw, 28px) clamp(16px, 3vh, 28px);
-}
-.about-view--eco-story .about-scrolly-stage,
-.about-view--eco-story .about-annot-overlay,
-.about-view--eco-story .about-scrolly-ambient,
-.about-view--eco-story .about-story-floats {
-  grid-row: 1 / -1;
-  grid-column: 1 / -1;
-  place-self: stretch;
-}
 /* Stage: mild motion only — strong perspective + overflow:hidden clipped the whole scrub on some viewports. */
 .about-scrolly-stage {
   position: absolute;
@@ -4161,17 +4142,6 @@ body.community-page .community-top-nav {
 .about-view--eco-story .about-hero--scrolly .about-hero-content {
   padding: clamp(72px, 10dvh, 100px) 24px clamp(56px, 8dvh, 72px);
 }
-
-/* Lane 1: hero copy (eco only) */
-.about-view--eco-story .about-hero--scrolly .about-hero-content {
-  grid-row: 1;
-  grid-column: 1;
-  align-self: center;
-  justify-self: center;
-  width: min(92vw, 740px);
-  margin: 0;
-  padding: 0;
-}
 .about-scrolly-hint {
   position: absolute;
   bottom: 28px;
@@ -4184,19 +4154,6 @@ body.community-page .community-top-nav {
   text-transform: uppercase;
   color: rgba(255,255,255,0.55);
   animation: aboutScrollyHint 2.2s ease-in-out infinite;
-}
-
-/* Lane 4: hint (eco only) */
-.about-view--eco-story .about-scrolly-hint {
-  position: relative;
-  left: auto;
-  bottom: auto;
-  transform: none;
-  grid-row: 4;
-  grid-column: 1;
-  justify-self: center;
-  margin: 0;
-  opacity: 0.65;
 }
 @keyframes aboutScrollyHint {
   0%, 100% { opacity: 0.45; transform: translateX(-50%) translateY(0); }
@@ -4217,19 +4174,6 @@ body.community-page .community-top-nav {
   background: rgba(255, 255, 255, 0.07);
   pointer-events: none;
   overflow: hidden;
-}
-
-/* Lane 4: progress (eco only) */
-.about-view--eco-story .about-scrolly-progress {
-  position: relative;
-  left: auto;
-  right: auto;
-  bottom: auto;
-  grid-row: 4;
-  grid-column: 1;
-  width: min(98vw, 1200px);
-  margin-top: 10px;
-  border-radius: 999px;
 }
 .about-scrolly-progress__fill {
   display: block;
@@ -4322,18 +4266,6 @@ body.community-page .community-top-nav {
   mask-image: linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
   -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
 }
-
-/* Lane 3: horizontal ticker (eco only) */
-.about-view--eco-story .about-scrolly-news {
-  position: relative;
-  left: auto;
-  right: auto;
-  bottom: auto;
-  grid-row: 3;
-  grid-column: 1;
-  width: min(98vw, 1200px);
-  margin: 0;
-}
 .about-scrolly-news__track {
   display: flex;
   align-items: stretch;
@@ -4385,11 +4317,11 @@ body.community-page .community-top-nav {
   .about-scrolly-news__track { animation: none; }
 }
 @media (max-height: 700px) {
-  /* Grid lanes keep spacing stable; just tighten gaps a bit */
-  .about-view--eco-story .about-scrolly-sticky.about-scrolly-sticky--eco {
-    row-gap: clamp(10px, 1.6vh, 18px);
-    padding-top: clamp(14px, 2.4vh, 20px);
-    padding-bottom: clamp(12px, 2.2vh, 18px);
+  .about-story-phases {
+    bottom: clamp(188px, 28vh, 280px);
+  }
+  .about-scrolly-news {
+    bottom: clamp(84px, 11vh, 124px);
   }
 }
 .about-view--eco-story .about-scrolly-fallback-bg::after {
@@ -4516,19 +4448,6 @@ body.community-page .community-top-nav {
   min-height: 108px;
   text-align: center;
   pointer-events: none;
-}
-
-/* Lane 2: phase copy (eco only) */
-.about-view--eco-story .about-story-phases {
-  position: relative;
-  left: auto;
-  bottom: auto;
-  transform: none;
-  grid-row: 2;
-  grid-column: 1;
-  width: min(94vw, 720px);
-  min-height: 108px;
-  margin: 0;
 }
 .about-story-phase {
   position: absolute;
