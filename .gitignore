@@ -14,3 +14,10 @@ dew-iot-7f89e-firebase-adminsdk-fbsvc-526cbf5f30.json
 *.md
 !/README.md
 docs/*.md
+
+# Local-only folders/files (not part of repo source)
+Irisoled-main/
+docs/
+firmware/
+reference.mp4
+supabase/plantbot_photos_schema.sql
