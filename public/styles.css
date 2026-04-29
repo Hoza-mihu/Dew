@@ -3870,23 +3870,19 @@ body.community-page .community-top-nav {
   /* Scroll-linked cinematic tilt (driven by about-animations.js) */
   perspective: 1200px;
 }
-/* Extra vertical canvas on the eco About hero so copy, callouts, and ticker don’t stack */
-@media (min-width: 901px) and (min-height: 640px) {
-  .about-view--eco-story .about-scrolly-sticky.about-scrolly-sticky--eco {
-    height: 108dvh;
-    min-height: 108dvh;
-  }
-}
+/* Keep sticky hero <= viewport height; use padding/grid lanes for spacing instead.
+   (If height exceeds 100vh, the bottom lanes can clip because sticky uses overflow:hidden.) */
 
 /* Eco scrolly layout: vertical lanes (grid) to prevent overlay collisions */
 .about-view--eco-story .about-scrolly-sticky.about-scrolly-sticky--eco {
   display: grid;
-  grid-template-rows: 1fr auto auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
   grid-template-columns: 1fr;
   align-items: stretch;
   justify-items: center;
   row-gap: clamp(14px, 2.2vh, 26px);
   padding: clamp(18px, 3.2vh, 34px) clamp(14px, 2.2vw, 28px) clamp(16px, 3vh, 28px);
+  box-sizing: border-box;
 }
 .about-view--eco-story .about-scrolly-stage,
 .about-view--eco-story .about-annot-overlay,
