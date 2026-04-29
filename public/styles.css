@@ -517,8 +517,8 @@ textarea {
 
 /* Tap/click to zoom like social apps */
 .dew-logo-lightbox.dew-logo-lightbox--zoom .dew-logo-lightbox-img {
-  /* Shift up slightly so the full logo stays visible while zoomed */
-  transform: translateY(-6vh) scale(1.6);
+  /* Shift up more so the logo stays fully visible while zoomed */
+  transform: translateY(clamp(-180px, -14vh, -90px)) scale(1.6);
   cursor: zoom-out;
 }
 
