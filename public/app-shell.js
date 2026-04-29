@@ -100,6 +100,7 @@ function openLogoModal() {
 
   // Start closed (for animation), then open next frame.
   modal.classList.remove("dew-logo-lightbox--open");
+  modal.classList.remove("dew-logo-lightbox--zoom");
   if (content && btn) {
     // Ensure we measure the target at (almost) final layout.
     const { dx, dy, scale } = calcLogoLightboxVars(btn, content);
@@ -119,6 +120,7 @@ function closeLogoModal() {
   const modal = document.getElementById("dewLogoModal");
   if (!modal) return;
   modal.classList.remove("dew-logo-lightbox--open");
+  modal.classList.remove("dew-logo-lightbox--zoom");
   // Wait for transition before hiding so it feels like Insta/Facebook.
   window.setTimeout(() => {
     // If re-opened quickly, don't hide.
@@ -137,6 +139,8 @@ function wireLogoModal() {
   const btn = document.getElementById("dewLogoBtn");
   const backdrop = document.getElementById("dewLogoModalBackdrop");
   const closeBtn = document.getElementById("dewLogoModalClose");
+  const img = document.getElementById("dewLogoModalImg");
+  const modal = document.getElementById("dewLogoModal");
   if (!btn) return;
 
   btn.addEventListener("click", (e) => {
@@ -154,6 +158,12 @@ function wireLogoModal() {
 
   backdrop?.addEventListener("click", closeLogoModal);
   closeBtn?.addEventListener("click", closeLogoModal);
+
+  img?.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!modal) return;
+    modal.classList.toggle("dew-logo-lightbox--zoom");
+  });
 }
 
 const TOGGLE_DEBOUNCE_MS = 380;
