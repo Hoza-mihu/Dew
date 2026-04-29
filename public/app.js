@@ -140,6 +140,66 @@ async function fetchWeatherFromApi(lat, lon) {
 
 var WEATHER_ICONS = { sunny: 'ri-sun-line', cloudy: 'ri-cloud-line', rainy: 'ri-rainy-line', snowy: 'ri-snowflake-line', thunderstorm: 'ri-thunderstorms-line', windy: 'ri-windy-line' };
 
+const USER_LOCATION_CACHE_PREFIX = "dewUserLocation:";
+
+function cacheUserLocation(uid, loc) {
+  if (!uid || !loc) return;
+  const lat = Number(loc.latitude);
+  const lon = Number(loc.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  const payload = {
+    city: String(loc.city || ""),
+    state: String(loc.state || ""),
+    country: String(loc.country || ""),
+    latitude: lat,
+    longitude: lon,
+    last_updated: loc.last_updated || loc.updated_at || null,
+    cached_at: new Date().toISOString(),
+  };
+  try {
+    window.localStorage?.setItem(USER_LOCATION_CACHE_PREFIX + uid, JSON.stringify(payload));
+  } catch (_) {}
+}
+
+function readCachedUserLocation(uid) {
+  if (!uid) return null;
+  try {
+    const raw = window.localStorage?.getItem(USER_LOCATION_CACHE_PREFIX + uid);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    const lat = Number(obj?.latitude);
+    const lon = Number(obj?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return {
+      city: String(obj.city || ""),
+      state: String(obj.state || ""),
+      country: String(obj.country || ""),
+      latitude: lat,
+      longitude: lon,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function restoreUserLocationIfMissing(uid) {
+  const cached = readCachedUserLocation(uid);
+  if (!cached) return false;
+  try {
+    const putRes = await authFetch(`${API}/api/users/${encodeURIComponent(uid)}/location`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cached),
+    });
+    if (!putRes.ok) return false;
+    const saved = await putRes.json().catch(() => null);
+    if (saved) cacheUserLocation(uid, saved);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function populateHeroParticles(animation, windKmh, isMobile) {
   const rainCount = isMobile ? 22 : 40;
   const snowCount = isMobile ? 18 : 30;
@@ -311,10 +371,22 @@ async function loadDashboardWeather() {
 
   // Server-side weather endpoint handles caching + open-meteo calls.
   try {
-    const res = await authFetch(`${API}/api/weather?user_id=${encodeURIComponent(uid)}`);
-    if (!res.ok) throw new Error('Weather request failed');
+    const fetchWeather = async () => {
+      const res = await authFetch(`${API}/api/weather?user_id=${encodeURIComponent(uid)}`);
+      if (!res.ok) throw new Error('Weather request failed');
+      return res.json();
+    };
 
-    const data = await res.json();
+    let data = await fetchWeather();
+    if (!data.ok || !data.location || !data.weather) {
+      // If the server lost state (redeploy/ephemeral disk) but the user has previously saved
+      // a location on this device, restore it once and retry.
+      const restored = await restoreUserLocationIfMissing(uid);
+      if (restored) {
+        data = await fetchWeather();
+      }
+    }
+
     if (!data.ok || !data.location || !data.weather) {
       areaTodayAverages = null;
       hero.style.display = 'none';
@@ -326,6 +398,7 @@ async function loadDashboardWeather() {
     }
     const loc = data.location;
     const weather = data.weather;
+    cacheUserLocation(uid, loc);
     areaTodayAverages = data.areaToday || null;
     empty.style.display = 'none';
     hero.style.display = 'block';
@@ -489,6 +562,8 @@ function initWeatherLocationPromptUI() {
             body: JSON.stringify(payload),
           });
           if (!putRes.ok) throw new Error("Failed to save location");
+          const saved = await putRes.json().catch(() => null);
+          if (saved) cacheUserLocation(uid, saved);
           hideModal();
           disableModalButtons(false);
           // Refresh after saving.
