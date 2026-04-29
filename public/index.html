@@ -40,7 +40,12 @@
       <aside class="sidebar" id="appSidebar">
         <div>
           <div class="logo-row">
-            <div class="logo-mark logo-mark--brand-img">
+            <button
+              type="button"
+              class="logo-mark logo-mark--brand-img"
+              id="dewLogoBtn"
+              aria-label="View DEW logo"
+            >
               <img
                 src="/images/symbols/dew-logo.png"
                 alt=""
@@ -49,7 +54,7 @@
                 decoding="async"
                 class="dew-app-logo-img dew-app-logo-img--sidebar"
               />
-            </div>
+            </button>
             <div class="logo-text">
               <span>WARDEN 2.1</span>
               <span>Eco Garden</span>
@@ -300,6 +305,26 @@
                 </button>
               </div>
               <div id="weatherLocationPromptStatus" class="location-message" style="display: none; margin-top: 14px" role="status" aria-live="polite"></div>
+            </div>
+          </div>
+          <!-- Logo preview (click the sidebar logo to view full size) -->
+          <div class="modal dew-logo-modal" id="dewLogoModal" aria-hidden="true" style="display: none">
+            <div class="modal-backdrop" id="dewLogoModalBackdrop"></div>
+            <div class="modal-content" role="dialog" aria-modal="true" aria-label="DEW logo preview">
+              <div class="modal-header">
+                <h2><i class="ri-leaf-line"></i> DEW</h2>
+                <button type="button" class="modal-close" id="dewLogoModalClose" aria-label="Close">
+                  <i class="ri-close-line"></i>
+                </button>
+              </div>
+              <div class="dew-logo-modal-body">
+                <img
+                  src="/images/symbols/dew-logo.png"
+                  alt="DEW logo"
+                  decoding="async"
+                  class="dew-logo-modal-img"
+                />
+              </div>
             </div>
           </div>
           <section class="metrics-row dashboard-section dashboard-section--metrics" id="metricsRow" aria-label="Environmental metrics"></section>

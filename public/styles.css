@@ -403,8 +403,17 @@ textarea {
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
+  border: none;
+  appearance: none;
   background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.2) 0, #134030 42%, #0d2820 100%);
   box-shadow: 0 0 18px rgba(126, 242, 191, 0.22);
+  cursor: pointer;
+}
+.logo-mark--brand-img:hover { opacity: 0.92; }
+.logo-mark--brand-img:active { transform: translateY(1px); }
+.logo-mark--brand-img:focus-visible {
+  outline: 2px solid rgba(126, 242, 191, 0.55);
+  outline-offset: 3px;
 }
 /* Shared raster logo: public/images/symbols/dew-logo.png */
 .dew-app-logo-img {
@@ -429,6 +438,29 @@ textarea {
 .dew-app-logo-img--community-nav {
   max-height: 32px;
   width: auto;
+}
+
+/* Sidebar logo click-to-preview modal */
+.dew-logo-modal .modal-content {
+  max-width: min(540px, 92vw);
+  padding: 18px 18px 20px;
+}
+.dew-logo-modal-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 8px;
+}
+.dew-logo-modal-img {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 18px;
+  background: radial-gradient(circle at 20% 18%, rgba(255,255,255,0.16) 0, rgba(19, 64, 48, 0.9) 45%, rgba(13, 40, 32, 0.9) 100%);
+  padding: 18px;
+  border: 1px solid rgba(126, 242, 191, 0.12);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.35);
 }
 .logo-text { display: flex; flex-direction: column; }
 .logo-text span:first-child { font-weight: 700; letter-spacing: 0.12em; font-size: 11px; text-transform: uppercase; color: var(--accent-strong); }

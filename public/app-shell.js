@@ -62,6 +62,57 @@ export function closeDrawer() {
   document.body.style.overflow = "";
 }
 
+function isLogoModalOpen() {
+  const modal = document.getElementById("dewLogoModal");
+  if (!modal) return false;
+  return modal.style.display !== "none";
+}
+
+function openLogoModal() {
+  const modal = document.getElementById("dewLogoModal");
+  if (!modal) return;
+  if (document.body.classList.contains("nav-drawer-open")) closeDrawer();
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+  document.documentElement.style.overflow = "hidden";
+  document.body.style.overflow = "hidden";
+}
+
+function closeLogoModal() {
+  const modal = document.getElementById("dewLogoModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+  // If drawer isn't open, release scroll locks.
+  if (!document.body.classList.contains("nav-drawer-open")) {
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+  }
+}
+
+function wireLogoModal() {
+  const btn = document.getElementById("dewLogoBtn");
+  const backdrop = document.getElementById("dewLogoModalBackdrop");
+  const closeBtn = document.getElementById("dewLogoModalClose");
+  if (!btn) return;
+
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    openLogoModal();
+    closeBtn?.focus?.();
+  });
+  btn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openLogoModal();
+      closeBtn?.focus?.();
+    }
+  });
+
+  backdrop?.addEventListener("click", closeLogoModal);
+  closeBtn?.addEventListener("click", closeLogoModal);
+}
+
 const TOGGLE_DEBOUNCE_MS = 380;
 let lastToggleTime = 0;
 
@@ -149,6 +200,7 @@ function wire() {
 
   wireMenuToggle(toggle);
   wireBackdrop(backdrop);
+  wireLogoModal();
 
   document.querySelectorAll(".sidebar .nav-item[data-view]").forEach((el) => {
     el.addEventListener("click", () => {
@@ -164,7 +216,13 @@ function wire() {
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && document.body.classList.contains("nav-drawer-open")) {
+    if (e.key !== "Escape") return;
+    if (isLogoModalOpen()) {
+      closeLogoModal();
+      document.getElementById("dewLogoBtn")?.focus?.();
+      return;
+    }
+    if (document.body.classList.contains("nav-drawer-open")) {
       closeDrawer();
       toggle?.focus();
     }
