@@ -4180,6 +4180,53 @@ body.community-page .community-top-nav {
   /* Matches canvas SCRUB_CANVAS_BG / frame edges (#050908) for seamless blend */
   background: #050908;
 }
+
+/* Eco About hero: top-weighted stack so title / CTA / phase line read as one column */
+.about-view--eco-story .about-scrolly-sticky {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: clamp(48px, 8.5vh, 92px);
+}
+.about-view--eco-story .about-hero--scrolly .about-hero-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 clamp(18px, 3.5vw, 28px);
+  box-sizing: border-box;
+}
+.about-view--eco-story .about-dew-story-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.about-view--eco-story .about-dew-eyebrow {
+  margin: 0 0 clamp(12px, 1.8vh, 18px);
+}
+.about-view--eco-story .about-dew-display-title {
+  margin: 0 0 clamp(8px, 1.2vh, 14px);
+}
+.about-view--eco-story .about-dew-story-hero .about-hero-tagline {
+  margin: 0 0 clamp(12px, 2vh, 20px);
+}
+.about-view--eco-story .about-dew-hero-sub {
+  margin: 0 auto clamp(22px, 3.5vh, 34px);
+  max-width: 36ch;
+}
+.about-view--eco-story .about-dew-primary-cta {
+  margin: 0;
+  border-radius: 999px;
+  padding: 14px 30px;
+  box-shadow:
+    0 10px 36px rgba(0, 0, 0, 0.38),
+    0 0 28px rgba(34, 197, 94, 0.22);
+}
+.about-view--eco-story .about-story-phases {
+  bottom: clamp(100px, 14vh, 168px);
+  width: min(92vw, 52rem);
+}
 .about-view--eco-story .about-scrolly-fallback-bg {
   background-color: #050908;
   /* Internet-backed fallback (so the scrolly never renders as an empty slab) */
