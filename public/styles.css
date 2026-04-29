@@ -3870,13 +3870,6 @@ body.community-page .community-top-nav {
   /* Scroll-linked cinematic tilt (driven by about-animations.js) */
   perspective: 1200px;
 }
-/* Extra vertical canvas on the eco About hero so copy, callouts, and ticker don’t stack */
-@media (min-width: 901px) and (min-height: 640px) {
-  .about-view--eco-story .about-scrolly-sticky.about-scrolly-sticky--eco {
-    height: 108dvh;
-    min-height: 108dvh;
-  }
-}
 /* Stage: mild motion only — strong perspective + overflow:hidden clipped the whole scrub on some viewports. */
 .about-scrolly-stage {
   position: absolute;
@@ -3986,14 +3979,6 @@ body.community-page .community-top-nav {
 .about-annot[style*="opacity: 0."] { transform: translate3d(0, 18px, 0) scale(0.98); }
 .about-annot[style*="opacity: 1"] { transform: translate3d(0, 0, 0) scale(1); }
 
-@media (min-width: 901px) {
-  .about-view--eco-story .about-annot.about-annot--left {
-    top: 42%;
-  }
-  .about-view--eco-story .about-annot.about-annot--right {
-    top: 58%;
-  }
-}
 @media (max-width: 900px) {
   .about-annot {
     width: min(84vw, 420px);
@@ -4139,9 +4124,6 @@ body.community-page .community-top-nav {
   margin: 0 auto;
   padding: 100px 24px 80px;
 }
-.about-view--eco-story .about-hero--scrolly .about-hero-content {
-  padding: clamp(72px, 10dvh, 100px) 24px clamp(56px, 8dvh, 72px);
-}
 .about-scrolly-hint {
   position: absolute;
   bottom: 28px;
@@ -4252,7 +4234,7 @@ body.community-page .community-top-nav {
   left: 0;
   right: 0;
   /* Sit above “scroll to explore” / progress, well below story-phase copy */
-  bottom: clamp(100px, 13vh, 156px);
+  bottom: clamp(88px, 11vh, 132px);
   z-index: 3;
   pointer-events: none;
   overflow: hidden;
@@ -4318,10 +4300,10 @@ body.community-page .community-top-nav {
 }
 @media (max-height: 700px) {
   .about-story-phases {
-    bottom: clamp(188px, 28vh, 280px);
+    bottom: clamp(168px, 24vh, 240px);
   }
   .about-scrolly-news {
-    bottom: clamp(84px, 11vh, 124px);
+    bottom: clamp(72px, 10vh, 112px);
   }
 }
 .about-view--eco-story .about-scrolly-fallback-bg::after {
@@ -4441,7 +4423,7 @@ body.community-page .community-top-nav {
   position: absolute;
   left: 50%;
   /* Lifted so phase lines never stack on the news marquee */
-  bottom: clamp(220px, 30vh, 360px);
+  bottom: clamp(200px, 26vh, 300px);
   transform: translateX(-50%);
   z-index: 6;
   width: min(94vw, 600px);
