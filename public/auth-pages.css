@@ -460,8 +460,16 @@
 
 .login-panel-right .login-brand-top .dew-app-logo-img--auth {
   margin: 0 auto 12px;
-  max-height: 56px;
-  width: auto;
+  width: 72px;
+  height: 72px;
+  max-height: none;
+  border-radius: 999px;
+  padding: 10px;
+  box-sizing: border-box;
+  object-fit: contain;
+  background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.18) 0, rgba(19, 64, 48, 0.9) 45%, rgba(13, 40, 32, 0.9) 100%);
+  border: 1px solid rgba(126, 242, 191, 0.22);
+  box-shadow: 0 0 22px rgba(126, 242, 191, 0.18);
 }
 
 .login-panel-right .login-brand-top .login-brand-subtitle {
@@ -602,8 +610,15 @@
   gap: 8px;
 }
 .login-panel-footer .dew-app-logo-img--auth-footer {
-  max-height: 22px;
-  width: auto;
+  width: 28px;
+  height: 28px;
+  max-height: none;
+  border-radius: 999px;
+  padding: 5px;
+  box-sizing: border-box;
+  object-fit: contain;
+  background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.16) 0, rgba(19, 64, 48, 0.82) 45%, rgba(13, 40, 32, 0.82) 100%);
+  border: 1px solid rgba(126, 242, 191, 0.18);
   opacity: 0.88;
 }
 
