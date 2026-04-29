@@ -972,6 +972,21 @@
                 <h2><i class="ri-device-line"></i> Plant Boards (Devices)</h2>
               </div>
               <div class="card-body">
+                <div class="bots-field" style="max-width: 760px; margin-bottom: 14px">
+                  <span class="bots-field-label">IoT admin key (optional)</span>
+                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
+                    <input class="bots-input" id="iotAdminKey" placeholder="DEW_IOT_ADMIN_TOKEN (enables public device management)" style="flex:1; min-width: 320px" />
+                    <button class="btn btn-ghost" id="btnIotSaveAdminKey" type="button">
+                      <i class="ri-key-2-line"></i> Save
+                    </button>
+                    <button class="btn btn-ghost" id="btnIotClearAdminKey" type="button">
+                      <i class="ri-delete-bin-6-line"></i> Clear
+                    </button>
+                  </div>
+                  <p class="bots-panel-hint" style="margin-top: 10px">
+                    If set, the IoT Setup page can list/create/rename devices without Firebase login. Keep this secret.
+                  </p>
+                </div>
                 <div class="bots-field" style="max-width: 760px">
                   <span class="bots-field-label">Create a device (returns a device token once)</span>
                   <div style="display:flex; gap: 10px; flex-wrap: wrap">

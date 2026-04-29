@@ -616,6 +616,18 @@ function readBearerOrHeaderToken(req, headerName) {
   return '';
 }
 
+function iotAdminTokenConfigured() {
+  return !!(process.env.DEW_IOT_ADMIN_TOKEN && String(process.env.DEW_IOT_ADMIN_TOKEN).trim());
+}
+
+function isIotAdminRequest(req) {
+  const expected = String(process.env.DEW_IOT_ADMIN_TOKEN || '').trim();
+  if (!expected) return false;
+  const provided = readBearerOrHeaderToken(req, 'x-iot-admin-token');
+  if (!provided) return false;
+  return provided === expected;
+}
+
 async function requireFirebaseUidOr401(req, res) {
   const uid = await optionalFirebaseUid(req);
   if (!uid) {
@@ -3700,18 +3712,26 @@ app.post('/api/battery-alert', async (req, res) => {
 // ============================================================
 
 // --- API: Device registry (owner creates devices + tokens) ---
-// Requires Firebase auth.
+// Requires Firebase auth OR IoT admin token (DEW_IOT_ADMIN_TOKEN).
 app.get('/api/iot/devices', async (req, res) => {
   try {
-    const uid = await requireFirebaseUidOr401(req, res);
-    if (!uid) return;
-    const rows = await dbAllAsync(
-      `SELECT device_id, device_name, created_at, last_seen_at
-       FROM iot_devices
-       WHERE owner_uid = ?
-       ORDER BY created_at DESC`,
-      [uid]
-    );
+    const isAdmin = isIotAdminRequest(req);
+    const uid = isAdmin ? null : await requireFirebaseUidOr401(req, res);
+    if (!isAdmin && !uid) return;
+    const rows = isAdmin
+      ? await dbAllAsync(
+          `SELECT device_id, device_name, created_at, last_seen_at, owner_uid
+           FROM iot_devices
+           ORDER BY created_at DESC`,
+          []
+        )
+      : await dbAllAsync(
+          `SELECT device_id, device_name, created_at, last_seen_at
+           FROM iot_devices
+           WHERE owner_uid = ?
+           ORDER BY created_at DESC`,
+          [uid]
+        );
     res.json({ ok: true, devices: rows || [] });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to list devices' });
@@ -3720,8 +3740,9 @@ app.get('/api/iot/devices', async (req, res) => {
 
 app.post('/api/iot/devices', async (req, res) => {
   try {
-    const uid = await requireFirebaseUidOr401(req, res);
-    if (!uid) return;
+    const isAdmin = isIotAdminRequest(req);
+    const uid = isAdmin ? null : await requireFirebaseUidOr401(req, res);
+    if (!isAdmin && !uid) return;
     const body = req.body || {};
     const deviceId = String(body.device_id || body.deviceId || '').trim() || `plantboard_${crypto.randomBytes(6).toString('hex')}`;
     const deviceName = String(body.device_name || body.deviceName || deviceId).trim();
@@ -3751,15 +3772,42 @@ app.post('/api/iot/devices', async (req, res) => {
   }
 });
 
+// Rename / edit device name.
+app.patch('/api/iot/devices/:deviceId', async (req, res) => {
+  try {
+    const isAdmin = isIotAdminRequest(req);
+    const uid = isAdmin ? null : await requireFirebaseUidOr401(req, res);
+    if (!isAdmin && !uid) return;
+    const deviceId = String(req.params.deviceId || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'deviceId required' });
+    const body = req.body || {};
+    const deviceName = String(body.device_name || body.deviceName || '').trim();
+    if (!deviceName) return res.status(400).json({ error: 'device_name required' });
+
+    if (!isAdmin) {
+      const owner = await dbGetAsync(`SELECT owner_uid FROM iot_devices WHERE device_id = ? LIMIT 1`, [deviceId]);
+      if (!owner || String(owner.owner_uid || '') !== uid) return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await dbRunAsync(`UPDATE iot_devices SET device_name = ? WHERE device_id = ?`, [deviceName, deviceId]);
+    res.json({ ok: true, device_id: deviceId, device_name: deviceName });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to update device' });
+  }
+});
+
 app.post('/api/iot/devices/:deviceId/rotate-token', async (req, res) => {
   try {
-    const uid = await requireFirebaseUidOr401(req, res);
-    if (!uid) return;
+    const isAdmin = isIotAdminRequest(req);
+    const uid = isAdmin ? null : await requireFirebaseUidOr401(req, res);
+    if (!isAdmin && !uid) return;
     const deviceId = String(req.params.deviceId || '').trim();
     if (!deviceId) return res.status(400).json({ error: 'deviceId required' });
 
-    const owner = await dbGetAsync(`SELECT owner_uid FROM iot_devices WHERE device_id = ? LIMIT 1`, [deviceId]);
-    if (!owner || String(owner.owner_uid || '') !== uid) return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin) {
+      const owner = await dbGetAsync(`SELECT owner_uid FROM iot_devices WHERE device_id = ? LIMIT 1`, [deviceId]);
+      if (!owner || String(owner.owner_uid || '') !== uid) return res.status(403).json({ error: 'Forbidden' });
+    }
 
     const now = new Date().toISOString();
     await dbRunAsync(`UPDATE iot_device_tokens SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL`, [now, deviceId]);

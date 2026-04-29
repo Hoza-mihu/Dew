@@ -62,6 +62,36 @@ function toast(msg, type = "success") {
   if (!window.__dewShowToast) console.log(`[${type}]`, msg);
 }
 
+const ADMIN_KEY_STORAGE = "dew_iot_admin_key";
+
+function getAdminKey() {
+  try {
+    return String(window.localStorage.getItem(ADMIN_KEY_STORAGE) || "").trim();
+  } catch (_) {
+    return "";
+  }
+}
+
+function setAdminKey(k) {
+  try {
+    const v = String(k || "").trim();
+    if (!v) window.localStorage.removeItem(ADMIN_KEY_STORAGE);
+    else window.localStorage.setItem(ADMIN_KEY_STORAGE, v);
+  } catch (_) {}
+}
+
+async function iotFetch(url, options = {}) {
+  const adminKey = getAdminKey();
+  if (adminKey) {
+    const headers = new Headers(options.headers || {});
+    headers.set("x-iot-admin-token", adminKey);
+    // also support Authorization bearer on some proxies
+    headers.set("Authorization", `Bearer ${adminKey}`);
+    return fetch(url, { ...options, headers });
+  }
+  return authFetch(url, options);
+}
+
 function fmtIso(iso) {
   if (!iso) return "—";
   const t = new Date(iso).getTime();
@@ -88,7 +118,7 @@ async function refreshLists() {
   if (tbEmpty) tbEmpty.style.display = "none";
 
   const [devRes, tbRes] = await Promise.all([
-    authFetch(`${API}/api/iot/devices`),
+    iotFetch(`${API}/api/iot/devices`),
     authFetch(`${API}/api/iot/tearboards`),
   ]);
 
@@ -112,6 +142,10 @@ async function refreshLists() {
               </div>
             </div>
             <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center">
+              <input class="bots-input" data-rename-input="1" data-device-id="${escapeHtml(d.device_id)}" placeholder="Rename device…" style="min-width: 220px" />
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rename-device" data-device-id="${escapeHtml(d.device_id)}">
+                <i class="ri-edit-line"></i> Save name
+              </button>
               <button type="button" class="btn btn-ghost btn-sm" data-action="rotate-device-token" data-device-id="${escapeHtml(d.device_id)}">
                 <i class="ri-refresh-line"></i> Rotate token
               </button>
@@ -154,7 +188,7 @@ async function createDevice() {
   const device_id = String(idEl?.value || "").trim();
   const device_name = String(nameEl?.value || "").trim();
 
-  const res = await authFetch(`${API}/api/iot/devices`, {
+  const res = await iotFetch(`${API}/api/iot/devices`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ device_id, device_name }),
@@ -179,7 +213,7 @@ async function createDevice() {
 async function rotateDeviceToken(deviceId) {
   const did = String(deviceId || "").trim();
   if (!did) return;
-  const res = await authFetch(`${API}/api/iot/devices/${encodeURIComponent(did)}/rotate-token`, {
+  const res = await iotFetch(`${API}/api/iot/devices/${encodeURIComponent(did)}/rotate-token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
@@ -195,6 +229,28 @@ async function rotateDeviceToken(deviceId) {
   } else {
     toast("Token rotated.", "success");
   }
+}
+
+async function renameDevice(deviceId) {
+  const did = String(deviceId || "").trim();
+  if (!did) return;
+  const input = document.querySelector(`input[data-rename-input="1"][data-device-id="${CSS.escape(did)}"]`);
+  const name = String(input?.value || "").trim();
+  if (!name) {
+    toast("Enter a new device name first.", "info");
+    return;
+  }
+  const res = await iotFetch(`${API}/api/iot/devices/${encodeURIComponent(did)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_name: name }),
+  });
+  if (!res.ok) {
+    toast(await dewReadErrorMessage(res, "Could not rename device."), "error");
+    return;
+  }
+  toast("Device name updated.", "success");
+  await refreshLists();
 }
 
 async function createTearboard() {
@@ -282,12 +338,33 @@ function wireOnce() {
   document.getElementById("btnIotMapDevice")?.addEventListener("click", mapDevice);
   document.getElementById("btnIotTestTbRead")?.addEventListener("click", testTearboardRead);
 
+  document.getElementById("btnIotSaveAdminKey")?.addEventListener("click", () => {
+    const el = document.getElementById("iotAdminKey");
+    const v = String(el?.value || "").trim();
+    if (!v) {
+      toast("Paste the admin key first.", "info");
+      return;
+    }
+    setAdminKey(v);
+    toast("Admin key saved for this browser.", "success");
+    refreshLists();
+  });
+  document.getElementById("btnIotClearAdminKey")?.addEventListener("click", () => {
+    setAdminKey("");
+    const el = document.getElementById("iotAdminKey");
+    if (el) el.value = "";
+    toast("Admin key cleared.", "success");
+    refreshLists();
+  });
+
   document.getElementById("iotDevicesList")?.addEventListener("click", async (e) => {
     const btn = e.target?.closest("button[data-action]");
     if (!btn) return;
     const act = btn.getAttribute("data-action");
     if (act === "rotate-device-token") {
       await rotateDeviceToken(btn.getAttribute("data-device-id"));
+    } else if (act === "rename-device") {
+      await renameDevice(btn.getAttribute("data-device-id"));
     } else if (act === "prefill-device") {
       const devEl = document.getElementById("iotMapDeviceId");
       if (devEl) devEl.value = btn.getAttribute("data-device-id") || "";
@@ -309,6 +386,10 @@ function wireOnce() {
 
 export async function initIotSetupPage() {
   wireOnce();
+  // Prefill admin key input if present
+  const k = getAdminKey();
+  const keyEl = document.getElementById("iotAdminKey");
+  if (keyEl && k) keyEl.value = k;
   await refreshLists();
 }
 
