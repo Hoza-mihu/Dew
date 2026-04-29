@@ -4233,31 +4233,38 @@ body.community-page .community-top-nav {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: clamp(18px, 4.2vh, 46px);
-  z-index: 2;
+  /* Sit above “scroll to explore” / progress, well below story-phase copy */
+  bottom: clamp(88px, 11vh, 132px);
+  z-index: 3;
   pointer-events: none;
+  overflow: hidden;
+  padding: 0 8px;
   opacity: calc(0.14 + (var(--about-awaken-p, 0) * 0.72));
   transform:
-    translate3d(calc(var(--about-cursor-x, 0) * 10px), calc(var(--about-cursor-y, 0) * -8px), 0)
-    rotateX(calc(var(--about-rot-x, 0deg) * 0.10))
-    rotateY(calc(var(--about-rot-y, 0deg) * 0.16));
+    translate3d(calc(var(--about-cursor-x, 0) * 6px), calc(var(--about-cursor-y, 0) * -5px), 0)
+    rotateX(calc(var(--about-rot-x, 0deg) * 0.06))
+    rotateY(calc(var(--about-rot-y, 0deg) * 0.08));
   filter: saturate(1.08);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
 }
 .about-scrolly-news__track {
   display: flex;
-  gap: 14px;
+  align-items: stretch;
+  gap: clamp(24px, 3.2vw, 40px);
   width: max-content;
-  padding: 0 18px;
-  animation: aboutNewsMarquee 28s linear infinite;
+  padding: 0 24px;
+  animation: aboutNewsMarquee 36s linear infinite;
   will-change: transform;
 }
 .about-scrolly-sticky--eco.about-scrolly--presence .about-scrolly-news__track {
-  animation-duration: 20s;
+  animation-duration: 28s;
 }
 .about-scrolly-news__card {
-  width: clamp(220px, 32vw, 360px);
-  height: clamp(90px, 14vh, 132px);
-  border-radius: 18px;
+  flex: 0 0 auto;
+  width: clamp(260px, 34vw, 400px);
+  height: clamp(108px, 15vh, 152px);
+  border-radius: 20px;
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(5, 8, 7, 0.08) 0%, rgba(5, 8, 7, 0.82) 100%),
@@ -4266,7 +4273,7 @@ body.community-page .community-top-nav {
   box-shadow:
     0 22px 60px rgba(0, 0, 0, 0.55),
     0 0 0 1px rgba(126, 242, 191, 0.06) inset;
-  transform: translateZ(18px);
+  transform: translateZ(12px);
 }
 .about-scrolly-news__title {
   margin: 14px 14px 0;
@@ -4290,6 +4297,14 @@ body.community-page .community-top-nav {
 @media (prefers-reduced-motion: reduce) {
   .about-scrolly-news { opacity: 0.22; }
   .about-scrolly-news__track { animation: none; }
+}
+@media (max-height: 700px) {
+  .about-story-phases {
+    bottom: clamp(168px, 24vh, 240px);
+  }
+  .about-scrolly-news {
+    bottom: clamp(72px, 10vh, 112px);
+  }
 }
 .about-view--eco-story .about-scrolly-fallback-bg::after {
   background: linear-gradient(
@@ -4407,11 +4422,12 @@ body.community-page .community-top-nav {
 .about-story-phases {
   position: absolute;
   left: 50%;
-  bottom: min(11vh, 112px);
+  /* Lifted so phase lines never stack on the news marquee */
+  bottom: clamp(200px, 26vh, 300px);
   transform: translateX(-50%);
   z-index: 6;
-  width: min(92vw, 520px);
-  min-height: 92px;
+  width: min(94vw, 600px);
+  min-height: 108px;
   text-align: center;
   pointer-events: none;
 }
