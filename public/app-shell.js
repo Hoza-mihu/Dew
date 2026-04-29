@@ -111,6 +111,8 @@ function openLogoModal() {
   // Prevent a flash of transform after the open class is applied.
   requestAnimationFrame(() => {
     modal.classList.add("dew-logo-lightbox--open");
+    // Open already “zoomed” so one tap on the sidebar logo is enough (tap image again to zoom out).
+    modal.classList.add("dew-logo-lightbox--zoom");
     // Force-load to avoid pop-in.
     try { img?.decode?.(); } catch (_) {}
   });
