@@ -4227,6 +4227,70 @@ body.community-page .community-top-nav {
     filter: saturate(1.18) contrast(1.08) blur(0.12px);
   }
 }
+
+/* Horizontal “news update” strip inside the scrolly hero (internet-backed) */
+.about-scrolly-news {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(18px, 4.2vh, 46px);
+  z-index: 2;
+  pointer-events: none;
+  opacity: calc(0.14 + (var(--about-awaken-p, 0) * 0.72));
+  transform:
+    translate3d(calc(var(--about-cursor-x, 0) * 10px), calc(var(--about-cursor-y, 0) * -8px), 0)
+    rotateX(calc(var(--about-rot-x, 0deg) * 0.10))
+    rotateY(calc(var(--about-rot-y, 0deg) * 0.16));
+  filter: saturate(1.08);
+}
+.about-scrolly-news__track {
+  display: flex;
+  gap: 14px;
+  width: max-content;
+  padding: 0 18px;
+  animation: aboutNewsMarquee 28s linear infinite;
+  will-change: transform;
+}
+.about-scrolly-sticky--eco.about-scrolly--presence .about-scrolly-news__track {
+  animation-duration: 20s;
+}
+.about-scrolly-news__card {
+  width: clamp(220px, 32vw, 360px);
+  height: clamp(90px, 14vh, 132px);
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(5, 8, 7, 0.08) 0%, rgba(5, 8, 7, 0.82) 100%),
+    var(--about-news-img, none) center / cover no-repeat;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 22px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(126, 242, 191, 0.06) inset;
+  transform: translateZ(18px);
+}
+.about-scrolly-news__title {
+  margin: 14px 14px 0;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 10px 30px rgba(0,0,0,0.55);
+}
+.about-scrolly-news__sub {
+  margin: 6px 14px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.62);
+  text-shadow: 0 10px 28px rgba(0,0,0,0.5);
+}
+@keyframes aboutNewsMarquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-scrolly-news { opacity: 0.22; }
+  .about-scrolly-news__track { animation: none; }
+}
 .about-view--eco-story .about-scrolly-fallback-bg::after {
   background: linear-gradient(
     180deg,
