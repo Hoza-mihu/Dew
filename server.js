@@ -721,7 +721,91 @@ async function getUserWeatherLocationPref(uid) {
   const userId = String(uid || "").trim();
   if (!userId) return null;
 
-  // 1) Canonical: SQLite (persistent per user on the server DB file).
+  // 1) Primary: Supabase (persist across serverless deployments).
+  // If Supabase isn't configured, we fall back to SQLite + JSON store.
+  if (supabaseAdmin) {
+    try {
+      // Attempt modern schema first (city/state/country + updated_at).
+      let data = null;
+      let error = null;
+      try {
+        const resp = await supabaseAdmin
+          .from("user_weather_preferences")
+          .select("city,state,country,latitude,longitude,updated_at")
+          .eq("user_id", userId)
+          .single();
+        data = resp.data;
+        error = resp.error;
+      } catch (e) {
+        error = e;
+      }
+
+      if (error) {
+        // Legacy schema fallback: location_name + created_at.
+        const resp = await supabaseAdmin
+          .from("user_weather_preferences")
+          .select("location_name,latitude,longitude,created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (resp.error) throw resp.error;
+        data = Array.isArray(resp.data) ? resp.data[0] : resp.data;
+      }
+
+      const row = data;
+      if (row && row.latitude != null && row.longitude != null) {
+        const lat = Number(row.latitude);
+        const lon = Number(row.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          const city =
+            typeof row.city === "string"
+              ? row.city
+              : typeof row.location_name === "string"
+                ? row.location_name
+                : "";
+          const state = typeof row.state === "string" ? row.state : "";
+          const country = typeof row.country === "string" ? row.country : "";
+          const lastUpdated =
+            typeof row.updated_at === "string"
+              ? row.updated_at
+              : typeof row.created_at === "string"
+                ? row.created_at
+                : null;
+
+          // Best-effort cache into SQLite + JSON for local dev + older tooling.
+          const now = new Date().toISOString();
+          dbRunAsync(
+            `INSERT OR REPLACE INTO user_weather_location (uid, city, state, country, latitude, longitude, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, city, state, country, lat, lon, lastUpdated || now]
+          ).catch(() => {});
+          if (!store.locations) store.locations = {};
+          store.locations[userId] = {
+            city,
+            state,
+            country,
+            latitude: lat,
+            longitude: lon,
+            last_updated: lastUpdated || now,
+          };
+          saveUserData();
+
+          return {
+            city,
+            state,
+            country,
+            latitude: lat,
+            longitude: lon,
+            last_updated: lastUpdated,
+          };
+        }
+      }
+    } catch (_) {
+      // Continue to SQLite/JSON fallbacks.
+    }
+  }
+
+  // 2) Fallback: SQLite (works locally / single-node servers).
   try {
     const row = await dbGetAsync(
       `SELECT city, state, country, latitude, longitude, updated_at FROM user_weather_location WHERE uid = ?`,
@@ -742,54 +826,7 @@ async function getUserWeatherLocationPref(uid) {
       }
     }
   } catch (_) {
-    // continue to fallbacks
-  }
-
-  // 2) Optional Supabase (legacy); migrate row into SQLite when found.
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from("user_weather_preferences")
-        .select("location_name,latitude,longitude,created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (row && row.latitude != null && row.longitude != null) {
-        const lat = Number(row.latitude);
-        const lon = Number(row.longitude);
-        if (Number.isFinite(lat) && Number.isFinite(lon)) {
-          const loc = {
-            city: row.location_name || "",
-            state: "",
-            country: "",
-            latitude: lat,
-            longitude: lon,
-            last_updated: row.created_at || null,
-          };
-          const now = new Date().toISOString();
-          dbRunAsync(
-            `INSERT OR REPLACE INTO user_weather_location (uid, city, state, country, latitude, longitude, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [userId, loc.city, loc.state, loc.country, lat, lon, row.created_at || now]
-          ).catch(() => {});
-          if (!store.locations) store.locations = {};
-          store.locations[userId] = {
-            city: loc.city,
-            state: loc.state,
-            country: loc.country,
-            latitude: lat,
-            longitude: lon,
-            last_updated: loc.last_updated,
-          };
-          saveUserData();
-          return loc;
-        }
-      }
-    } catch (_) {
-      // Fall back to JSON store.
-    }
+    // continue to JSON fallback
   }
 
   const loc = (store.locations || {})[userId];
@@ -820,7 +857,52 @@ async function saveUserWeatherLocationPref(uid, body) {
 
   const now = new Date().toISOString();
 
-  // Primary: SQLite (one row per user; only updated when the user saves location).
+  // Primary: Supabase (if configured) so this persists across serverless deploys.
+  if (supabaseAdmin) {
+    try {
+      const location_name = makeLocationName(city, state, country);
+      // Try modern schema (single row per user_id).
+      let upsertError = null;
+      try {
+        const resp = await supabaseAdmin
+          .from("user_weather_preferences")
+          .upsert(
+            [
+              {
+                user_id: userId,
+                city,
+                state,
+                country,
+                location_name,
+                latitude,
+                longitude,
+                updated_at: now,
+              },
+            ],
+            { onConflict: "user_id" }
+          );
+        upsertError = resp.error || null;
+      } catch (e) {
+        upsertError = e;
+      }
+      if (upsertError) {
+        // Legacy schema fallback.
+        await supabaseAdmin.from("user_weather_preferences").delete().eq("user_id", userId);
+        await supabaseAdmin.from("user_weather_preferences").insert([
+          {
+            user_id: userId,
+            location_name,
+            latitude,
+            longitude,
+          },
+        ]);
+      }
+    } catch (e) {
+      // If Supabase is present but failing, still allow local save paths.
+    }
+  }
+
+  // Fallback / local cache: SQLite (one row per user; only updated when the user saves location).
   try {
     await dbRunAsync(
       `INSERT INTO user_weather_location (uid, city, state, country, latitude, longitude, updated_at)
@@ -835,8 +917,7 @@ async function saveUserWeatherLocationPref(uid, body) {
       [userId, city, state, country, latitude, longitude, now]
     );
   } catch (e) {
-    console.warn('user_weather_location save failed:', e.message);
-    return false;
+    console.warn("user_weather_location save failed:", e.message);
   }
 
   // Mirror to JSON store for backward compatibility / local tooling.
@@ -850,24 +931,6 @@ async function saveUserWeatherLocationPref(uid, body) {
     last_updated: now,
   };
   saveUserData();
-
-  // Optional Supabase mirror (if configured + table accepts this user_id type).
-  if (supabaseAdmin) {
-    try {
-      const location_name = makeLocationName(city, state, country);
-      await supabaseAdmin.from("user_weather_preferences").delete().eq("user_id", userId);
-      await supabaseAdmin.from("user_weather_preferences").insert([
-        {
-          user_id: userId,
-          location_name,
-          latitude,
-          longitude,
-        },
-      ]);
-    } catch (_) {
-      // ignore supabase errors to not break the app if table isn't set up yet
-    }
-  }
 
   return true;
 }

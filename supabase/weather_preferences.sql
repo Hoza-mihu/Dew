@@ -1,16 +1,20 @@
--- Optional Supabase mirror for weather location (Firebase uid as text).
--- Canonical storage for Railway/Node is SQLite table `user_weather_location` in server.js.
--- Use this only if you want a Supabase copy for analytics; the app works without it.
+-- Weather location (Firebase uid as text).
+-- Recommended for serverless (Vercel) so location persists across deploys/instances.
+-- The Node server will still mirror into SQLite/JSON for local dev, but Supabase is treated as primary when configured.
 
 create extension if not exists "uuid-ossp";
 
 create table if not exists public.user_weather_preferences (
-  id uuid primary key default uuid_generate_v4(),
-  user_id text not null,
+  -- One row per Firebase user.
+  user_id text primary key,
   location_name text,
-  latitude double precision,
-  longitude double precision,
-  created_at timestamp default now()
+  city text,
+  state text,
+  country text,
+  latitude double precision not null,
+  longitude double precision not null,
+  updated_at timestamp with time zone default now(),
+  created_at timestamp with time zone default now()
 );
 
 create index if not exists idx_user_weather_preferences_user_id on public.user_weather_preferences (user_id);
