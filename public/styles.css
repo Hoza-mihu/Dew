@@ -3868,7 +3868,7 @@ body.community-page .community-top-nav {
   background: #000;
   isolation: isolate;
   /* Scroll-linked cinematic tilt (driven by about-animations.js) */
-  perspective: 1200px;
+  perspective: 1400px;
 }
 /* Stage: mild motion only — strong perspective + overflow:hidden clipped the whole scrub on some viewports. */
 .about-scrolly-stage {
@@ -3876,14 +3876,37 @@ body.community-page .community-top-nav {
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  transform-style: preserve-3d;
   transform:
-    perspective(1200px)
-    translate3d(calc(var(--about-cursor-x, 0) * 12px), calc(var(--about-cursor-y, 0) * -10px), var(--about-z, 0px))
+    perspective(1400px)
+    translate3d(calc(var(--about-cursor-x, 0) * 18px), calc(var(--about-cursor-y, 0) * -14px), var(--about-z, 0px))
     rotateX(var(--about-rot-x, 0deg))
     rotateY(var(--about-rot-y, 0deg))
-    scale(calc(1.01 + var(--about-awaken-p, 0) * 0.028));
+    scale(calc(1.02 + var(--about-awaken-p, 0) * 0.034));
   transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
+}
+/* Subtle “lens” ring in 3D space behind the scrub plane */
+.about-scrolly-depth-ring {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: min(140vw, 2000px);
+  height: min(140vw, 2000px);
+  margin-left: calc(min(140vw, 2000px) / -2);
+  margin-top: calc(min(140vw, 2000px) / -2);
+  z-index: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(126, 242, 191, 0.14);
+  box-shadow:
+    0 0 100px rgba(34, 197, 94, 0.07) inset,
+    0 0 140px rgba(34, 197, 94, 0.05);
+  opacity: 0.45;
+  transform: translateZ(-140px) rotateX(74deg);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-scrolly-depth-ring { opacity: 0.28; }
 }
 @media (prefers-reduced-motion: reduce) {
   .about-scrolly-stage {
@@ -4067,6 +4090,21 @@ body.community-page .community-top-nav {
   backface-visibility: hidden;
   transition: opacity 0.55s ease;
 }
+/* Light “dust” plane — opacity follows scroll progress on #aboutScrolly */
+.about-scrolly-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: calc(0.1 + var(--about-awaken-p, 0) * 0.42);
+  background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.42) 1px, transparent 1.6px);
+  background-size: 52px 64px;
+  mix-blend-mode: screen;
+  transform: translateZ(24px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-scrolly-particles { opacity: 0.12; }
+}
 .about-scrolly-matte {
   position: absolute;
   inset: 0;
@@ -4182,7 +4220,7 @@ body.community-page .community-top-nav {
 }
 .about-view--eco-story .about-scrolly-fallback-bg {
   background-color: #050908;
-  background-image: url("/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-001.jpg");
+  background-image: url("https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=82");
   background-size: cover;
   background-position: center;
   filter: brightness(0.93) contrast(1.06) saturate(1.08);
@@ -4881,7 +4919,27 @@ body.community-page .community-top-nav {
   width: auto;
   height: auto;
 }
+.about-footer-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
+}
 .about-footer-copy { opacity: 0.85; }
+.about-footer-photos {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.52;
+}
+.about-footer-photos a {
+  color: rgba(126, 242, 191, 0.88);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(126, 242, 191, 0.35);
+}
+.about-footer-photos a:hover {
+  border-bottom-color: rgba(126, 242, 191, 0.65);
+}
 
 /* Profile section */
 .profile-view { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 0; max-width: 640px; }
@@ -8535,7 +8593,7 @@ body.syncdata-page main.main {
 /* Eco story fallback: block legacy plant art even if an older styles.css was cached */
 body.about-page .about-view--eco-story .about-scrolly-fallback-bg {
   background-color: #050908 !important;
-  background-image: url("/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-001.jpg") !important;
+  background-image: url("https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=82") !important;
   background-size: cover !important;
   background-position: center !important;
   filter: brightness(0.93) contrast(1.06) saturate(1.08) !important;
