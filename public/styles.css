@@ -451,6 +451,16 @@ textarea {
   padding: 20px;
   box-sizing: border-box;
 }
+/* When zoomed, top-align so the enlarged logo can't "sink" toward the bottom */
+.dew-logo-lightbox.dew-logo-lightbox--zoom {
+  align-items: flex-start;
+  /* Keep preview high: only safe-area + room for close control (avoid 12vh which pushes mid-screen) */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+}
+.dew-logo-lightbox.dew-logo-lightbox--zoom .dew-logo-lightbox-content {
+  align-items: flex-start;
+}
 .dew-logo-lightbox[style*="display: none"] { pointer-events: none; }
 .dew-logo-lightbox-backdrop {
   position: absolute;
@@ -517,9 +527,16 @@ textarea {
 
 /* Tap/click to zoom like social apps */
 .dew-logo-lightbox.dew-logo-lightbox--zoom .dew-logo-lightbox-img {
-  /* Shift up more so the logo stays fully visible while zoomed */
-  transform: translateY(max(-320px, min(-24vh, -160px))) scale(1.6);
+  /* Scale-only; top origin keeps growth downward so it doesn’t “hang” toward the bottom */
+  transform-origin: center top;
+  transform: scale(1.45);
   cursor: zoom-out;
+}
+
+@media (max-width: 640px) {
+  .dew-logo-lightbox.dew-logo-lightbox--zoom .dew-logo-lightbox-img {
+    transform: scale(1.25);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
