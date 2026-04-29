@@ -68,26 +68,69 @@ function isLogoModalOpen() {
   return modal.style.display !== "none";
 }
 
+function calcLogoLightboxVars(fromEl, toEl) {
+  if (!fromEl || !toEl) return { dx: 0, dy: 0, scale: 0.9 };
+  try {
+    const fr = fromEl.getBoundingClientRect();
+    const tr = toEl.getBoundingClientRect();
+    const fromCx = fr.left + fr.width / 2;
+    const fromCy = fr.top + fr.height / 2;
+    const toCx = tr.left + tr.width / 2;
+    const toCy = tr.top + tr.height / 2;
+    const dx = fromCx - toCx;
+    const dy = fromCy - toCy;
+    const scale = Math.max(0.18, Math.min(0.92, Math.min(fr.width / Math.max(1, tr.width), fr.height / Math.max(1, tr.height))));
+    return { dx, dy, scale };
+  } catch (_) {
+    return { dx: 0, dy: 0, scale: 0.9 };
+  }
+}
+
 function openLogoModal() {
   const modal = document.getElementById("dewLogoModal");
+  const content = document.querySelector("#dewLogoModal .dew-logo-lightbox-content");
+  const img = document.getElementById("dewLogoModalImg");
+  const btn = document.getElementById("dewLogoBtn");
   if (!modal) return;
   if (document.body.classList.contains("nav-drawer-open")) closeDrawer();
   modal.style.display = "flex";
   modal.setAttribute("aria-hidden", "false");
   document.documentElement.style.overflow = "hidden";
   document.body.style.overflow = "hidden";
+
+  // Start closed (for animation), then open next frame.
+  modal.classList.remove("dew-logo-lightbox--open");
+  if (content && btn) {
+    // Ensure we measure the target at (almost) final layout.
+    const { dx, dy, scale } = calcLogoLightboxVars(btn, content);
+    content.style.setProperty("--dew-logo-dx", `${dx}px`);
+    content.style.setProperty("--dew-logo-dy", `${dy}px`);
+    content.style.setProperty("--dew-logo-scale", String(scale));
+  }
+  // Prevent a flash of transform after the open class is applied.
+  requestAnimationFrame(() => {
+    modal.classList.add("dew-logo-lightbox--open");
+    // Force-load to avoid pop-in.
+    try { img?.decode?.(); } catch (_) {}
+  });
 }
 
 function closeLogoModal() {
   const modal = document.getElementById("dewLogoModal");
   if (!modal) return;
-  modal.style.display = "none";
-  modal.setAttribute("aria-hidden", "true");
-  // If drawer isn't open, release scroll locks.
-  if (!document.body.classList.contains("nav-drawer-open")) {
-    document.documentElement.style.overflow = "";
-    document.body.style.overflow = "";
-  }
+  modal.classList.remove("dew-logo-lightbox--open");
+  // Wait for transition before hiding so it feels like Insta/Facebook.
+  window.setTimeout(() => {
+    // If re-opened quickly, don't hide.
+    if (modal.classList.contains("dew-logo-lightbox--open")) return;
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+    // If drawer isn't open, release scroll locks.
+    if (!document.body.classList.contains("nav-drawer-open")) {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+    }
+  }, 210);
 }
 
 function wireLogoModal() {
