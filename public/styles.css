@@ -4182,10 +4182,43 @@ body.community-page .community-top-nav {
 }
 .about-view--eco-story .about-scrolly-fallback-bg {
   background-color: #050908;
-  background-image: url("/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-001.jpg");
+  /* Internet-backed fallback (so the scrolly never renders as an empty slab) */
+  background-image: url("https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=82");
   background-size: cover;
   background-position: center;
   filter: brightness(0.93) contrast(1.06) saturate(1.08);
+}
+.about-view--eco-story .about-scrolly-fallback-bg::before {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  pointer-events: none;
+  /* Extra layers: “living system” vibes (soil + leaves) with a subtle 3D drift */
+  background-image:
+    url("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80"),
+    url("https://images.unsplash.com/photo-1416879595882-3373a0480b5b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80");
+  background-size: 120% 120%, 120% 120%;
+  background-position: 30% 52%, 72% 30%;
+  background-repeat: no-repeat;
+  opacity: calc(0.12 + (var(--about-awaken-p, 0) * 0.28));
+  mix-blend-mode: screen;
+  filter: saturate(1.1) contrast(1.04);
+  transform: translate3d(0, 0, -1px) rotateZ(0.001deg);
+  animation: aboutFallbackDrift 12s ease-in-out infinite alternate;
+}
+.about-scrolly-sticky--eco.about-scrolly--presence .about-scrolly-fallback-bg::before {
+  opacity: calc(0.18 + (var(--about-awaken-p, 0) * 0.34));
+  animation-duration: 9.5s;
+}
+@keyframes aboutFallbackDrift {
+  from {
+    transform: translate3d(-10px, 8px, -1px) scale(1.02);
+    background-position: 22% 56%, 78% 28%;
+  }
+  to {
+    transform: translate3d(14px, -10px, -1px) scale(1.03);
+    background-position: 36% 48%, 66% 34%;
+  }
 }
 .about-view--eco-story .about-scrolly-fallback-bg::after {
   background: linear-gradient(
@@ -8535,7 +8568,7 @@ body.syncdata-page main.main {
 /* Eco story fallback: block legacy plant art even if an older styles.css was cached */
 body.about-page .about-view--eco-story .about-scrolly-fallback-bg {
   background-color: #050908 !important;
-  background-image: url("/about-scroll-frames/ezgif-3c2f5268f03d640e-jpg/ezgif-frame-001.jpg") !important;
+  background-image: url("https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=82") !important;
   background-size: cover !important;
   background-position: center !important;
   filter: brightness(0.93) contrast(1.06) saturate(1.08) !important;
