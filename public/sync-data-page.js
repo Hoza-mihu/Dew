@@ -3,7 +3,7 @@
  */
 import { authReady } from "./firebase-config.js";
 
-const API = window.location.origin;
+const API = (import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : window.location.origin;
 
 async function authFetch(url, options = {}) {
   try {

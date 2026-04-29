@@ -58,6 +58,7 @@ const aboutView = document.getElementById("aboutView");
 const communityView = document.getElementById("communityView");
 const botsHubView = document.getElementById("botsHubView");
 const syncDataView = document.getElementById("syncDataView");
+const iotSetupView = document.getElementById("iotSetupView");
 
 /** Tear down scroll scrub + observers when leaving About. */
 let aboutPageMotionTeardown = null;
@@ -107,7 +108,18 @@ const PERSISTED_VIEWS = new Set([
   "bots-plant",
   "bots-desk",
   "syncdata",
+  "iot",
 ]);
+
+let iotSetupModulePromise = null;
+function loadIotSetupModule() {
+  if (!iotSetupModulePromise) iotSetupModulePromise = import("./iot-setup-page.js");
+  iotSetupModulePromise
+    .then((m) => {
+      if (m.initIotSetupPage) m.initIotSetupPage();
+    })
+    .catch((err) => console.error("IoT Setup page", err));
+}
 
 async function upsertUserDirectoryEntry(user) {
   if (!user?.uid) return;
@@ -185,6 +197,11 @@ function showToast(message, type = "success") {
     window.setTimeout(() => el.remove(), 250);
   }, 2200);
 }
+
+// Allow other lazy-loaded pages (Bots, IoT Setup, etc.) to reuse the same toast UI.
+try {
+  if (typeof window !== "undefined") window.__dewShowToast = showToast;
+} catch (_) {}
 
 function bindPlantDetailStaticActions() {
   document.getElementById("plantBackBtn")?.addEventListener("click", () => showView(lastPlantsSection));
@@ -476,10 +493,12 @@ function showView(view) {
   if (communityView) communityView.style.display = v === "community" ? "block" : "none";
   if (botsHubView) botsHubView.style.display = v === "bots" || v === "bots-plant" || v === "bots-desk" ? "block" : "none";
   if (syncDataView) syncDataView.style.display = v === "syncdata" ? "block" : "none";
+  if (iotSetupView) iotSetupView.style.display = v === "iot" ? "block" : "none";
   document.body.classList.toggle("about-page", v === "about");
   document.body.classList.toggle("community-page", v === "community");
   document.body.classList.toggle("bots-subpage", v === "bots-plant" || v === "bots-desk");
   document.body.classList.toggle("syncdata-page", v === "syncdata");
+  document.body.classList.toggle("iot-setup-page", v === "iot");
   document.querySelectorAll(".nav-item").forEach((el) => {
     const nv = el.dataset.view;
     if (!nv) el.classList.remove("active");
@@ -538,6 +557,7 @@ function showView(view) {
 
   if (v === "bots" || v === "bots-plant" || v === "bots-desk") loadBotsPagesModule(v);
   if (v === "syncdata") loadSyncDataModule();
+  if (v === "iot") loadIotSetupModule();
 
   if (v === "syncdata") {
     requestAnimationFrame(() => {

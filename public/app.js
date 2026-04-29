@@ -1,6 +1,6 @@
 import { authReady } from "./firebase-config.js";
 
-const API = window.location.origin;
+const API = (import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : window.location.origin;
 
 /** Attach Firebase ID token so the server can link Desk Bot / plant fleet to your account. */
 async function authFetch(url, options = {}) {
@@ -258,7 +258,7 @@ function renderWeatherHero(loc, weather) {
 function reportWeatherForAlerts(weather) {
   const uid = window.__dewUid;
   if (!uid || !weather) return;
-  const API = window.location.origin;
+  const API = (import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : window.location.origin;
   fetch(API + '/api/users/' + encodeURIComponent(uid) + '/weather-alerts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

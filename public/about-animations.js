@@ -46,6 +46,38 @@ function smoothstep01(t) {
   return x * x * (3 - 2 * x);
 }
 
+function remap01(x, a, b) {
+  if (b === a) return 0;
+  return clamp((x - a) / (b - a), 0, 1);
+}
+
+function fadeWindow(p, start, end) {
+  // 0 → 1 (ease in) then 1 → 0 (ease out) across [start, end]
+  const w = Math.max(0.04, end - start);
+  const inLen = Math.min(0.16, w * 0.38);
+  const outLen = Math.min(0.18, w * 0.42);
+  const tIn = smoothstep01(remap01(p, start, start + inLen));
+  const tOut = 1 - smoothstep01(remap01(p, end - outLen, end));
+  return clamp(Math.min(tIn, tOut), 0, 1);
+}
+
+function parseAnchor(raw) {
+  const parts = String(raw || "")
+    .split(",")
+    .map((s) => parseFloat(s.trim()));
+  const ax = Number.isFinite(parts[0]) ? parts[0] : 0.5;
+  const ay = Number.isFinite(parts[1]) ? parts[1] : 0.5;
+  return { ax: clamp(ax, 0, 1), ay: clamp(ay, 0, 1) };
+}
+
+function setSvgLinePath(pathEl, fromX, fromY, toX, toY) {
+  if (!pathEl) return;
+  const mx = fromX + (toX - fromX) * 0.55;
+  const my = fromY + (toY - fromY) * 0.18;
+  // Single soft curve, “technical” but minimal.
+  pathEl.setAttribute("d", `M ${fromX.toFixed(1)} ${fromY.toFixed(1)} Q ${mx.toFixed(1)} ${my.toFixed(1)} ${toX.toFixed(1)} ${toY.toFixed(1)}`);
+}
+
 function subsampleFrameUrls(urls, step) {
   if (!urls.length || step <= 1) return urls;
   return urls.filter((_, i) => i % step === 0);
@@ -118,12 +150,17 @@ export function mountAboutPage() {
   const video = document.getElementById("aboutRefVideo");
   const section = document.getElementById("aboutScrolly");
   const sticky = document.getElementById("aboutScrollySticky");
+  const stage = document.getElementById("aboutScrollyStage");
+  const annotOverlay = document.getElementById("aboutAnnotOverlay");
+  const annotSvg = document.getElementById("aboutAnnotLines");
   const fallbackBg = document.querySelector(".about-scrolly-fallback-bg");
   const hint = document.querySelector(".about-scrolly-hint");
   const progressBar = document.getElementById("aboutScrollyProgress");
   const heroBlock = section?.querySelector(".about-dew-story-hero");
   const phases = section ? Array.from(section.querySelectorAll(".about-story-phase")) : [];
   const floatNodes = section ? Array.from(section.querySelectorAll(".about-story-float")) : [];
+  const callouts = annotOverlay ? Array.from(annotOverlay.querySelectorAll(".about-annot")) : [];
+  const linePaths = annotSvg ? Array.from(annotSvg.querySelectorAll(".about-annot-line")) : [];
 
   if (!aboutView || !track) {
     return () => {};
@@ -148,6 +185,21 @@ export function mountAboutPage() {
   const onScrubUi = (p) => {
     if (section) section.style.setProperty("--about-awaken-p", String(p));
 
+    if (!reducedMotion && sticky) {
+      // Premium product-page “3D-ish” drift tied to scroll.
+      // (No heavy WebGL; we tilt the whole stage subtly and keep it readable.)
+      const rotY = (p - 0.5) * 14; // degrees
+      const rotX = (0.5 - p) * 6; // degrees
+      const z = p * -16; // px
+      sticky.style.setProperty("--about-rot-y", `${rotY.toFixed(3)}deg`);
+      sticky.style.setProperty("--about-rot-x", `${rotX.toFixed(3)}deg`);
+      sticky.style.setProperty("--about-z", `${z.toFixed(2)}px`);
+    } else if (sticky) {
+      sticky.style.removeProperty("--about-rot-y");
+      sticky.style.removeProperty("--about-rot-x");
+      sticky.style.removeProperty("--about-z");
+    }
+
     const heroFade = 1 - clamp((p - 0.035) * 2.65, 0, 1);
     if (heroBlock) {
       heroBlock.style.opacity = String(Math.max(0.12, heroFade));
@@ -164,6 +216,62 @@ export function mountAboutPage() {
     });
 
     updateStoryFloats(section, p, reducedMotion);
+
+    // Callouts: fade/slide in windows + draw hairline connectors to the “object”.
+    if (annotOverlay && !reducedMotion) {
+      annotOverlay.style.opacity = String(clamp((p - 0.14) * 6.5, 0, 1));
+      const viewW = 1000;
+      const viewH = 1000;
+      callouts.forEach((el) => {
+        const start = parseFloat(el.getAttribute("data-annot-start") || "0");
+        const end = parseFloat(el.getAttribute("data-annot-end") || "0");
+        const o = fadeWindow(p, start, end);
+        el.style.setProperty("--annot-o", o.toFixed(4));
+        el.style.opacity = String(o);
+        el.style.pointerEvents = o > 0.2 ? "auto" : "none";
+      });
+
+      // Update SVG paths only when at least one callout is visible.
+      const any = callouts.some((el) => parseFloat(el.style.opacity || "0") > 0.05);
+      if (any) {
+        linePaths.forEach((pathEl) => {
+          const id = pathEl.getAttribute("data-line-for") || "";
+          const target = id ? document.getElementById(id) : null;
+          if (!target) return;
+          const o = parseFloat(target.style.opacity || "0") || 0;
+          pathEl.style.opacity = String(clamp(o * 1.05, 0, 1));
+
+          // Anchor (object-space) in normalized 0..1; convert to SVG viewbox.
+          const { ax, ay } = parseAnchor(target.getAttribute("data-annot-anchor"));
+          const fromX = ax * viewW;
+          const fromY = ay * viewH;
+
+          // To-point: approximate to left/right edge band + vertical center of callout
+          const right = target.classList.contains("about-annot--right");
+          const rect = target.getBoundingClientRect();
+          const stickyRect = sticky?.getBoundingClientRect?.() || { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+          const cy = rect.height ? (rect.top + rect.height / 2 - stickyRect.top) / Math.max(1, stickyRect.height) : 0.5;
+          const toY = clamp(cy, 0.08, 0.92) * viewH;
+          const toX = right ? 760 : 240;
+          setSvgLinePath(pathEl, fromX, fromY, toX, toY);
+        });
+      } else {
+        linePaths.forEach((pEl) => {
+          pEl.style.opacity = "0";
+        });
+      }
+    } else if (annotOverlay) {
+      annotOverlay.style.opacity = "";
+      callouts.forEach((el) => {
+        el.style.opacity = "0";
+        el.style.pointerEvents = "none";
+        el.style.removeProperty("--annot-o");
+      });
+      linePaths.forEach((pEl) => {
+        pEl.style.opacity = "0";
+        pEl.removeAttribute("d");
+      });
+    }
 
     if (sticky) {
       sticky.classList.toggle("about-scrolly--presence", !reducedMotion && p > 0.76);
@@ -270,6 +378,9 @@ export function mountAboutPage() {
       } catch (_) {}
     }
     if (section) section.style.removeProperty("--about-awaken-p");
+    sticky?.style.removeProperty("--about-rot-y");
+    sticky?.style.removeProperty("--about-rot-x");
+    sticky?.style.removeProperty("--about-z");
     if (progressBar) progressBar.setAttribute("aria-valuenow", "0");
     if (heroBlock) {
       heroBlock.style.opacity = "";

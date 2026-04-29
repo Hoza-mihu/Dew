@@ -137,6 +137,12 @@
                 <span>Community</span>
               </div>
             </li>
+            <li class="nav-item" data-view="iot">
+              <div class="nav-item-left">
+                <div class="nav-icon"><i class="ri-base-station-line"></i></div>
+                <span>IoT Setup</span>
+              </div>
+            </li>
             <li class="nav-item" data-view="settings">
               <div class="nav-item-left">
                 <div class="nav-icon"><i class="ri-settings-3-line"></i></div>
@@ -941,6 +947,106 @@
           </div>
 
           <div class="sync-data-insights" id="syncDataInsights" aria-live="polite"></div>
+        </div>
+
+        <!-- IoT Setup: create Plant Boards + Tearboards + mapping -->
+        <div class="main-inner dashboard-shell" id="iotSetupView" style="display: none">
+          <section class="top-bar dashboard-section dashboard-section--header">
+            <div class="top-left">
+              <h1>
+                IoT Setup
+                <span class="accent"><i class="ri-base-station-line"></i> devices + tearboards</span>
+              </h1>
+              <p>Create device tokens, map them to Tearboards, and test secure reads.</p>
+            </div>
+            <div class="top-right">
+              <button class="btn btn-ghost" id="btnIotRefresh">
+                <i class="ri-refresh-line"></i> Refresh
+              </button>
+            </div>
+          </section>
+
+          <section class="dashboard-section">
+            <div class="card" style="margin-bottom: 18px">
+              <div class="card-header">
+                <h2><i class="ri-device-line"></i> Plant Boards (Devices)</h2>
+              </div>
+              <div class="card-body">
+                <div class="bots-field" style="max-width: 760px">
+                  <span class="bots-field-label">Create a device (returns a device token once)</span>
+                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
+                    <input class="bots-input" id="iotDeviceId" placeholder="device_id (e.g. plantboard_1)" style="flex:1; min-width: 220px" />
+                    <input class="bots-input" id="iotDeviceName" placeholder="device_name (e.g. Kitchen Board)" style="flex:1; min-width: 220px" />
+                    <button class="btn btn-primary" id="btnIotCreateDevice" type="button">
+                      <i class="ri-add-line"></i> Create
+                    </button>
+                  </div>
+                  <p class="bots-panel-hint" style="margin-top: 10px">
+                    The returned <code>dev_...</code> token is what firmware uses as <code>Authorization: Bearer dev_...</code> for <code>/api/upload-data</code>.
+                  </p>
+                </div>
+
+                <div id="iotDevicesEmpty" class="bots-muted" style="display:none; margin-top: 14px">No devices yet.</div>
+                <div id="iotDevicesList" style="margin-top: 14px"></div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 18px">
+              <div class="card-header">
+                <h2><i class="ri-window-line"></i> Tearboards</h2>
+              </div>
+              <div class="card-body">
+                <div class="bots-field" style="max-width: 760px">
+                  <span class="bots-field-label">Create a tearboard (returns a tearboard token once)</span>
+                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
+                    <input class="bots-input" id="iotTearboardName" placeholder="Name (e.g. Tearboard #1)" style="flex:1; min-width: 220px" />
+                    <input class="bots-input" id="iotTearboardDeviceId" placeholder="Optional initial device_id to map" style="flex:1; min-width: 220px" />
+                    <button class="btn btn-primary" id="btnIotCreateTearboard" type="button">
+                      <i class="ri-add-line"></i> Create
+                    </button>
+                  </div>
+                  <p class="bots-panel-hint" style="margin-top: 10px">
+                    The returned <code>tb_...</code> token is what a Tearboard uses to call <code>/api/tearboard/get-device-data</code>.
+                  </p>
+                </div>
+
+                <div class="bots-field" style="max-width: 760px; margin-top: 18px">
+                  <span class="bots-field-label">Map a device to a tearboard</span>
+                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
+                    <input class="bots-input" id="iotMapTearboardId" placeholder="tearboard_id (tb_...)" style="flex:1; min-width: 220px" />
+                    <input class="bots-input" id="iotMapDeviceId" placeholder="device_id (plantboard_1)" style="flex:1; min-width: 220px" />
+                    <button class="btn btn-ghost" id="btnIotMapDevice" type="button">
+                      <i class="ri-link"></i> Map
+                    </button>
+                  </div>
+                </div>
+
+                <div id="iotTearboardsEmpty" class="bots-muted" style="display:none; margin-top: 14px">No tearboards yet.</div>
+                <div id="iotTearboardsList" style="margin-top: 14px"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h2><i class="ri-shield-check-line"></i> Test tearboard read (secure)</h2>
+              </div>
+              <div class="card-body">
+                <div class="bots-field" style="max-width: 760px">
+                  <span class="bots-field-label">Tearboard token (tb_...)</span>
+                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
+                    <input class="bots-input" id="iotTestTbToken" placeholder="tb_..." style="flex:1; min-width: 320px" />
+                    <button class="btn btn-ghost" id="btnIotTestTbRead" type="button">
+                      <i class="ri-play-line"></i> Fetch
+                    </button>
+                  </div>
+                  <p class="bots-panel-hint" style="margin-top: 10px">
+                    This request is intentionally <strong>not</strong> Firebase-auth. It uses only the tearboard token to return mapped device data.
+                  </p>
+                </div>
+                <pre id="iotTestOut" style="margin-top: 12px; white-space: pre-wrap; word-break: break-word; font-size: 12px; opacity: 0.92"></pre>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="profile-view" id="profileView" style="display: none">
@@ -2105,6 +2211,62 @@
                   <div class="about-scrolly-fallback-bg"></div>
                   <canvas id="aboutSeqCanvas" aria-hidden="true"></canvas>
                   <div class="about-scrolly-matte"></div>
+                </div>
+                <div class="about-annot-overlay" id="aboutAnnotOverlay" aria-hidden="true">
+                  <svg class="about-annot-lines" id="aboutAnnotLines" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+                    <path class="about-annot-line" data-line-for="feature-processing" d="" />
+                    <path class="about-annot-line" data-line-for="feature-modular" d="" />
+                    <path class="about-annot-line" data-line-for="feature-ai" d="" />
+                    <path class="about-annot-line" data-line-for="feature-cloud" d="" />
+                  </svg>
+
+                  <div
+                    class="about-annot about-annot--left"
+                    id="feature-processing"
+                    data-annot-start="0.20"
+                    data-annot-end="0.40"
+                    data-annot-anchor="0.56,0.46"
+                  >
+                    <span class="about-annot-kicker">Core</span>
+                    <div class="about-annot-title">Real-time Processing</div>
+                    <div class="about-annot-body">Edge-to-cloud telemetry, stitched into one calm dashboard.</div>
+                  </div>
+
+                  <div
+                    class="about-annot about-annot--right"
+                    id="feature-modular"
+                    data-annot-start="0.34"
+                    data-annot-end="0.56"
+                    data-annot-anchor="0.46,0.58"
+                  >
+                    <span class="about-annot-kicker">System</span>
+                    <div class="about-annot-title">Modular Architecture</div>
+                    <div class="about-annot-body">Plant bot + desk bot + app panels—snap-in, extensible, resilient.</div>
+                  </div>
+
+                  <div
+                    class="about-annot about-annot--left"
+                    id="feature-ai"
+                    data-annot-start="0.52"
+                    data-annot-end="0.78"
+                    data-annot-anchor="0.58,0.40"
+                  >
+                    <span class="about-annot-kicker">Intelligence</span>
+                    <div class="about-annot-title">AI Integration Layer</div>
+                    <div class="about-annot-body">Recommendations, moods, and alerts—always subtle, never noisy.</div>
+                  </div>
+
+                  <div
+                    class="about-annot about-annot--right"
+                    id="feature-cloud"
+                    data-annot-start="0.70"
+                    data-annot-end="0.98"
+                    data-annot-anchor="0.44,0.44"
+                  >
+                    <span class="about-annot-kicker">Network</span>
+                    <div class="about-annot-title">Cloud Sync Engine</div>
+                    <div class="about-annot-body">Secure identity, shared state, and real-time updates across devices.</div>
+                  </div>
                 </div>
                 <div class="about-scrolly-ambient" aria-hidden="true"></div>
                 <div class="about-story-floats" aria-hidden="true">

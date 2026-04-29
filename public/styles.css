@@ -3751,6 +3751,8 @@ body.community-page .community-top-nav {
   overflow: hidden;
   background: #000;
   isolation: isolate;
+  /* Scroll-linked cinematic tilt (driven by about-animations.js) */
+  perspective: 1200px;
 }
 /* Stage: mild motion only — strong perspective + overflow:hidden clipped the whole scrub on some viewports. */
 .about-scrolly-stage {
@@ -3758,8 +3760,12 @@ body.community-page .community-top-nav {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  transform: scale(calc(1.01 + var(--about-awaken-p, 0) * 0.028))
-    translate3d(calc(var(--about-cursor-x, 0) * 12px), calc(var(--about-cursor-y, 0) * -10px), 0);
+  transform:
+    perspective(1200px)
+    translate3d(calc(var(--about-cursor-x, 0) * 12px), calc(var(--about-cursor-y, 0) * -10px), var(--about-z, 0px))
+    rotateX(var(--about-rot-x, 0deg))
+    rotateY(var(--about-rot-y, 0deg))
+    scale(calc(1.01 + var(--about-awaken-p, 0) * 0.028));
   transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
@@ -3769,6 +3775,108 @@ body.community-page .community-top-nav {
     transition: none;
     will-change: auto;
   }
+}
+
+/* Premium annotation overlay (hairlines + floating callouts) */
+.about-annot-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.about-annot-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 10px rgba(126, 242, 191, 0.12));
+}
+.about-annot-line {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.78);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-dasharray: 2 10;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.about-annot {
+  position: absolute;
+  top: 50%;
+  width: min(38vw, 380px);
+  padding: 14px 16px 13px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(8, 10, 10, 0.75) 0%, rgba(6, 8, 8, 0.52) 100%);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(126, 242, 191, 0.06) inset;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translate3d(0, 18px, 0) scale(0.98);
+  transition: opacity 0.28s ease, transform 0.32s cubic-bezier(0.2, 1, 0.25, 1);
+  will-change: opacity, transform;
+}
+.about-annot::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(70% 120% at 30% 0%, rgba(126, 242, 191, 0.12), transparent 58%);
+  opacity: 0.8;
+  mix-blend-mode: screen;
+}
+.about-annot--left { left: clamp(16px, 6vw, 84px); transform-origin: left center; }
+.about-annot--right { right: clamp(16px, 6vw, 84px); transform-origin: right center; }
+
+.about-annot-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.about-annot-title {
+  margin-top: 8px;
+  font-size: clamp(16px, 1.6vw, 18px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.92);
+}
+.about-annot-body {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* Give the callouts subtle, scroll-synced “arrival” */
+.about-annot[style*="opacity: 0."] { transform: translate3d(0, 18px, 0) scale(0.98); }
+.about-annot[style*="opacity: 1"] { transform: translate3d(0, 0, 0) scale(1); }
+
+@media (max-width: 900px) {
+  .about-annot {
+    width: min(84vw, 420px);
+    left: 50% !important;
+    right: auto !important;
+    top: auto;
+    bottom: 90px;
+    transform: translate3d(-50%, 18px, 0) scale(0.98);
+  }
+  .about-annot[style*="opacity: 1"] { transform: translate3d(-50%, 0, 0) scale(1); }
+  .about-annot-lines { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-annot-overlay { display: none; }
 }
 /* Depth stack: atmosphere → poster fallback → canvas scrub → cinematic matte → cursor glow → copy */
 .about-scrolly-atmosphere {

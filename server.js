@@ -147,6 +147,138 @@ function initDbAndMigrateFromJson() {
       )`
     );
 
+    // ============================================================
+    // IoT: Plant Board / Tearboard (multi-device, controlled access)
+    // ============================================================
+    db.run(
+      `CREATE TABLE IF NOT EXISTS iot_devices (
+        device_id TEXT NOT NULL PRIMARY KEY,
+        device_name TEXT,
+        owner_uid TEXT,
+        created_at TEXT NOT NULL,
+        last_seen_at TEXT
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS iot_device_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        revoked_at TEXT,
+        FOREIGN KEY (device_id) REFERENCES iot_devices(device_id)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_iot_device_tokens_hash ON iot_device_tokens(token_hash)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS iot_sensor_readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        soil_moisture REAL,
+        light_intensity REAL,
+        temperature REAL,
+        humidity REAL,
+        battery REAL,
+        battery_pct REAL,
+        device_status TEXT,
+        FOREIGN KEY (device_id) REFERENCES iot_devices(device_id)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_iot_sensor_device_ts ON iot_sensor_readings(device_id, timestamp DESC)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS iot_device_images (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        storage_path TEXT,
+        public_url TEXT,
+        FOREIGN KEY (device_id) REFERENCES iot_devices(device_id)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_iot_images_device_ts ON iot_device_images(device_id, timestamp DESC)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS tearboards (
+        tearboard_id TEXT NOT NULL PRIMARY KEY,
+        name TEXT,
+        owner_uid TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS tearboard_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tearboard_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        revoked_at TEXT,
+        FOREIGN KEY (tearboard_id) REFERENCES tearboards(tearboard_id)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_tearboard_tokens_hash ON tearboard_tokens(token_hash)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS tearboard_device_map (
+        tearboard_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (tearboard_id, device_id),
+        FOREIGN KEY (tearboard_id) REFERENCES tearboards(tearboard_id),
+        FOREIGN KEY (device_id) REFERENCES iot_devices(device_id)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_tb_map_device ON tearboard_device_map(device_id)');
+
+    // ----------------------------------------------------------------
+    // Compatibility layer (PlantBoardDatabase naming from spec)
+    // These are READ-ONLY views over the canonical iot_* tables so the
+    // database shape matches the requested table names without duplicating
+    // data. Writes should go through the canonical tables/endpoints.
+    // ----------------------------------------------------------------
+    db.run(
+      `CREATE VIEW IF NOT EXISTS plant_boards AS
+       SELECT
+         device_id AS id,
+         COALESCE(device_name, device_id) AS device_name,
+         created_at
+       FROM iot_devices`
+    );
+
+    db.run(
+      `CREATE VIEW IF NOT EXISTS sensor_data AS
+       SELECT
+         id,
+         device_id,
+         soil_moisture,
+         light_intensity AS light_level,
+         temperature,
+         humidity,
+         timestamp
+       FROM iot_sensor_readings`
+    );
+
+    db.run(
+      `CREATE VIEW IF NOT EXISTS images AS
+       SELECT
+         id,
+         device_id,
+         COALESCE(public_url, storage_path) AS image_url,
+         timestamp
+       FROM iot_device_images`
+    );
+
+    db.run(
+      `CREATE VIEW IF NOT EXISTS tearboard_mapping AS
+       SELECT
+         (tearboard_id || ':' || device_id) AS id,
+         tearboard_id,
+         device_id AS plant_board_id
+       FROM tearboard_device_map`
+    );
+
     // --- Community: user directory + membership + moderators + meta (symbol) ---
     db.run(
       `CREATE TABLE IF NOT EXISTS users (
@@ -466,6 +598,51 @@ async function findUidByIngestToken(raw) {
   const h = hashIngestTokenSecret(raw);
   const row = await dbGetAsync('SELECT uid FROM user_ingest_token WHERE token_hash = ?', [h]);
   return row && row.uid ? String(row.uid) : null;
+}
+
+function makeApiToken(prefix) {
+  return `${prefix}_${crypto.randomBytes(32).toString('hex')}`;
+}
+
+function hashApiToken(raw) {
+  return crypto.createHash('sha256').update(String(raw).trim(), 'utf8').digest('hex');
+}
+
+function readBearerOrHeaderToken(req, headerName) {
+  const auth = String(req.headers.authorization || '');
+  if (/^Bearer\s+\S+/i.test(auth)) return auth.replace(/^Bearer\s+/i, '').trim();
+  const h = req.headers[headerName];
+  if (h != null && String(h).trim() !== '') return String(h).trim();
+  return '';
+}
+
+async function requireFirebaseUidOr401(req, res) {
+  const uid = await optionalFirebaseUid(req);
+  if (!uid) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  return String(uid).trim();
+}
+
+async function findDeviceIdByDeviceToken(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const h = hashApiToken(raw);
+  const row = await dbGetAsync(
+    `SELECT device_id FROM iot_device_tokens WHERE token_hash = ? AND revoked_at IS NULL LIMIT 1`,
+    [h]
+  );
+  return row && row.device_id ? String(row.device_id) : null;
+}
+
+async function findTearboardIdByToken(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const h = hashApiToken(raw);
+  const row = await dbGetAsync(
+    `SELECT tearboard_id FROM tearboard_tokens WHERE token_hash = ? AND revoked_at IS NULL LIMIT 1`,
+    [h]
+  );
+  return row && row.tearboard_id ? String(row.tearboard_id) : null;
 }
 
 async function getPlantbotChoicePlantId(uid) {
@@ -3248,6 +3425,52 @@ app.post('/api/sensor-data', async (req, res) => {
     // Link to user plant usage if we know uid
     if (uid) upsertUserPlantUsage(uid, [plantId], 'telemetry', () => {});
 
+    // Persist to Supabase sensor tables (optional; requires sensors_sync_schema.sql)
+    if (uid && supabaseAdmin) {
+      try {
+        const recordedAt = reading.at || new Date().toISOString();
+        await upsertSupabaseSensorReading({
+          uid,
+          deviceId,
+          plantId,
+          sensorType: 'temperature',
+          unit: '°C',
+          value: reading.temp,
+          recordedAt,
+        });
+        await upsertSupabaseSensorReading({
+          uid,
+          deviceId,
+          plantId,
+          sensorType: 'humidity',
+          unit: '%',
+          value: reading.humidity,
+          recordedAt,
+        });
+        await upsertSupabaseSensorReading({
+          uid,
+          deviceId,
+          plantId,
+          sensorType: 'moisture',
+          unit: '%',
+          value: reading.moisture,
+          recordedAt,
+        });
+        await upsertSupabaseSensorReading({
+          uid,
+          deviceId,
+          plantId,
+          sensorType: 'light',
+          unit: 'lux',
+          value: reading.lux,
+          recordedAt,
+        });
+      } catch (e) {
+        // Do not fail ingest if Supabase isn't ready; app still works via in-memory telemetry
+        console.warn('Supabase persist failed (sensor-data):', e?.message || e);
+      }
+    }
+
     // Optional alert when moisture low
     if (reading.moisture < 40 && (store.plants || []).find((p) => p.id === plantId)) {
       const alert = {
@@ -3289,15 +3512,108 @@ app.post('/api/upload-image', async (req, res) => {
     const buf = Buffer.from(cleanB64, 'base64');
     if (!buf || !buf.length) return res.status(400).json({ error: 'Invalid base64 image' });
 
+    // Determine uid (optional) so we can store in Supabase with ownership
+    let uid = null;
+    const headerUid = await optionalFirebaseUid(req);
+    if (headerUid) uid = String(headerUid).trim();
+    if (!uid && body.uid) uid = String(body.uid).trim();
+    if (!uid) {
+      const headerIngest = req.headers['x-dew-ingest-token'] || req.headers['x-dew-device-token'];
+      if (headerIngest && String(headerIngest).trim() !== '') {
+        const u = await findUidByIngestToken(String(headerIngest).trim());
+        if (u) uid = u;
+      }
+    }
+
+    const tsIso = body.timestamp || new Date().toISOString();
+    const tsSafe = new Date(tsIso).toISOString().replace(/[:.]/g, '-');
+    const filename = `${deviceId}-${tsSafe}.jpg`;
+
+    // Prefer Supabase Storage if configured; fall back to local disk.
+    if (supabaseAdmin && uid) {
+      const resolved = PLANTBOT_DEVICE_MAP[deviceId] || {};
+      const derivedPlantId =
+        typeof resolved.plantId === 'string' && resolved.plantId.trim()
+          ? String(resolved.plantId).trim()
+          : /^plant[-_]?(.+)$/i.test(deviceId)
+            ? String(deviceId).replace(/^plant[-_]?/i, '').trim()
+            : null;
+      const plantId =
+        derivedPlantId ||
+        (store?.deskbotConfig?.plantId ? String(store.deskbotConfig.plantId) : null) ||
+        (Array.isArray(store?.plants) && store.plants[0] ? store.plants[0].id : null) ||
+        null;
+
+      const storagePath = `${uid}/${deviceId}/${filename}`;
+      const up = await supabaseAdmin.storage.from('plantbot-images').upload(storagePath, buf, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+      if (up.error) throw up.error;
+      const { data: urlData } = supabaseAdmin.storage.from('plantbot-images').getPublicUrl(storagePath);
+      const publicUrl = urlData?.publicUrl || null;
+
+      // Optional DB row for easy listing
+      try {
+        await supabaseAdmin.from('plantbot_photos').insert({
+          user_id: uid,
+          device_id: deviceId,
+          plant_id: plantId,
+          captured_at: tsIso,
+          storage_path: storagePath,
+          public_url: publicUrl,
+        });
+      } catch (_) {}
+
+      return res.json({ ok: true, stored: true, filename, storage: 'supabase', publicUrl });
+    }
+
     if (!fs.existsSync(path.join(DATA_DIR, 'device-images'))) fs.mkdirSync(path.join(DATA_DIR, 'device-images'), { recursive: true });
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${deviceId}-${ts}.jpg`;
     const outPath = path.join(DATA_DIR, 'device-images', filename);
     fs.writeFileSync(outPath, buf);
 
-    res.json({ ok: true, stored: true, filename });
+    res.json({ ok: true, stored: true, filename, storage: 'local' });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Image upload failed' });
+  }
+});
+
+// --- API: List Plant Bot images (Supabase or local fallback) ---
+app.get('/api/plantbot/images', async (req, res) => {
+  try {
+    const deviceId = String(req.query.device_id || '').trim();
+    const uidParam = String(req.query.uid || '').trim();
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+
+    // Prefer Supabase table if available (and user is authenticated)
+    const uidToken = await optionalFirebaseUid(req);
+    const uid = uidToken ? String(uidToken).trim() : uidParam || null;
+    if (supabaseAdmin && uid) {
+      const q = supabaseAdmin
+        .from('plantbot_photos')
+        .select('id,device_id,plant_id,captured_at,public_url,storage_path')
+        .eq('user_id', uid)
+        .order('captured_at', { ascending: false })
+        .limit(limit);
+      if (deviceId) q.eq('device_id', deviceId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return res.json({ ok: true, storage: 'supabase', images: data || [] });
+    }
+
+    // Local fallback: return filenames (no auth)
+    const dir = path.join(DATA_DIR, 'device-images');
+    if (!fs.existsSync(dir)) return res.json({ ok: true, storage: 'local', images: [] });
+    const files = fs
+      .readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith('.jpg') && (!deviceId || f.startsWith(`${deviceId}-`)))
+      .sort()
+      .reverse()
+      .slice(0, limit)
+      .map((f) => ({ filename: f }));
+    return res.json({ ok: true, storage: 'local', images: files });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Could not list images' });
   }
 });
 
@@ -3376,6 +3692,397 @@ app.post('/api/battery-alert', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Battery alert failed' });
+  }
+});
+
+// ============================================================
+// IoT: Plant Board ingestion + Tearboard secure reads (SQLite)
+// ============================================================
+
+// --- API: Device registry (owner creates devices + tokens) ---
+// Requires Firebase auth.
+app.get('/api/iot/devices', async (req, res) => {
+  try {
+    const uid = await requireFirebaseUidOr401(req, res);
+    if (!uid) return;
+    const rows = await dbAllAsync(
+      `SELECT device_id, device_name, created_at, last_seen_at
+       FROM iot_devices
+       WHERE owner_uid = ?
+       ORDER BY created_at DESC`,
+      [uid]
+    );
+    res.json({ ok: true, devices: rows || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to list devices' });
+  }
+});
+
+app.post('/api/iot/devices', async (req, res) => {
+  try {
+    const uid = await requireFirebaseUidOr401(req, res);
+    if (!uid) return;
+    const body = req.body || {};
+    const deviceId = String(body.device_id || body.deviceId || '').trim() || `plantboard_${crypto.randomBytes(6).toString('hex')}`;
+    const deviceName = String(body.device_name || body.deviceName || deviceId).trim();
+    const now = new Date().toISOString();
+
+    await dbRunAsync(
+      `INSERT INTO iot_devices (device_id, device_name, owner_uid, created_at, last_seen_at)
+       VALUES (?, ?, ?, ?, NULL)
+       ON CONFLICT(device_id) DO UPDATE SET
+         device_name = excluded.device_name,
+         owner_uid = excluded.owner_uid`,
+      [deviceId, deviceName, uid, now]
+    );
+
+    // Create a new device token (plaintext returned once)
+    const raw = makeApiToken('dev');
+    const hash = hashApiToken(raw);
+    await dbRunAsync(
+      `INSERT INTO iot_device_tokens (device_id, token_hash, created_at, revoked_at)
+       VALUES (?, ?, ?, NULL)`,
+      [deviceId, hash, now]
+    );
+
+    res.json({ ok: true, device_id: deviceId, device_name: deviceName, device_token: raw });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to create device' });
+  }
+});
+
+app.post('/api/iot/devices/:deviceId/rotate-token', async (req, res) => {
+  try {
+    const uid = await requireFirebaseUidOr401(req, res);
+    if (!uid) return;
+    const deviceId = String(req.params.deviceId || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'deviceId required' });
+
+    const owner = await dbGetAsync(`SELECT owner_uid FROM iot_devices WHERE device_id = ? LIMIT 1`, [deviceId]);
+    if (!owner || String(owner.owner_uid || '') !== uid) return res.status(403).json({ error: 'Forbidden' });
+
+    const now = new Date().toISOString();
+    await dbRunAsync(`UPDATE iot_device_tokens SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL`, [now, deviceId]);
+
+    const raw = makeApiToken('dev');
+    const hash = hashApiToken(raw);
+    await dbRunAsync(
+      `INSERT INTO iot_device_tokens (device_id, token_hash, created_at, revoked_at)
+       VALUES (?, ?, ?, NULL)`,
+      [deviceId, hash, now]
+    );
+
+    res.json({ ok: true, device_id: deviceId, device_token: raw });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to rotate token' });
+  }
+});
+
+// --- API: Data ingestion (Plant Boards) ---
+// Auth: Authorization: Bearer <dev_...>  OR  x-dew-device-token: <dev_...>
+app.post('/api/upload-data', async (req, res) => {
+  try {
+    const rawToken = readBearerOrHeaderToken(req, 'x-dew-device-token');
+    const authedDeviceId = await findDeviceIdByDeviceToken(rawToken);
+    if (!authedDeviceId) return res.status(401).json({ error: 'Invalid device token' });
+
+    const body = req.body || {};
+    const deviceId = String(body.device_id || body.deviceId || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+    if (deviceId !== authedDeviceId) return res.status(403).json({ error: 'Token does not match device_id' });
+
+    const ts = body.timestamp ? new Date(body.timestamp).toISOString() : new Date().toISOString();
+    const soil = body.soil_moisture != null ? Number(body.soil_moisture) : null;
+    const light = body.light_intensity != null ? Number(body.light_intensity) : body.light != null ? Number(body.light) : null;
+    const temperature = body.temperature != null ? Number(body.temperature) : null;
+    const humidity = body.humidity != null ? Number(body.humidity) : null;
+    const battery = body.battery != null ? Number(body.battery) : null;
+    const batteryPct = body.battery_pct != null ? Number(body.battery_pct) : null;
+    const status = body.device_status != null ? String(body.device_status).trim() : body.status != null ? String(body.status).trim() : null;
+
+    await dbRunAsync(
+      `INSERT INTO iot_sensor_readings
+        (device_id, timestamp, soil_moisture, light_intensity, temperature, humidity, battery, battery_pct, device_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [deviceId, ts, soil, light, temperature, humidity, battery, batteryPct, status]
+    );
+    await dbRunAsync(`UPDATE iot_devices SET last_seen_at = ? WHERE device_id = ?`, [new Date().toISOString(), deviceId]);
+
+    res.json({ ok: true, device_id: deviceId, timestamp: ts });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Upload failed' });
+  }
+});
+
+// --- API (compat): Data ingestion (Plant Boards) ---
+// Matches spec: POST /api/plant-data and requires device_token.
+// Accepts token via:
+// - Authorization: Bearer dev_...
+// - x-dew-device-token: dev_...
+// - JSON body: { device_token: "dev_..." }
+app.post('/api/plant-data', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const bodyTok = body.device_token != null ? String(body.device_token).trim() : '';
+    const headerTok = readBearerOrHeaderToken(req, 'x-dew-device-token');
+    const rawToken = bodyTok || headerTok;
+    if (!rawToken) return res.status(401).json({ error: 'device_token required' });
+
+    const authedDeviceId = await findDeviceIdByDeviceToken(rawToken);
+    if (!authedDeviceId) return res.status(401).json({ error: 'Invalid device token' });
+
+    const deviceId = String(body.device_id || body.deviceId || authedDeviceId || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+    if (deviceId !== authedDeviceId) return res.status(403).json({ error: 'Token does not match device_id' });
+
+    const ts = body.timestamp ? new Date(body.timestamp).toISOString() : new Date().toISOString();
+    const soil = body.soil_moisture != null ? Number(body.soil_moisture) : null;
+    const light = body.light_level != null ? Number(body.light_level) : body.light_intensity != null ? Number(body.light_intensity) : null;
+    const temperature = body.temperature != null ? Number(body.temperature) : null;
+    const humidity = body.humidity != null ? Number(body.humidity) : null;
+    const status = body.device_status != null ? String(body.device_status).trim() : null;
+
+    await dbRunAsync(
+      `INSERT INTO iot_sensor_readings
+        (device_id, timestamp, soil_moisture, light_intensity, temperature, humidity, battery, battery_pct, device_status)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
+      [deviceId, ts, soil, light, temperature, humidity, status]
+    );
+    await dbRunAsync(`UPDATE iot_devices SET last_seen_at = ? WHERE device_id = ?`, [new Date().toISOString(), deviceId]);
+
+    res.json({ ok: true, device_id: deviceId, timestamp: ts });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Plant data upload failed' });
+  }
+});
+
+// --- API (compat): Image upload (Plant Boards) ---
+// POST /api/plant-image
+// Auth: same as /api/plant-data (device_token via header or body)
+// Payload:
+// { device_id, timestamp, image_b64 }
+// Stores file locally (data/device-images-iot) and records a row in iot_device_images.
+app.post('/api/plant-image', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const bodyTok = body.device_token != null ? String(body.device_token).trim() : '';
+    const headerTok = readBearerOrHeaderToken(req, 'x-dew-device-token');
+    const rawToken = bodyTok || headerTok;
+    if (!rawToken) return res.status(401).json({ error: 'device_token required' });
+
+    const authedDeviceId = await findDeviceIdByDeviceToken(rawToken);
+    if (!authedDeviceId) return res.status(401).json({ error: 'Invalid device token' });
+
+    const deviceId = String(body.device_id || body.deviceId || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+    if (deviceId !== authedDeviceId) return res.status(403).json({ error: 'Token does not match device_id' });
+
+    const b64 = body.image_b64;
+    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'image_b64 required' });
+
+    const cleanB64 = b64.includes(',') ? b64.split(',').pop() : b64;
+    const buf = Buffer.from(cleanB64, 'base64');
+    if (!buf || !buf.length) return res.status(400).json({ error: 'Invalid base64 image' });
+
+    const tsIso = body.timestamp ? new Date(body.timestamp).toISOString() : new Date().toISOString();
+    const tsSafe = new Date(tsIso).toISOString().replace(/[:.]/g, '-');
+    const filename = `${deviceId}-${tsSafe}.jpg`;
+
+    const dir = path.join(DATA_DIR, 'device-images-iot');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const outPath = path.join(dir, filename);
+    fs.writeFileSync(outPath, buf);
+
+    const storagePath = `device-images-iot/${filename}`;
+    const imageUrl = `/data/${storagePath}`;
+
+    // Record in unified IoT table
+    await dbRunAsync(
+      `INSERT INTO iot_device_images (device_id, timestamp, storage_path, public_url)
+       VALUES (?, ?, ?, ?)`,
+      [deviceId, tsIso, storagePath, null]
+    );
+    await dbRunAsync(`UPDATE iot_devices SET last_seen_at = ? WHERE device_id = ?`, [new Date().toISOString(), deviceId]);
+
+    res.json({ ok: true, device_id: deviceId, timestamp: tsIso, filename });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Plant image upload failed' });
+  }
+});
+
+// --- API: Tearboards (owner creates tearboards + maps devices) ---
+app.get('/api/iot/tearboards', async (req, res) => {
+  try {
+    const uid = await requireFirebaseUidOr401(req, res);
+    if (!uid) return;
+    const rows = await dbAllAsync(
+      `SELECT tearboard_id, name, created_at
+       FROM tearboards
+       WHERE owner_uid = ?
+       ORDER BY created_at DESC`,
+      [uid]
+    );
+    res.json({ ok: true, tearboards: rows || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to list tearboards' });
+  }
+});
+
+app.post('/api/iot/tearboards', async (req, res) => {
+  try {
+    const uid = await requireFirebaseUidOr401(req, res);
+    if (!uid) return;
+    const body = req.body || {};
+    const name = String(body.name || 'Tearboard').trim() || 'Tearboard';
+    const tearboardId = String(body.tearboard_id || body.tearboardId || '').trim() || `tb_${crypto.randomBytes(8).toString('hex')}`;
+    const now = new Date().toISOString();
+
+    await dbRunAsync(
+      `INSERT INTO tearboards (tearboard_id, name, owner_uid, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(tearboard_id) DO UPDATE SET name = excluded.name`,
+      [tearboardId, name, uid, now]
+    );
+
+    const raw = makeApiToken('tb');
+    const hash = hashApiToken(raw);
+    await dbRunAsync(
+      `INSERT INTO tearboard_tokens (tearboard_id, token_hash, created_at, revoked_at)
+       VALUES (?, ?, ?, NULL)`,
+      [tearboardId, hash, now]
+    );
+
+    // Optional: map an initial device_id (must be owned by the user)
+    const deviceId = String(body.device_id || body.deviceId || '').trim();
+    if (deviceId) {
+      const d = await dbGetAsync(`SELECT owner_uid FROM iot_devices WHERE device_id = ? LIMIT 1`, [deviceId]);
+      if (d && String(d.owner_uid || '') === uid) {
+        await dbRunAsync(
+          `INSERT OR IGNORE INTO tearboard_device_map (tearboard_id, device_id, created_at) VALUES (?, ?, ?)`,
+          [tearboardId, deviceId, now]
+        );
+      }
+    }
+
+    res.json({ ok: true, tearboard_id: tearboardId, name, tearboard_token: raw });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to create tearboard' });
+  }
+});
+
+app.post('/api/iot/tearboards/:tearboardId/map-device', async (req, res) => {
+  try {
+    const uid = await requireFirebaseUidOr401(req, res);
+    if (!uid) return;
+    const tearboardId = String(req.params.tearboardId || '').trim();
+    if (!tearboardId) return res.status(400).json({ error: 'tearboardId required' });
+
+    const tb = await dbGetAsync(`SELECT owner_uid FROM tearboards WHERE tearboard_id = ? LIMIT 1`, [tearboardId]);
+    if (!tb || String(tb.owner_uid || '') !== uid) return res.status(403).json({ error: 'Forbidden' });
+
+    const deviceId = String((req.body || {}).device_id || (req.body || {}).deviceId || '').trim();
+    if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+
+    const d = await dbGetAsync(`SELECT owner_uid FROM iot_devices WHERE device_id = ? LIMIT 1`, [deviceId]);
+    if (!d || String(d.owner_uid || '') !== uid) return res.status(403).json({ error: 'Device not owned by user' });
+
+    const now = new Date().toISOString();
+    await dbRunAsync(
+      `INSERT OR IGNORE INTO tearboard_device_map (tearboard_id, device_id, created_at) VALUES (?, ?, ?)`,
+      [tearboardId, deviceId, now]
+    );
+    res.json({ ok: true, tearboard_id: tearboardId, device_id: deviceId });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to map device' });
+  }
+});
+
+// --- API: Tearboard data (locked down by tearboard token; no device_id param needed) ---
+async function listMappedDevicesForTearboard(tearboardId) {
+  const rows = await dbAllAsync(
+    `SELECT device_id FROM tearboard_device_map WHERE tearboard_id = ? ORDER BY device_id ASC`,
+    [tearboardId]
+  );
+  return (rows || []).map((r) => String(r.device_id));
+}
+
+app.get('/api/tearboard/get-device-data', async (req, res) => {
+  try {
+    const rawToken = readBearerOrHeaderToken(req, 'x-tearboard-token');
+    const tearboardId = await findTearboardIdByToken(rawToken);
+    if (!tearboardId) return res.status(401).json({ error: 'Invalid tearboard token' });
+
+    const deviceIds = await listMappedDevicesForTearboard(tearboardId);
+    if (!deviceIds.length) return res.json({ ok: true, tearboard_id: tearboardId, devices: [], readings: [] });
+
+    // For now, return the latest reading for each mapped device (fast UI).
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const out = [];
+    for (const did of deviceIds) {
+      const readings = await dbAllAsync(
+        `SELECT id, device_id, timestamp, soil_moisture, light_intensity, temperature, humidity, battery, battery_pct, device_status
+         FROM iot_sensor_readings
+         WHERE device_id = ?
+         ORDER BY timestamp DESC
+         LIMIT ?`,
+        [did, limit]
+      );
+      const latestImage = await dbGetAsync(
+        `SELECT id, device_id, timestamp, public_url, storage_path
+         FROM iot_device_images
+         WHERE device_id = ?
+         ORDER BY timestamp DESC
+         LIMIT 1`,
+        [did]
+      );
+      out.push({ device_id: did, readings: readings || [], latest_image: latestImage || null });
+    }
+
+    res.json({ ok: true, tearboard_id: tearboardId, devices: deviceIds, data: out });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to fetch tearboard data' });
+  }
+});
+
+// --- API (compat): Web app / Tearboard data fetch ---
+// Matches spec: GET /api/data
+// Auth via tearboard token:
+// - Authorization: Bearer tb_...
+// - x-tearboard-token: tb_...
+// Returns ONLY mapped device data.
+app.get('/api/data', async (req, res) => {
+  try {
+    const rawToken = readBearerOrHeaderToken(req, 'x-tearboard-token');
+    const tearboardId = await findTearboardIdByToken(rawToken);
+    if (!tearboardId) return res.status(401).json({ error: 'Invalid tearboard token' });
+
+    const deviceIds = await listMappedDevicesForTearboard(tearboardId);
+    if (!deviceIds.length) return res.json({ ok: true, tearboard_id: tearboardId, device_id: null, sensor_data: [], images: [] });
+
+    // Default: first mapped device (1-to-1). If you later allow multi-map, add a query param.
+    const deviceId = deviceIds[0];
+    const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
+
+    const readings = await dbAllAsync(
+      `SELECT id, device_id, timestamp, soil_moisture, light_intensity AS light_level, temperature, humidity, device_status
+       FROM iot_sensor_readings
+       WHERE device_id = ?
+       ORDER BY timestamp DESC
+       LIMIT ?`,
+      [deviceId, limit]
+    );
+    const imgs = await dbAllAsync(
+      `SELECT id, device_id, timestamp, COALESCE(public_url, storage_path) AS image_url
+       FROM iot_device_images
+       WHERE device_id = ?
+       ORDER BY timestamp DESC
+       LIMIT 50`,
+      [deviceId]
+    );
+
+    res.json({ ok: true, tearboard_id: tearboardId, device_id: deviceId, sensor_data: readings || [], images: imgs || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load data' });
   }
 });
 
@@ -3512,6 +4219,47 @@ app.post('/api/deskbot-config', (req, res) => {
   });
 });
 
+async function upsertSupabaseSensorReading({ uid, deviceId, plantId, sensorType, unit, value, recordedAt }) {
+  if (!supabaseAdmin) return { stored: false };
+  if (!uid) return { stored: false };
+  if (value == null || Number.isNaN(Number(value))) return { stored: false };
+  const v = Number(value);
+  const at = recordedAt || new Date().toISOString();
+
+  const { data: selRows, error: selErr } = await supabaseAdmin
+    .from('sensors')
+    .select('id')
+    .eq('user_id', uid)
+    .eq('sensor_type', sensorType)
+    .eq('device_id', deviceId)
+    .limit(1);
+  if (selErr) throw selErr;
+  let sensorId = Array.isArray(selRows) && selRows[0] ? selRows[0].id : null;
+  if (!sensorId) {
+    const { data: ins, error: insErr } = await supabaseAdmin
+      .from('sensors')
+      .insert({
+        user_id: uid,
+        sensor_type: sensorType,
+        device_id: deviceId,
+        plant_id: plantId || null,
+      })
+      .select('id')
+      .single();
+    if (insErr) throw insErr;
+    sensorId = ins.id;
+  }
+
+  const { error: readErr } = await supabaseAdmin.from('sensor_readings').insert({
+    sensor_id: sensorId,
+    value: v,
+    unit: unit || null,
+    recorded_at: at,
+  });
+  if (readErr) throw readErr;
+  return { stored: true };
+}
+
 // --- API: Sensor sync (mirror Plant Bot readings to Supabase) ---
 // Some browsers / tools issue GET /api/sensors/sync (prefetch); avoid noisy 404 on dashboards.
 app.get('/api/sensors/sync', (req, res) => {
@@ -3559,36 +4307,15 @@ app.post('/api/sensors/sync', async (req, res) => {
       for (const t of metricDefs) {
         const raw = t.pick(plant);
         if (raw == null || Number.isNaN(Number(raw))) continue;
-        const { data: selRows, error: selErr } = await supabaseAdmin
-          .from('sensors')
-          .select('id')
-          .eq('user_id', uid)
-          .eq('sensor_type', t.sensor_type)
-          .eq('device_id', deviceId)
-          .limit(1);
-        if (selErr) throw selErr;
-        let sensorId = Array.isArray(selRows) && selRows[0] ? selRows[0].id : null;
-        if (!sensorId) {
-          const { data: ins, error: insErr } = await supabaseAdmin
-            .from('sensors')
-            .insert({
-              user_id: uid,
-              sensor_type: t.sensor_type,
-              device_id: deviceId,
-              plant_id: plant.id,
-            })
-            .select('id')
-            .single();
-          if (insErr) throw insErr;
-          sensorId = ins.id;
-        }
-        const { error: readErr } = await supabaseAdmin.from('sensor_readings').insert({
-          sensor_id: sensorId,
-          value: Number(raw),
+        await upsertSupabaseSensorReading({
+          uid,
+          deviceId,
+          plantId: plant.id,
+          sensorType: t.sensor_type,
           unit: t.unit,
-          recorded_at: syncedAt,
+          value: raw,
+          recordedAt: syncedAt,
         });
-        if (readErr) throw readErr;
       }
     }
 
