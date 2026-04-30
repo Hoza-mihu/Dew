@@ -2763,7 +2763,11 @@ app.get('/api/posts/:id', async (req, res) => {
     const postVotesRowP = dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]);
     const commentCountRowP = (async () => {
       try {
-        const resp = await supabaseAdmin.from('post_comments').select('id', { count: 'exact', head: true }).eq('post_id', postId);
+        const resp = await supabaseAdmin
+          .from('post_comments')
+          .select('id', { count: 'exact', head: true })
+          .eq('post_id', postId)
+          .is('deleted_at', null);
         if (resp.error) throw resp.error;
         return { n: Number(resp.count ?? 0) };
       } catch (_) {
@@ -2896,7 +2900,7 @@ app.get('/api/posts/:id/comments', async (req, res) => {
       comments: (comments || []).map((c) => ({
         id: String(c.id),
         parent_comment_id: c.parent_comment_id ? String(c.parent_comment_id) : null,
-        uid: c.uid || c.author_firebase_uid || c.uid,
+        uid: c.uid || null,
         author_display_name: c.display_name || c.author_display_name || 'Unknown',
         body: c.body,
         created_at: c.created_at,
