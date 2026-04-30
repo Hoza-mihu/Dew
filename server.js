@@ -2628,8 +2628,21 @@ app.post('/api/communities/:slug/messages', async (req, res) => {
 
 app.post('/api/posts/:id/share', async (req, res) => {
   const postId = String(req.params.id || '').trim();
-  const slug = String(req.body.communitySlug || '').trim().toLowerCase();
-  if (!postId || !slug) return res.status(400).json({ error: 'post id and communitySlug required' });
+  let slug = String(req.body.communitySlug || '').trim().toLowerCase();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  // Backward-compatible: allow missing communitySlug by inferring from post.
+  if (!slug) {
+    try {
+      if (!supabaseAdmin) throw new Error('Supabase not configured');
+      const { data: post, error: pErr } = await supabaseAdmin.from('posts').select('community_id').eq('id', postId).single();
+      if (pErr || !post) throw new Error('Post not found');
+      const { data: comm, error: cErr } = await supabaseAdmin.from('communities').select('slug').eq('id', post.community_id).single();
+      if (cErr || !comm?.slug) throw new Error('Community not found');
+      slug = String(comm.slug).trim().toLowerCase();
+    } catch (e) {
+      return res.status(400).json({ error: 'post id and communitySlug required' });
+    }
+  }
   let uid;
   try {
     uid = await requireFirebaseUser(req);
@@ -2654,10 +2667,23 @@ app.post('/api/posts/:id/share', async (req, res) => {
 
 app.post('/api/posts/:id/metrics', async (req, res) => {
   const postId = String(req.params.id || '').trim();
-  const slug = String(req.body.communitySlug || '').trim().toLowerCase();
+  let slug = String(req.body.communitySlug || '').trim().toLowerCase();
   const score = Number(req.body.score || 0);
   const comments = Number(req.body.comments || 0);
-  if (!postId || !slug) return res.status(400).json({ error: 'post id and communitySlug required' });
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  // Backward-compatible: allow missing communitySlug by inferring from post.
+  if (!slug) {
+    try {
+      if (!supabaseAdmin) throw new Error('Supabase not configured');
+      const { data: post, error: pErr } = await supabaseAdmin.from('posts').select('community_id').eq('id', postId).single();
+      if (pErr || !post) throw new Error('Post not found');
+      const { data: comm, error: cErr } = await supabaseAdmin.from('communities').select('slug').eq('id', post.community_id).single();
+      if (cErr || !comm?.slug) throw new Error('Community not found');
+      slug = String(comm.slug).trim().toLowerCase();
+    } catch (e) {
+      return res.status(400).json({ error: 'post id and communitySlug required' });
+    }
+  }
   const now = new Date().toISOString();
   db.run(
     `INSERT INTO community_post_metrics (post_id, community_slug, share_count, last_seen_score, last_seen_comments, updated_at)
