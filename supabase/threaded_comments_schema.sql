@@ -15,6 +15,9 @@ create table if not exists public.post_comments (
   community_id uuid not null references public.communities(id) on delete cascade,
   post_id uuid not null references public.posts(id) on delete cascade,
   author_id uuid references auth.users(id) on delete set null,
+  -- Firebase-auth support (this repo uses Firebase for web auth).
+  author_firebase_uid text,
+  author_display_name text,
   body text not null,
   parent_comment_id uuid references public.post_comments(id) on delete cascade,
   created_at timestamptz not null default now(),
@@ -48,6 +51,16 @@ create index if not exists idx_post_comments_community_created
 
 create index if not exists idx_post_comments_author_created
   on public.post_comments(author_id, created_at desc);
+
+create index if not exists idx_post_comments_author_firebase_uid
+  on public.post_comments(author_firebase_uid)
+  where author_firebase_uid is not null;
+
+-- Safe re-run for existing installs (adds Firebase columns if table already existed).
+alter table public.post_comments
+  add column if not exists author_firebase_uid text;
+alter table public.post_comments
+  add column if not exists author_display_name text;
 
 -- =============================================================================
 -- 2) Comment votes (optional; mirrors your SQLite comment_votes)

@@ -2759,10 +2759,18 @@ app.get('/api/posts/:id', async (req, res) => {
     // Public is viewable by anyone; restricted/private requires membership/mod/creator.
     if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
 
-    const [postVotesRow, commentCountRow] = await Promise.all([
-      dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]),
-      dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]),
-    ]);
+    // Prefer Supabase-backed counts when available (serverless-safe). Fallback to SQLite.
+    const postVotesRowP = dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]);
+    const commentCountRowP = (async () => {
+      try {
+        const resp = await supabaseAdmin.from('post_comments').select('id', { count: 'exact', head: true }).eq('post_id', postId);
+        if (resp.error) throw resp.error;
+        return { n: Number(resp.count ?? 0) };
+      } catch (_) {
+        return await dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]);
+      }
+    })();
+    const [postVotesRow, commentCountRow] = await Promise.all([postVotesRowP, commentCountRowP]);
 
     res.json({
       post: {
@@ -2813,30 +2821,74 @@ app.get('/api/posts/:id/comments', async (req, res) => {
       .single();
     if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
 
-    const comments = await dbAllAsync(
-      `SELECT
-         pc.id,
-         pc.parent_comment_id,
-         pc.post_id,
-         pc.uid,
-         u.display_name,
-         pc.body,
-         pc.created_at,
-         COALESCE(SUM(cv.value), 0) AS score
-       FROM post_comments pc
-       LEFT JOIN comment_votes cv ON cv.comment_id = pc.id
-       LEFT JOIN users u ON u.uid = pc.uid
-       WHERE pc.post_id = ?
-       GROUP BY pc.id
-       ORDER BY pc.created_at ASC`,
-      [postId]
-    );
+    // Enforce community visibility rules (public/restricted/private).
+    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
 
-    // Optional: include whether the current user voted up/down
+    // Prefer Supabase-backed comments when available (serverless-safe). Fallback to SQLite.
+    let comments = [];
     let myVotesByComment = new Map();
-    if (uid) {
-      const voted = await dbAllAsync('SELECT comment_id, value FROM comment_votes WHERE uid = ?', [uid]);
-      voted.forEach((v) => myVotesByComment.set(String(v.comment_id), Number(v.value)));
+    try {
+      const { data: rows, error } = await supabaseAdmin
+        .from('post_comments')
+        .select('id,parent_comment_id,post_id,author_firebase_uid,author_display_name,body,created_at,deleted_at')
+        .eq('post_id', postId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      comments = (rows || []).map((r) => ({
+        id: String(r.id),
+        parent_comment_id: r.parent_comment_id ? String(r.parent_comment_id) : null,
+        post_id: r.post_id,
+        uid: r.author_firebase_uid || null,
+        display_name: r.author_display_name || null,
+        body: r.body,
+        created_at: r.created_at,
+      }));
+      // Votes (best-effort; if table not present or RLS blocks, just return zeros)
+      const ids = comments.map((c) => String(c.id)).filter(Boolean);
+      if (ids.length) {
+        try {
+          const { data: vRows, error: vErr } = await supabaseAdmin
+            .from('comment_votes')
+            .select('comment_id,value')
+            .in('comment_id', ids);
+          if (!vErr && Array.isArray(vRows)) {
+            const scoreById = new Map();
+            vRows.forEach((v) => {
+              const cid = String(v.comment_id);
+              scoreById.set(cid, (scoreById.get(cid) || 0) + Number(v.value || 0));
+            });
+            comments.forEach((c) => (c.score = scoreById.get(String(c.id)) || 0));
+          }
+          if (uid && !vErr && Array.isArray(vRows)) {
+            // Can't compute my_vote without a user_id mapping; skip for now.
+          }
+        } catch (_) {}
+      }
+    } catch (_) {
+      const sqliteRows = await dbAllAsync(
+        `SELECT
+           pc.id,
+           pc.parent_comment_id,
+           pc.post_id,
+           pc.uid,
+           u.display_name,
+           pc.body,
+           pc.created_at,
+           COALESCE(SUM(cv.value), 0) AS score
+         FROM post_comments pc
+         LEFT JOIN comment_votes cv ON cv.comment_id = pc.id
+         LEFT JOIN users u ON u.uid = pc.uid
+         WHERE pc.post_id = ?
+         GROUP BY pc.id
+         ORDER BY pc.created_at ASC`,
+        [postId]
+      );
+      comments = sqliteRows || [];
+      if (uid) {
+        const voted = await dbAllAsync('SELECT comment_id, value FROM comment_votes WHERE uid = ?', [uid]);
+        voted.forEach((v) => myVotesByComment.set(String(v.comment_id), Number(v.value)));
+      }
     }
 
     res.json({
@@ -2844,8 +2896,8 @@ app.get('/api/posts/:id/comments', async (req, res) => {
       comments: (comments || []).map((c) => ({
         id: String(c.id),
         parent_comment_id: c.parent_comment_id ? String(c.parent_comment_id) : null,
-        uid: c.uid,
-        author_display_name: c.display_name || 'Unknown',
+        uid: c.uid || c.author_firebase_uid || c.uid,
+        author_display_name: c.display_name || c.author_display_name || 'Unknown',
         body: c.body,
         created_at: c.created_at,
         score: Number(c.score ?? 0),
@@ -2865,7 +2917,8 @@ app.post('/api/posts/:id/comments', async (req, res) => {
   if (!body) return res.status(400).json({ error: 'comment body required' });
 
   try {
-    const uid = await requireFirebaseUser(req);
+    const claims = await requireFirebaseUserClaims(req);
+    const uid = claims.uid;
     if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
 
     const { data: post, error: postErr } = await supabaseAdmin
@@ -2882,24 +2935,59 @@ app.post('/api/posts/:id/comments', async (req, res) => {
       .single();
     if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
 
-    // Validate parent belongs to the same post (when provided)
-    if (parentCommentId) {
-      const parent = await dbGetAsync('SELECT id FROM post_comments WHERE id = ? AND post_id = ? LIMIT 1', [parentCommentId, postId]);
-      if (!parent) return res.status(400).json({ error: 'Invalid parent comment' });
+    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+    // Try Supabase threaded comments first (persistent).
+    try {
+      // Validate parent belongs to the same post (when provided)
+      if (parentCommentId) {
+        const { data: parent, error: pErr } = await supabaseAdmin
+          .from('post_comments')
+          .select('id,post_id')
+          .eq('id', parentCommentId)
+          .single();
+        if (pErr || !parent || String(parent.post_id) !== String(postId)) {
+          return res.status(400).json({ error: 'Invalid parent comment' });
+        }
+      }
+
+      const displayName = claims.displayName || claims.name || claims.username || 'Unknown';
+      const { data: inserted, error: insErr } = await supabaseAdmin.from('post_comments').insert({
+        community_id: post.community_id,
+        post_id: postId,
+        author_firebase_uid: uid,
+        author_display_name: String(displayName || '').trim() || 'Unknown',
+        body,
+        parent_comment_id: parentCommentId || null,
+      }).select('id').single();
+      if (insErr) throw insErr;
+
+      // Update posts.comment_count for feed consistency (in case trigger isn't installed).
+      const countResp = await supabaseAdmin.from('post_comments').select('id', { count: 'exact', head: true }).eq('post_id', postId).is('deleted_at', null);
+      if (!countResp.error) await supabaseAdmin.from('posts').update({ comment_count: Number(countResp.count ?? 0) }).eq('id', postId);
+
+      return res.json({ ok: true, commentId: String(inserted?.id || ''), comment_count: Number(countResp.count ?? 0) });
+    } catch (_) {
+      // Fallback to SQLite (local dev / legacy)
+      // Validate parent belongs to the same post (when provided)
+      if (parentCommentId) {
+        const parent = await dbGetAsync('SELECT id FROM post_comments WHERE id = ? AND post_id = ? LIMIT 1', [parentCommentId, postId]);
+        if (!parent) return res.status(400).json({ error: 'Invalid parent comment' });
+      }
+
+      const now = new Date().toISOString();
+      const commentId = `c_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      await dbRunAsync(
+        'INSERT INTO post_comments (id, post_id, community_slug, uid, parent_comment_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [commentId, postId, comm.slug, uid, parentCommentId, body, now]
+      );
+
+      const commentCountRow = await dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]);
+      const commentCount = Number(commentCountRow?.n ?? 0);
+      await supabaseAdmin.from('posts').update({ comment_count: commentCount }).eq('id', postId);
+
+      return res.json({ ok: true, commentId, comment_count: commentCount });
     }
-
-    const now = new Date().toISOString();
-    const commentId = `c_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    await dbRunAsync(
-      'INSERT INTO post_comments (id, post_id, community_slug, uid, parent_comment_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [commentId, postId, comm.slug, uid, parentCommentId, body, now]
-    );
-
-    const commentCountRow = await dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]);
-    const commentCount = Number(commentCountRow?.n ?? 0);
-    await supabaseAdmin.from('posts').update({ comment_count: commentCount }).eq('id', postId);
-
-    res.json({ ok: true, commentId, comment_count: commentCount });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to create comment' });
   }
@@ -2911,34 +2999,63 @@ app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
   if (!postId || !commentId) return res.status(400).json({ error: 'postId and commentId required' });
   try {
     const uid = await requireFirebaseUser(req);
-    if (!(await canDeleteComment(commentId, uid))) return res.status(403).json({ error: 'Not allowed' });
+    // Prefer Supabase threaded comments when available (persistent). Fallback to SQLite.
+    try {
+      if (!supabaseAdmin) throw new Error('Supabase not configured');
+      const { data: postRow, error: postErr } = await supabaseAdmin.from('posts').select('id,community_id').eq('id', postId).single();
+      if (postErr || !postRow) throw new Error('Post not found');
+      const { data: comm, error: commErr } = await supabaseAdmin.from('communities').select('slug,creator_firebase_uid').eq('id', postRow.community_id).single();
+      if (commErr || !comm) throw new Error('Community not found');
+      if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
 
-    // Collect descendants (simple iterative BFS)
-    const toDelete = [commentId];
-    const seen = new Set([commentId]);
-    let i = 0;
-    while (i < toDelete.length) {
-      const batch = toDelete[i];
-      const rows = await dbAllAsync('SELECT id FROM post_comments WHERE parent_comment_id = ?', [batch]);
-      for (const r of rows || []) {
-        const id = String(r.id);
-        if (!seen.has(id)) {
-          seen.add(id);
-          toDelete.push(id);
+      const { data: cRow, error: cErr } = await supabaseAdmin
+        .from('post_comments')
+        .select('id,author_firebase_uid')
+        .eq('id', commentId)
+        .single();
+      if (cErr || !cRow) throw new Error('Comment not found');
+      const isAuthor = cRow.author_firebase_uid && String(cRow.author_firebase_uid) === String(uid);
+      const isCreator = comm.creator_firebase_uid && String(comm.creator_firebase_uid) === String(uid);
+      const isMod = await isModeratorToCommunitySQLite(comm.slug, uid);
+      if (!(isAuthor || isCreator || isMod)) return res.status(403).json({ error: 'Not allowed' });
+
+      const { error: delErr } = await supabaseAdmin.from('post_comments').delete().eq('id', commentId);
+      if (delErr) throw delErr;
+
+      const countResp = await supabaseAdmin.from('post_comments').select('id', { count: 'exact', head: true }).eq('post_id', postId).is('deleted_at', null);
+      if (!countResp.error) await supabaseAdmin.from('posts').update({ comment_count: Number(countResp.count ?? 0) }).eq('id', postId);
+
+      return res.json({ ok: true, comment_count: Number(countResp.count ?? 0) });
+    } catch (_) {
+      if (!(await canDeleteComment(commentId, uid))) return res.status(403).json({ error: 'Not allowed' });
+
+      // Collect descendants (simple iterative BFS)
+      const toDelete = [commentId];
+      const seen = new Set([commentId]);
+      let i = 0;
+      while (i < toDelete.length) {
+        const batch = toDelete[i];
+        const rows = await dbAllAsync('SELECT id FROM post_comments WHERE parent_comment_id = ?', [batch]);
+        for (const r of rows || []) {
+          const id = String(r.id);
+          if (!seen.has(id)) {
+            seen.add(id);
+            toDelete.push(id);
+          }
         }
+        i += 1;
       }
-      i += 1;
+
+      const placeholders = toDelete.map(() => '?').join(',');
+      await dbRunAsync(`DELETE FROM comment_votes WHERE comment_id IN (${placeholders})`, toDelete);
+      await dbRunAsync(`DELETE FROM post_comments WHERE id IN (${placeholders})`, toDelete);
+
+      const commentCountRow = await dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]);
+      const commentCount = Number(commentCountRow?.n ?? 0);
+      await supabaseAdmin.from('posts').update({ comment_count: commentCount }).eq('id', postId);
+
+      return res.json({ ok: true, comment_count: commentCount });
     }
-
-    const placeholders = toDelete.map(() => '?').join(',');
-    await dbRunAsync(`DELETE FROM comment_votes WHERE comment_id IN (${placeholders})`, toDelete);
-    await dbRunAsync(`DELETE FROM post_comments WHERE id IN (${placeholders})`, toDelete);
-
-    const commentCountRow = await dbGetAsync('SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?', [postId]);
-    const commentCount = Number(commentCountRow?.n ?? 0);
-    await supabaseAdmin.from('posts').update({ comment_count: commentCount }).eq('id', postId);
-
-    res.json({ ok: true, comment_count: commentCount });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to delete comment' });
   }
