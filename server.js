@@ -2700,7 +2700,9 @@ app.get('/api/posts/:id', async (req, res) => {
       .single();
     if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
 
-    // Post detail + comments are open for viewing (like Instagram/Reddit).
+    // Enforce community visibility rules (public/restricted/private).
+    // Public is viewable by anyone; restricted/private requires membership/mod/creator.
+    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
 
     const [postVotesRow, commentCountRow] = await Promise.all([
       dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]),
