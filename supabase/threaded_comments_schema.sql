@@ -23,15 +23,8 @@ create table if not exists public.post_comments (
   created_at timestamptz not null default now(),
   deleted_at timestamptz,
 
-  -- Comments never "move" to another post/community; parent must belong to same post.
-  constraint post_comments_parent_same_post check (
-    parent_comment_id is null
-    or post_id = (select pc2.post_id from public.post_comments pc2 where pc2.id = parent_comment_id)
-  ),
-  constraint post_comments_parent_same_community check (
-    parent_comment_id is null
-    or community_id = (select pc2.community_id from public.post_comments pc2 where pc2.id = parent_comment_id)
-  )
+  -- NOTE: Postgres does not allow subqueries in CHECK constraints.
+  -- Parent post/community consistency is enforced via a trigger below.
 );
 
 -- Core read patterns:
@@ -61,6 +54,44 @@ alter table public.post_comments
   add column if not exists author_firebase_uid text;
 alter table public.post_comments
   add column if not exists author_display_name text;
+
+-- Enforce: parent_comment_id must reference a comment with the same post_id + community_id.
+create or replace function public.validate_post_comment_parent()
+returns trigger as $$
+declare
+  p_post_id uuid;
+  p_community_id uuid;
+begin
+  if new.parent_comment_id is null then
+    return new;
+  end if;
+
+  select pc2.post_id, pc2.community_id
+    into p_post_id, p_community_id
+  from public.post_comments pc2
+  where pc2.id = new.parent_comment_id;
+
+  if p_post_id is null then
+    raise exception 'Invalid parent_comment_id: parent does not exist';
+  end if;
+
+  if p_post_id <> new.post_id then
+    raise exception 'Invalid parent_comment_id: parent belongs to different post';
+  end if;
+
+  if p_community_id <> new.community_id then
+    raise exception 'Invalid parent_comment_id: parent belongs to different community';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_validate_post_comment_parent on public.post_comments;
+create trigger trg_validate_post_comment_parent
+  before insert or update of parent_comment_id, post_id, community_id on public.post_comments
+  for each row
+  execute function public.validate_post_comment_parent();
 
 -- =============================================================================
 -- 2) Comment votes (optional; mirrors your SQLite comment_votes)
