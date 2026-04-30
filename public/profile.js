@@ -2021,6 +2021,8 @@ let communitySelectedSlug = null;
 let communityJoinedSlugs = new Set();
 let communityMutedSlugs = new Set();
 let communityPostDetailOpenPostId = null;
+/** Lowercase slug for the post open in the detail modal (comment delete UI + membership). */
+let communityPostDetailCommunitySlug = null;
 let createCommunityWizard = { step: 1, topic: "Indoor Plants", type: "public", mature: false };
 
 function openCommunityCreatePostModal() {
@@ -3703,13 +3705,13 @@ function closeCommunityPostDetailModal() {
     document.body.style.overflow = "";
   } catch (_) {}
   communityPostDetailOpenPostId = null;
+  communityPostDetailCommunitySlug = null;
 }
 
 function computeCanComment(commObj) {
-  if (!commObj) return true;
-  if (commObj.status === "public") return true;
-  // Restricted/private: only joined members (and mods/creator).
-  return !!commObj.joined || !!commObj.isModerator || !!commObj.isCreator;
+  // Comments are open to everyone (like Instagram/Reddit).
+  // We still require login at submit-time (see submit handler).
+  return true;
 }
 
 function safeToDate(iso) {
@@ -3744,12 +3746,18 @@ async function openCommunityPostDetail(postId) {
 
   const post = data.post || {};
   const comm = data.community || {};
+  const slugKey = String(comm.slug || "").toLowerCase();
+  communityPostDetailCommunitySlug = slugKey || null;
+
   const commObj =
-    (Array.isArray(communityList) ? communityList.find((c) => String(c.slug || "").toLowerCase() === String(comm.slug || "").toLowerCase()) : null) ||
+    (Array.isArray(communityList) ? communityList.find((c) => String(c.slug || "").toLowerCase() === slugKey) : null) ||
     {};
   commObj.slug = comm.slug || commObj.slug;
   commObj.status = comm.status || commObj.status;
   commObj.creator_firebase_uid = comm.creator_firebase_uid || commObj.creator_firebase_uid;
+  if (slugKey && !commObj.joined && communityJoinedSlugs.has(slugKey)) {
+    commObj.joined = true;
+  }
 
   const uid = currentProfileUser?.uid || null;
   const isCreator = !!uid && String(commObj.creator_firebase_uid) === String(uid);
@@ -3981,8 +3989,16 @@ async function openCommunityPostDetail(postId) {
       const parentCommentId = parentIdEl?.value ? String(parentIdEl.value) : null;
 
       try {
+        if (!currentProfileUser?.uid) {
+          showToast("Please log in to comment.", "error");
+          return;
+        }
         const auth = await authReady;
         const token2 = await auth.currentUser?.getIdToken?.();
+        if (!token2) {
+          showToast("Please log in to comment.", "error");
+          return;
+        }
         const createRes = await fetch(`/api/posts/${encodeURIComponent(communityPostDetailOpenPostId)}/comments`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token2}` },
@@ -4070,23 +4086,11 @@ async function renderCommunityPostComments(postId) {
     }
   });
 
-  const canDelete = (() => {
-    // UI permission is a best-effort guess; server enforces.
-    const uid = currentProfileUser?.uid || null;
-    return async () => {
-      if (!uid) return false;
-      // Mods/creator delete all in this modal (based on current communityList entry).
-      const commObj = (Array.isArray(communityList) ? communityList.find((c) => String(c.slug || "").toLowerCase() === String(data.community_slug || "").toLowerCase()) : null) || null;
-      return !!commObj;
-    };
-  })();
-
-  const currentUserDisplayName = currentProfileUser?.displayName ? String(currentProfileUser.displayName) : "";
   const uid = currentProfileUser?.uid || null;
+  const ctxSlug = String(communityPostDetailCommunitySlug || data.community_slug || "").toLowerCase();
+  const commForPost =
+    ctxSlug && Array.isArray(communityList) ? communityList.find((cm) => String(cm.slug || "").toLowerCase() === ctxSlug) : null;
 
-  // Determine can-delete heuristically:
-  const modalPostId = postId;
-  // We'll compute comment delete permission per comment while rendering.
   const escapeBody = (txt) => escapeHtml(String(txt || ""));
   const renderNode = (c, depth) => {
     const commentId = String(c.id);
@@ -4095,13 +4099,18 @@ async function renderCommunityPostComments(postId) {
     const score = Number(c.score ?? 0);
     const myVote = Number(c.my_vote ?? 0);
 
-    const canDeleteComment =
-      (!!uid && Array.isArray(communityList) && communityList.some((comm) => {
-        const isCreator = comm.creator_firebase_uid && String(comm.creator_firebase_uid) === String(uid);
-        const isMod = Array.isArray(comm.moderators) && comm.moderators.some((m) => String(m.uid) === String(uid));
-        const isInThisModal = comm.id && comm.id; // no-op; kept for readability
-        return isCreator || isMod || false;
-      })) || (currentUserDisplayName && authorName === currentUserDisplayName) || String(c.uid) === String(uid);
+    const isCommentAuthor = !!(uid && String(c.uid) === String(uid));
+    const isCommunityCreator = !!(
+      uid &&
+      commForPost?.creator_firebase_uid &&
+      String(commForPost.creator_firebase_uid) === String(uid)
+    );
+    const isCommunityMod = !!(
+      uid &&
+      Array.isArray(commForPost?.moderators) &&
+      commForPost.moderators.some((m) => String(m?.uid || m || "").trim() === String(uid))
+    );
+    const canDeleteComment = isCommentAuthor || isCommunityCreator || isCommunityMod;
 
     const replyBtn = `<button type="button" class="community-comment-reply-btn" data-reply-comment-id="${escapeHtml(commentId)}">
         Reply</button>`;

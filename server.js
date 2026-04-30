@@ -2721,8 +2721,6 @@ app.get('/api/posts/:id/comments', async (req, res) => {
       .single();
     if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
 
-    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
-
     const comments = await dbAllAsync(
       `SELECT
          pc.id,
@@ -2750,6 +2748,7 @@ app.get('/api/posts/:id/comments', async (req, res) => {
     }
 
     res.json({
+      community_slug: comm.slug,
       comments: (comments || []).map((c) => ({
         id: String(c.id),
         parent_comment_id: c.parent_comment_id ? String(c.parent_comment_id) : null,
@@ -2790,8 +2789,6 @@ app.post('/api/posts/:id/comments', async (req, res) => {
       .eq('id', post.community_id)
       .single();
     if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
-
-    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
 
     // Validate parent belongs to the same post (when provided)
     if (parentCommentId) {
