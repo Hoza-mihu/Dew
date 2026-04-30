@@ -1075,13 +1075,29 @@ async function canDeletePost(postId, uid, firebaseClaims = null) {
   const postIdStr = String(postId || '').trim();
   if (!postIdStr || !uid) return false;
   const uidNorm = String(uid || '').trim();
-  const { data: post, error } = await supabaseAdmin.from('posts').select('id,community_id,title,author_username').eq('id', postIdStr).single();
-  if (error || !post) return false;
+  const selectWithFirebaseUid = 'id,community_id,title,author_username,author_firebase_uid';
+  const selectBase = 'id,community_id,title,author_username';
+  const attempt = await supabaseAdmin.from('posts').select(selectWithFirebaseUid).eq('id', postIdStr).single();
+  let post = attempt.data || null;
+  let postErr = attempt.error || null;
+  if (postErr) {
+    const msg = String(postErr?.message || '').toLowerCase();
+    if (msg.includes('author_firebase_uid') || msg.includes('column')) {
+      const fallback = await supabaseAdmin.from('posts').select(selectBase).eq('id', postIdStr).single();
+      post = fallback.data || null;
+      postErr = fallback.error || null;
+    }
+  }
+  if (postErr || !post) return false;
   const comm = await supabaseAdmin.from('communities').select('slug,status,creator_firebase_uid').eq('id', post.community_id).single();
   if (comm.error || !comm.data) return false;
   const communityRow = comm.data;
   if (communityRow.creator_firebase_uid && String(communityRow.creator_firebase_uid).trim() === uidNorm) return true;
   if (await isModeratorToCommunitySQLite(communityRow.slug, uidNorm)) return true;
+
+  // Strong check when available: the author_firebase_uid stored on the post.
+  if (post.author_firebase_uid && String(post.author_firebase_uid).trim() === uidNorm) return true;
+
   // Fallback: allow if the author_username matches the user's display_name
   const authorUsername = String(post.author_username || '').trim().toLowerCase();
   const claimsName =
@@ -2651,11 +2667,30 @@ app.get('/api/posts/:id', async (req, res) => {
       }
     }
 
-    const { data: post, error: postErr } = await supabaseAdmin
-      .from('posts')
-      .select('id,community_id,title,body,created_at,author_username,image_url,media_urls,media_types,score,comment_count')
-      .eq('id', postId)
-      .single();
+    const selectWithMedia = 'id,community_id,title,body,created_at,author_username,image_url,media_urls,media_types,score,comment_count';
+    const selectBase = 'id,community_id,title,body,created_at,author_username,image_url,score,comment_count';
+    const trySelect = async (sel) => {
+      const { data, error } = await supabaseAdmin.from('posts').select(sel).eq('id', postId).single();
+      return { data, error };
+    };
+
+    let post = null;
+    let postErr = null;
+    const attemptWithMedia = await trySelect(selectWithMedia);
+    if (attemptWithMedia.error) {
+      const msg = String(attemptWithMedia.error?.message || '').toLowerCase();
+      if (msg.includes('media_urls') || msg.includes('media_types') || msg.includes('column')) {
+        const attemptBase = await trySelect(selectBase);
+        post = attemptBase.data || null;
+        postErr = attemptBase.error || null;
+      } else {
+        post = null;
+        postErr = attemptWithMedia.error;
+      }
+    } else {
+      post = attemptWithMedia.data || null;
+      postErr = null;
+    }
     if (postErr || !post) return res.status(404).json({ error: 'Post not found' });
 
     const { data: comm, error: commErr } = await supabaseAdmin
@@ -2665,7 +2700,7 @@ app.get('/api/posts/:id', async (req, res) => {
       .single();
     if (commErr || !comm) return res.status(404).json({ error: 'Community not found' });
 
-    if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+    // Post detail + comments are open for viewing (like Instagram/Reddit).
 
     const [postVotesRow, commentCountRow] = await Promise.all([
       dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]),

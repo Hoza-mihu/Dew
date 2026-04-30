@@ -4334,6 +4334,7 @@ async function handleCommunityPostSubmit(e) {
       title,
       body: finalBody || null,
       author_username: author,
+      author_firebase_uid: currentProfileUser?.uid || null,
       image_url: imageUrl,
       tags: tags.length ? tags : [],
     };
