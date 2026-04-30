@@ -21,7 +21,7 @@ create table if not exists public.post_comments (
   body text not null,
   parent_comment_id uuid references public.post_comments(id) on delete cascade,
   created_at timestamptz not null default now(),
-  deleted_at timestamptz,
+  deleted_at timestamptz
 
   -- NOTE: Postgres does not allow subqueries in CHECK constraints.
   -- Parent post/community consistency is enforced via a trigger below.
