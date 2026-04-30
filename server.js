@@ -522,6 +522,21 @@ async function requireFirebaseUser(req) {
   if (!m) throw new Error('Missing Authorization bearer token');
   const decoded = await firebaseAdmin.auth().verifyIdToken(m[1]);
   if (!decoded?.uid) throw new Error('Invalid token');
+  // Keep a lightweight local user directory for comment author display, mod tools, etc.
+  // This avoids "Unknown" authors when rendering comments.
+  try {
+    const displayName = decoded.displayName || decoded.name || decoded.username || null;
+    const email = decoded.email || null;
+    await dbRunAsync(
+      `INSERT INTO users (uid, display_name, email, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(uid) DO UPDATE SET
+         display_name = excluded.display_name,
+         email = excluded.email,
+         updated_at = excluded.updated_at`,
+      [String(decoded.uid).trim(), displayName ? String(displayName).trim() : null, email ? String(email).trim() : null, new Date().toISOString()]
+    );
+  } catch (_) {}
   return decoded.uid;
 }
 
@@ -532,6 +547,20 @@ async function requireFirebaseUserClaims(req) {
   if (!m) throw new Error('Missing Authorization bearer token');
   const decoded = await firebaseAdmin.auth().verifyIdToken(m[1]);
   if (!decoded?.uid) throw new Error('Invalid token');
+  // Keep a lightweight local user directory for comment author display, mod tools, etc.
+  try {
+    const displayName = decoded.displayName || decoded.name || decoded.username || null;
+    const email = decoded.email || null;
+    await dbRunAsync(
+      `INSERT INTO users (uid, display_name, email, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(uid) DO UPDATE SET
+         display_name = excluded.display_name,
+         email = excluded.email,
+         updated_at = excluded.updated_at`,
+      [String(decoded.uid).trim(), displayName ? String(displayName).trim() : null, email ? String(email).trim() : null, new Date().toISOString()]
+    );
+  } catch (_) {}
   return decoded;
 }
 
