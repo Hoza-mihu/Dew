@@ -306,8 +306,10 @@ function bindCommunityPostMediaLightbox() {
   const prevBtn = document.getElementById("communityPostMediaPrevBtn");
   const nextBtn = document.getElementById("communityPostMediaNextBtn");
   const lightboxFrame = lightbox?.querySelector(".community-post-media-lightbox-frame");
+  const zoomHint = document.getElementById("communityPostMediaLightboxZoomHint");
 
   if (!lightbox || !lightboxImg || !lightboxVideo) return;
+  if (lightbox.dataset.dewCommunityMediaLightboxBound === "1") return;
 
   let mediaUrls = [];
   let mediaTypes = [];
@@ -316,6 +318,7 @@ function bindCommunityPostMediaLightbox() {
   let imgTx = 0;
   let imgTy = 0;
   let imgDrag = null;
+  let pinchDist = 0;
 
   function inferKind(url, explicitType) {
     if (explicitType) return explicitType === "video" ? "video" : "image";
@@ -346,6 +349,7 @@ function bindCommunityPostMediaLightbox() {
     lightboxImg.style.display = isVideo ? "none" : "block";
     lightboxVideo.style.display = isVideo ? "block" : "none";
     if (lightboxFrame) lightboxFrame.style.cursor = isVideo ? "default" : "grab";
+    if (zoomHint) zoomHint.hidden = isVideo;
 
     if (isVideo) {
       lightboxVideo.src = url;
@@ -453,17 +457,15 @@ function bindCommunityPostMediaLightbox() {
     setMainByIndex(activeIndex + 1);
   });
 
-  lightboxFrame?.addEventListener(
-    "wheel",
-    (e) => {
-      if (lightboxImg.style.display === "none") return;
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.12 : 0.12;
-      imgScale = Math.min(5, Math.max(0.35, imgScale + delta));
-      applyImgViewTransform();
-    },
-    { passive: false }
-  );
+  function onLightboxZoomWheel(e) {
+    if (lightbox.style.display === "none") return;
+    if (lightboxImg.style.display === "none") return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.12 : 0.12;
+    imgScale = Math.min(5, Math.max(0.35, imgScale + delta));
+    applyImgViewTransform();
+  }
+  lightbox?.addEventListener("wheel", onLightboxZoomWheel, { passive: false, capture: true });
 
   lightboxFrame?.addEventListener("dblclick", (e) => {
     if (lightboxImg.style.display === "none") return;
@@ -490,8 +492,41 @@ function bindCommunityPostMediaLightbox() {
     imgDrag = null;
   });
 
+  lightboxFrame?.addEventListener(
+    "touchstart",
+    (e) => {
+      if (lightboxImg.style.display === "none") return;
+      if (e.touches.length === 2) {
+        pinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+      }
+    },
+    { passive: true }
+  );
+  lightboxFrame?.addEventListener(
+    "touchmove",
+    (e) => {
+      if (lightboxImg.style.display === "none" || e.touches.length !== 2) return;
+      e.preventDefault();
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (pinchDist > 8) {
+        const factor = d / pinchDist;
+        imgScale = Math.min(5, Math.max(0.35, imgScale * factor));
+        applyImgViewTransform();
+      }
+      pinchDist = d;
+    },
+    { passive: false }
+  );
+
   document.getElementById("communityFeed")?.addEventListener("click", onPostClick);
 
+  lightbox.dataset.dewCommunityMediaLightboxBound = "1";
   openCommunityPostMediaLightboxFn = openWithData;
 }
 
@@ -3531,14 +3566,17 @@ async function loadCommunityView() {
         const isModerator = !!(currentProfileUser?.uid && mods.some((m) => String(m?.uid || m || "").trim() === String(currentProfileUser.uid)));
         const showDeleteByAdminMod = isCreator || isModerator;
         const showDeleteInitial = showDeleteByAuthor || showDeleteByAdminMod;
+        const mv = Number(p.my_vote ?? 0);
+        const upActive = mv === 1 ? " community-vote-btn--active-up" : "";
+        const downActive = mv === -1 ? " community-vote-btn--active-down" : "";
 
         return `<article class="community-post" data-post-id="${escapeHtml(p.id)}" data-media-urls="${escapeHtml(
           JSON.stringify(mediaUrls)
         )}" data-media-types="${escapeHtml(JSON.stringify(mediaTypes))}">
           <div class="community-vote">
-            <button type="button" data-vote="up"><i class="ri-arrow-up-s-line"></i></button>
+            <button type="button" class="community-vote-btn${upActive}" data-vote="up" aria-label="Helpful — this adds value" title="Helpful"><span class="community-vote-emoji" aria-hidden="true">👍</span></button>
             <div class="community-vote-score">${p.score ?? 0}</div>
-            <button type="button" data-vote="down"><i class="ri-arrow-down-s-line"></i></button>
+            <button type="button" class="community-vote-btn${downActive}" data-vote="down" aria-label="Not helpful — off-topic or low quality" title="Not helpful"><span class="community-vote-emoji" aria-hidden="true">👎</span></button>
           </div>
           <div class="community-post-main">
             <div class="community-post-header">
@@ -4247,6 +4285,7 @@ async function openCommunityPostDetail(postId) {
   // Votes
   const scoreEl = document.getElementById("communityPostDetailScore");
   if (scoreEl) scoreEl.textContent = String(Number(post.score ?? 0));
+  updatePostDetailVoteButtons(post.my_vote ?? 0);
 
   // Media
   const mediaHost = document.getElementById("communityPostDetailMedia");
@@ -4268,9 +4307,9 @@ async function openCommunityPostDetail(postId) {
       .map((url, idx) => {
         const kind = inferKind(safeTypes[idx], url);
         if (kind === "video")
-          return `<div class="community-post-media-slide" data-slide-index="${idx}"><video src="${escapeHtml(url)}" controls preload="metadata" playsinline title="Double-click for full-screen viewer"></video></div>`;
+          return `<div class="community-post-media-slide" data-slide-index="${idx}"><video src="${escapeHtml(url)}" controls preload="metadata" playsinline title="Tap outside controls for full-screen viewer"></video></div>`;
         if (kind === "audio")
-          return `<div class="community-post-media-slide community-post-media-slide--audio" data-slide-index="${idx}"><audio src="${escapeHtml(url)}" controls preload="metadata" title="Double-click for full-screen viewer"></audio></div>`;
+          return `<div class="community-post-media-slide community-post-media-slide--audio" data-slide-index="${idx}"><audio src="${escapeHtml(url)}" controls preload="metadata" title="Tap for full-screen viewer"></audio></div>`;
         return `<div class="community-post-media-slide" data-slide-index="${idx}"><img src="${escapeHtml(url)}" alt="Post media ${idx + 1}" loading="lazy" /></div>`;
       })
       .join("");
@@ -4323,14 +4362,15 @@ async function openCommunityPostDetail(postId) {
     if (!mediaHost.__dewPostDetailMediaClick) {
       mediaHost.__dewPostDetailMediaClick = true;
       mediaHost.addEventListener("click", (e) => {
+        if (!openCommunityPostMediaLightboxFn) bindCommunityPostMediaLightbox();
         if (!openCommunityPostMediaLightboxFn) return;
         if (e.target.closest(".community-post-media-thumb-btn")) return;
         const slide = e.target.closest(".community-post-media-slide");
         if (!slide) return;
         const vid = slide.querySelector("video");
         const aud = slide.querySelector("audio");
-        if (vid && vid.contains(e.target) && e.detail < 2) return;
-        if (aud && aud.contains(e.target) && e.detail < 2) return;
+        if (vid) try { vid.pause(); } catch (_) {}
+        if (aud) try { aud.pause(); } catch (_) {}
         const idx = Number(slide.dataset.slideIndex || "0") || 0;
         let urls = [];
         let types = [];
@@ -4399,6 +4439,17 @@ async function openCommunityPostDetail(postId) {
   if (listEl && !listEl.__dewDelegated) {
     listEl.__dewDelegated = true;
     listEl.addEventListener("click", async (ev) => {
+      const revealLow = ev.target.closest("[data-reveal-low-comment]");
+      if (revealLow) {
+        ev.preventDefault();
+        const stack = revealLow.closest(".community-comment-body-stack");
+        if (stack) {
+          stack.classList.remove("community-comment-body-stack--masked");
+          revealLow.remove();
+        }
+        return;
+      }
+
       const collapseBtn = ev.target.closest(".community-comment-collapse-btn");
       if (collapseBtn) {
         ev.preventDefault();
@@ -4523,6 +4574,20 @@ async function openCommunityPostDetail(postId) {
   }
 }
 
+function updatePostDetailVoteButtons(myVote) {
+  const up = document.getElementById("communityPostDetailVoteUpBtn");
+  const down = document.getElementById("communityPostDetailVoteDownBtn");
+  const mv = Number(myVote) || 0;
+  if (up) {
+    up.classList.toggle("community-vote-btn--active-up", mv === 1);
+    up.style.borderColor = mv === 1 ? "rgba(126,242,191,0.55)" : "";
+  }
+  if (down) {
+    down.classList.toggle("community-vote-btn--active-down", mv === -1);
+    down.style.borderColor = mv === -1 ? "rgba(255,120,120,0.55)" : "";
+  }
+}
+
 async function voteOnPostDetail(postId, delta) {
   try {
     if (!currentProfileUser?.uid) {
@@ -4541,7 +4606,7 @@ async function voteOnPostDetail(postId, delta) {
     if (!voteRes.ok) throw new Error(j.error || "Vote failed");
     const scoreEl = document.getElementById("communityPostDetailScore");
     if (scoreEl) scoreEl.textContent = String(Number(j.score ?? 0));
-    // Feed metrics mirror is updated server-side via the voting endpoint itself.
+    updatePostDetailVoteButtons(j.my_vote ?? 0);
   } catch (e) {
     showToast(e?.message || "Could not vote.", "error");
   }
@@ -4631,6 +4696,11 @@ function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint
 
     const voteUpActive = myVote === 1;
     const voteDownActive = myVote === -1;
+    const heavilyDownvoted = score <= -15;
+    const bodyMaskClass = heavilyDownvoted ? " community-comment-body-stack--masked" : "";
+    const revealLowBtn = heavilyDownvoted
+      ? `<button type="button" class="community-comment-reveal-low" data-reveal-low-comment="${escapeHtml(commentId)}">This comment was voted down a lot — tap to show</button>`
+      : "";
     const liClass = "community-comment" + (depth > 0 ? " community-comment--reply" : "");
 
     const children = childrenByParent.get(commentId) || [];
@@ -4658,12 +4728,12 @@ function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint
         <div class="community-comment-shell">
           <div class="${voteColClass}" aria-label="Comment score">
             ${collapseCtl}
-            <button type="button" class="community-comment-vote-btn community-comment-vote-btn--col" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Upvote" ${voteUpActive ? 'style="border-color: rgba(126,242,191,0.55)"' : ''}>
-              <i class="ri-arrow-up-s-line"></i>
+            <button type="button" class="community-comment-vote-btn community-comment-vote-btn--col" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Helpful — adds value" title="Helpful" ${voteUpActive ? 'style="border-color: rgba(126,242,191,0.55)"' : ''}>
+              <span class="community-comment-vote-emoji" aria-hidden="true">👍</span>
             </button>
             <div class="community-comment-score community-comment-score--col">${score}</div>
-            <button type="button" class="community-comment-vote-btn community-comment-vote-btn--col" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Downvote" ${voteDownActive ? 'style="border-color: rgba(255,120,120,0.55)"' : ''}>
-              <i class="ri-arrow-down-s-line"></i>
+            <button type="button" class="community-comment-vote-btn community-comment-vote-btn--col" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Not helpful — off-topic or low quality" title="Not helpful" ${voteDownActive ? 'style="border-color: rgba(255,120,120,0.55)"' : ''}>
+              <span class="community-comment-vote-emoji" aria-hidden="true">👎</span>
             </button>
           </div>
           <div class="community-comment-right">
@@ -4680,7 +4750,10 @@ function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint
                   </div>
                   <div class="community-comment-header-actions">${deleteBtn}</div>
                 </div>
-                <div class="community-comment-body">${formatCommentBodyToHtml(c.body)}</div>
+                <div class="community-comment-body-stack${bodyMaskClass}">
+                  ${revealLowBtn}
+                  <div class="community-comment-body">${formatCommentBodyToHtml(c.body)}</div>
+                </div>
                 <div class="community-comment-actions">
                   ${replyBtn}
                 </div>
@@ -4939,6 +5012,17 @@ async function voteOnPost(postId, delta, card) {
 
     const scoreEl = card.querySelector(".community-vote-score");
     if (scoreEl) scoreEl.textContent = String(Number(data.score ?? 0));
+    const mv = Number(data.my_vote) || 0;
+    const upBtn = card.querySelector('.community-vote [data-vote="up"]');
+    const downBtn = card.querySelector('.community-vote [data-vote="down"]');
+    if (upBtn) {
+      upBtn.classList.toggle("community-vote-btn--active-up", mv === 1);
+      upBtn.style.borderColor = mv === 1 ? "rgba(126,242,191,0.55)" : "";
+    }
+    if (downBtn) {
+      downBtn.classList.toggle("community-vote-btn--active-down", mv === -1);
+      downBtn.style.borderColor = mv === -1 ? "rgba(255,120,120,0.55)" : "";
+    }
   } catch (e) {
     showToast(e?.message || "Could not vote.", "error");
   }

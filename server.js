@@ -2828,12 +2828,19 @@ app.get('/api/posts/:id', async (req, res) => {
     })();
     const [postVotesRow, commentCountRow] = await Promise.all([postVotesRowP, commentCountRowP]);
 
+    let myVote = 0;
+    if (uid) {
+      const mine = await dbGetAsync('SELECT value FROM post_votes WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
+      if (mine && mine.value != null) myVote = Number(mine.value);
+    }
+
     res.json({
       post: {
         ...post,
         // prefer SQLite score/commentCount so votes/comments work immediately
         score: Number(postVotesRow?.score ?? 0),
         comment_count: Number(commentCountRow?.n ?? 0),
+        my_vote: myVote,
       },
       community: {
         id: comm.id,
@@ -3155,7 +3162,10 @@ app.post('/api/posts/:id/vote', async (req, res) => {
     const score = Number(scoreRow?.score ?? 0);
     await supabaseAdmin.from('posts').update({ score }).eq('id', postId);
 
-    res.json({ ok: true, score });
+    const mineAfter = await dbGetAsync('SELECT value FROM post_votes WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
+    const my_vote = mineAfter && mineAfter.value != null ? Number(mineAfter.value) : 0;
+
+    res.json({ ok: true, score, my_vote });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to vote' });
   }
@@ -3192,7 +3202,9 @@ app.post('/api/comments/:id/vote', async (req, res) => {
 
     const scoreRow = await dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM comment_votes WHERE comment_id = ?', [commentId]);
     const score = Number(scoreRow?.score ?? 0);
-    res.json({ ok: true, score });
+    const mineAfter = await dbGetAsync('SELECT value FROM comment_votes WHERE comment_id = ? AND uid = ? LIMIT 1', [commentId, uid]);
+    const my_vote = mineAfter && mineAfter.value != null ? Number(mineAfter.value) : 0;
+    res.json({ ok: true, score, my_vote });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to vote' });
   }
@@ -3445,7 +3457,45 @@ app.get('/api/community-feed/posts', async (req, res) => {
       const msg = String(attempt.error?.message || '').toLowerCase();
       if (!msg.includes('column') && !msg.includes('schema')) break;
     }
-    res.json({ posts: rows });
+
+    const postIds = rows.map((r) => String(r.id || '').trim()).filter(Boolean);
+    const scoresByPost = new Map();
+    const myVoteByPost = new Map();
+    let voteRowsLoaded = false;
+    if (postIds.length) {
+      const ph = postIds.map(() => '?').join(',');
+      try {
+        const aggRows = await dbAllAsync(
+          `SELECT post_id, COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id IN (${ph}) GROUP BY post_id`,
+          postIds
+        );
+        voteRowsLoaded = true;
+        for (const row of aggRows || []) {
+          scoresByPost.set(String(row.post_id), Number(row.score ?? 0));
+        }
+        if (uid) {
+          const mineRows = await dbAllAsync(
+            `SELECT post_id, value FROM post_votes WHERE uid = ? AND post_id IN (${ph})`,
+            [uid, ...postIds]
+          );
+          for (const row of mineRows || []) {
+            myVoteByPost.set(String(row.post_id), Number(row.value));
+          }
+        }
+      } catch (_) {
+        voteRowsLoaded = false;
+      }
+    }
+
+    const enriched = rows.map((p) => {
+      const id = String(p.id || '');
+      const baseScore = Number(p.score ?? 0);
+      const score = voteRowsLoaded ? (scoresByPost.has(id) ? scoresByPost.get(id) : 0) : baseScore;
+      const my_vote = uid && voteRowsLoaded ? myVoteByPost.get(id) || 0 : 0;
+      return { ...p, score, my_vote };
+    });
+
+    res.json({ posts: enriched });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to load posts' });
   }
