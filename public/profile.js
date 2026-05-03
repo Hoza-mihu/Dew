@@ -2025,6 +2025,8 @@ let communityPostDetailOpenPostId = null;
 let communityPostDetailCommunitySlug = null;
 /** Post author's Firebase UID when modal is open (OP badge on comments). */
 let communityPostDetailAuthorFirebaseUid = null;
+/** Cached flat comment list for search + client-side sort without refetch. */
+let __dewCommentsCache = { postId: null, raw: [] };
 let createCommunityWizard = { step: 1, topic: "Indoor Plants", type: "public", mature: false };
 
 function openCommunityCreatePostModal() {
@@ -3781,9 +3783,11 @@ function bindCommunityPostDetailModal() {
   if (sortEl && !sortEl.__dewSortBound) {
     sortEl.__dewSortBound = true;
     sortEl.addEventListener("change", () => {
-      if (communityPostDetailOpenPostId) renderCommunityPostComments(communityPostDetailOpenPostId);
+      if (communityPostDetailOpenPostId) renderCommunityPostComments(communityPostDetailOpenPostId, { skipFetch: true });
     });
   }
+
+  bindCommunityCommentComposerExtras();
 }
 
 function closeCommunityPostDetailModal() {
@@ -3846,6 +3850,183 @@ function formatCommentTime(iso) {
   } catch (_) {
     return safeToDate(iso);
   }
+}
+
+function escapeHtmlAttr(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function isSafeHttpUrl(u) {
+  try {
+    const p = new URL(String(u || "").trim());
+    return p.protocol === "http:" || p.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isImageMediaUrl(u) {
+  if (!isSafeHttpUrl(u)) return false;
+  const noQs = String(u).split("?")[0].toLowerCase();
+  if (/\.(gif|png|jpe?g|webp|avif|svg)(\b|$)/i.test(noQs)) return true;
+  try {
+    const host = new URL(u).hostname.replace(/^www\./, "").toLowerCase();
+    const hosts = [
+      "giphy.com",
+      "media.giphy.com",
+      "i.giphy.com",
+      "tenor.com",
+      "media.tenor.com",
+      "c.tenor.com",
+      "imgur.com",
+      "i.imgur.com",
+      "preview.redd.it",
+      "i.redd.it",
+      "external-preview.redd.it",
+    ];
+    return hosts.some((h) => host === h || host.endsWith("." + h));
+  } catch {
+    return false;
+  }
+}
+
+function stripTrailingPunctFromUrl(url) {
+  let u = String(url || "");
+  while (u.length > 1 && /[.,;:!?)\]}>]+$/u.test(u.slice(-1))) u = u.slice(0, -1);
+  return u;
+}
+
+function applyInlineMarkdown(escapedPlain) {
+  let t = escapedPlain.replace(/\n/g, "<br>");
+  t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  t = t.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  return t;
+}
+
+function linkifyBareUrlsInText(t) {
+  const urlRe = /https?:\/\/[^\s<>\[\]()'"]+/gi;
+  let out = "";
+  let last = 0;
+  let m;
+  while ((m = urlRe.exec(t)) !== null) {
+    if (m.index > last) out += applyInlineMarkdown(escapeHtml(t.slice(last, m.index)));
+    const matched = m[0];
+    const trimmed = stripTrailingPunctFromUrl(matched);
+    if (isSafeHttpUrl(trimmed)) {
+      const u = escapeHtmlAttr(trimmed);
+      const disp = escapeHtml(trimmed);
+      if (isImageMediaUrl(trimmed)) {
+        out += `<a href="${u}" target="_blank" rel="noopener noreferrer" class="community-comment-body-media-wrap"><img src="${u}" alt="" class="community-comment-body-img" decoding="async" loading="lazy" /></a>`;
+      } else {
+        out += `<a href="${u}" target="_blank" rel="noopener noreferrer" class="community-comment-body-link">${disp}</a>`;
+      }
+    } else {
+      out += applyInlineMarkdown(escapeHtml(matched));
+    }
+    last = m.index + matched.length;
+  }
+  if (last < t.length) out += applyInlineMarkdown(escapeHtml(t.slice(last)));
+  return out;
+}
+
+function linkifyMarkdownSegment(text) {
+  const mdLinkRe = /\[([^\]]*)\]\(\s*(https?:\/\/[^)\s]+)\s*\)/g;
+  const pieces = [];
+  let last = 0;
+  let m;
+  while ((m = mdLinkRe.exec(text)) !== null) {
+    if (m.index > last) pieces.push({ kind: "text", v: text.slice(last, m.index) });
+    pieces.push({ kind: "mdlink", label: m[1], url: m[2] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) pieces.push({ kind: "text", v: text.slice(last) });
+
+  return pieces
+    .map((p) => {
+      if (p.kind === "mdlink") {
+        if (!isSafeHttpUrl(p.url)) return applyInlineMarkdown(escapeHtml(`[${p.label}](${p.url})`));
+        const u = escapeHtmlAttr(p.url);
+        const lab = String(p.label || "").trim() ? escapeHtml(p.label) : escapeHtml(p.url);
+        if (isImageMediaUrl(p.url)) {
+          return `<a href="${u}" target="_blank" rel="noopener noreferrer" class="community-comment-body-media-wrap"><img src="${u}" alt="${lab}" class="community-comment-body-img" loading="lazy" /></a>`;
+        }
+        return `<a href="${u}" target="_blank" rel="noopener noreferrer" class="community-comment-body-link">${lab}</a>`;
+      }
+      return linkifyBareUrlsInText(p.v);
+    })
+    .join("");
+}
+
+function formatCommentBodyToHtml(raw) {
+  const s = String(raw || "");
+  const imgRe = /!\[([^\]]*)\]\(\s*(https?:\/\/[^)\s]+)\s*\)/gi;
+  const parts = [];
+  let last = 0;
+  let m;
+  while ((m = imgRe.exec(s)) !== null) {
+    if (m.index > last) parts.push({ kind: "text", v: s.slice(last, m.index) });
+    parts.push({ kind: "img", alt: m[1], url: m[2] });
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) parts.push({ kind: "text", v: s.slice(last) });
+
+  return parts
+    .map((p) => {
+      if (p.kind === "img") {
+        if (!isSafeHttpUrl(p.url)) return applyInlineMarkdown(escapeHtml(p.url));
+        const u = escapeHtmlAttr(p.url);
+        const alt = escapeHtml(p.alt || "image");
+        return `<a href="${u}" target="_blank" rel="noopener noreferrer" class="community-comment-body-media-wrap"><img src="${u}" alt="${alt}" class="community-comment-body-img" loading="lazy" /></a>`;
+      }
+      return linkifyMarkdownSegment(p.v);
+    })
+    .join("");
+}
+
+function filterCommentsForSearch(comments, q) {
+  const norm = String(q || "")
+    .trim()
+    .toLowerCase();
+  if (!norm) return comments;
+  const byId = new Map(comments.map((c) => [String(c.id), c]));
+  const direct = new Set(
+    comments
+      .filter((c) => {
+        const body = String(c.body || "").toLowerCase();
+        const author = String(c.author_display_name || "").toLowerCase();
+        return body.includes(norm) || author.includes(norm);
+      })
+      .map((c) => String(c.id))
+  );
+  if (!direct.size) return [];
+  const keep = new Set();
+  for (const id of direct) {
+    let cur = byId.get(id);
+    while (cur) {
+      keep.add(String(cur.id));
+      const pid = cur.parent_comment_id ? String(cur.parent_comment_id) : "";
+      cur = pid ? byId.get(pid) : null;
+    }
+  }
+  const stack = [...direct];
+  while (stack.length) {
+    const id = stack.pop();
+    for (const c of comments) {
+      if (String(c.parent_comment_id || "") === id) {
+        const cid = String(c.id);
+        if (!keep.has(cid)) {
+          keep.add(cid);
+          stack.push(cid);
+        }
+      }
+    }
+  }
+  return comments.filter((c) => keep.has(String(c.id)));
 }
 
 function compareCommentsForSort(a, b, mode) {
@@ -3929,6 +4110,10 @@ async function openCommunityPostDetail(postId) {
   } catch (_) {}
 
   updateCommunityCommentComposerAvatar();
+
+  const searchEl = document.getElementById("communityCommentsSearch");
+  if (searchEl) searchEl.value = "";
+  bindCommunityCommentComposerExtras();
 
   // Header
   const titleEl = document.getElementById("communityPostDetailTitle");
@@ -4028,6 +4213,8 @@ async function openCommunityPostDetail(postId) {
 
   // Comment form visibility
   const form = document.getElementById("communityCommentForm");
+  const composerWrap = document.getElementById("communityCommentComposer");
+  if (composerWrap) composerWrap.style.display = canComment ? "" : "none";
   if (form) form.style.display = canComment ? "flex" : "none";
 
   if (__communityPostDetail.voteUpBtn) {
@@ -4065,7 +4252,10 @@ async function openCommunityPostDetail(postId) {
     const parentIdEl = document.getElementById("communityCommentParentId");
     const bodyEl = document.getElementById("communityCommentBody");
     if (parentIdEl) parentIdEl.value = "";
-    if (bodyEl) bodyEl.value = "";
+    if (bodyEl) {
+      bodyEl.value = "";
+      bodyEl.placeholder = communityCommentComposerDefaultPlaceholder();
+    }
   }
 
   // Wire comment actions (delegated) once per open
@@ -4187,7 +4377,7 @@ async function openCommunityPostDetail(postId) {
 
         bodyEl.value = "";
         if (parentIdEl) parentIdEl.value = "";
-        if (bodyEl) bodyEl.placeholder = "Add a comment…";
+        if (bodyEl) bodyEl.placeholder = communityCommentComposerDefaultPlaceholder();
         await renderCommunityPostComments(communityPostDetailOpenPostId);
       } catch (e) {
         showToast(e?.message || "Could not comment.", "error");
@@ -4222,52 +4412,29 @@ async function voteOnPostDetail(postId, delta) {
   }
 }
 
-async function renderCommunityPostComments(postId) {
+function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint) {
   const listEl = document.getElementById("communityPostCommentsList");
   const emptyEl = document.getElementById("communityPostCommentsEmpty");
   if (!listEl) return;
 
-  const token = await (async () => {
-    if (!currentProfileUser?.uid) return null;
-    const auth = await authReady;
-    return await auth.currentUser?.getIdToken?.();
-  })();
+  const q = String(searchQuery || "").trim();
+  const filtered = filterCommentsForSearch(flatComments, q);
 
   listEl.innerHTML = "";
   if (emptyEl) emptyEl.style.display = "none";
-  const countPillReset = document.getElementById("communityPostCommentsCountPill");
-  if (countPillReset) {
-    countPillReset.textContent = "";
-    countPillReset.hidden = true;
-  }
 
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, { headers });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    showToast(data.error || "Could not load comments.", "error");
-    return;
-  }
-
-  const comments = Array.isArray(data.comments) ? data.comments : [];
-  const countPill = document.getElementById("communityPostCommentsCountPill");
-  if (countPill) {
-    const n = comments.length;
-    if (n > 0) {
-      countPill.textContent = `${n} ${n === 1 ? "comment" : "comments"}`;
-      countPill.hidden = false;
-    } else {
-      countPill.textContent = "";
-      countPill.hidden = true;
-    }
-  }
-  if (!comments.length) {
+  if (!flatComments.length) {
     if (emptyEl) emptyEl.style.display = "block";
     return;
   }
 
-  // Build thread tree by parent_comment_id
-  const byId = new Map(comments.map((c) => [String(c.id), c]));
+  if (!filtered.length && q) {
+    listEl.innerHTML = `<li class="community-post-comments-search-empty" role="status">No comments match your search.</li>`;
+    return;
+  }
+
+  const comments = filtered;
+
   const childrenByParent = new Map();
   const roots = [];
   comments.forEach((c) => {
@@ -4294,11 +4461,10 @@ async function renderCommunityPostComments(postId) {
 
   const uid = currentProfileUser?.uid || null;
   const postAuthorUid = communityPostDetailAuthorFirebaseUid;
-  const ctxSlug = String(communityPostDetailCommunitySlug || data.community_slug || "").toLowerCase();
+  const ctxSlug = String(communityPostDetailCommunitySlug || communitySlugHint || "").toLowerCase();
   const commForPost =
     ctxSlug && Array.isArray(communityList) ? communityList.find((cm) => String(cm.slug || "").toLowerCase() === ctxSlug) : null;
 
-  const escapeBody = (txt) => escapeHtml(String(txt || ""));
   const renderNode = (c, depth) => {
     const commentId = String(c.id);
     const authorName = c.author_display_name || "Unknown";
@@ -4379,7 +4545,7 @@ async function renderCommunityPostComments(postId) {
                   </div>
                   <div class="community-comment-header-actions">${deleteBtn}</div>
                 </div>
-                <div class="community-comment-body">${escapeBody(c.body)}</div>
+                <div class="community-comment-body">${formatCommentBodyToHtml(c.body)}</div>
                 <div class="community-comment-actions">
                   ${replyBtn}
                 </div>
@@ -4394,6 +4560,225 @@ async function renderCommunityPostComments(postId) {
 
   const html = `<ul class="community-post-comments-list">${roots.map((r) => renderNode(r, 0)).join("")}</ul>`;
   listEl.innerHTML = html;
+}
+
+async function renderCommunityPostComments(postId, opts = {}) {
+  const listEl = document.getElementById("communityPostCommentsList");
+  const emptyEl = document.getElementById("communityPostCommentsEmpty");
+  if (!listEl) return;
+
+  const skipFetch = !!opts.skipFetch;
+  let comments;
+  let communitySlugHint = "";
+
+  if (skipFetch && __dewCommentsCache.postId === postId && Array.isArray(__dewCommentsCache.raw)) {
+    comments = __dewCommentsCache.raw;
+    communitySlugHint = __dewCommentsCache.community_slug || "";
+  } else {
+    const token = await (async () => {
+      if (!currentProfileUser?.uid) return null;
+      const auth = await authReady;
+      return await auth.currentUser?.getIdToken?.();
+    })();
+
+    listEl.innerHTML = "";
+    if (emptyEl) emptyEl.style.display = "none";
+    const countPillReset = document.getElementById("communityPostCommentsCountPill");
+    if (countPillReset) {
+      countPillReset.textContent = "";
+      countPillReset.hidden = true;
+    }
+
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, { headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(data.error || "Could not load comments.", "error");
+      return;
+    }
+
+    comments = Array.isArray(data.comments) ? data.comments : [];
+    communitySlugHint = String(data.community_slug || "");
+    __dewCommentsCache = { postId, raw: comments, community_slug: communitySlugHint };
+  }
+
+  const countPill = document.getElementById("communityPostCommentsCountPill");
+  if (countPill) {
+    const n = comments.length;
+    if (n > 0) {
+      countPill.textContent = `${n} ${n === 1 ? "comment" : "comments"}`;
+      countPill.hidden = false;
+    } else {
+      countPill.textContent = "";
+      countPill.hidden = true;
+    }
+  }
+
+  const searchQ = document.getElementById("communityCommentsSearch")?.value ?? "";
+  paintCommunityCommentsTree(comments, searchQ, communitySlugHint);
+}
+
+function communityCommentComposerDefaultPlaceholder() {
+  return "Join the conversation";
+}
+
+function communityCommentInsertAtCursor(textarea, chunk) {
+  if (!textarea) return;
+  const start = textarea.selectionStart ?? 0;
+  const end = textarea.selectionEnd ?? 0;
+  const v = textarea.value;
+  textarea.value = v.slice(0, start) + chunk + v.slice(end);
+  const pos = start + chunk.length;
+  textarea.focus();
+  textarea.setSelectionRange(pos, pos);
+}
+
+function communityCommentWrapSelection(textarea, before, after) {
+  if (!textarea) return;
+  const start = textarea.selectionStart ?? 0;
+  const end = textarea.selectionEnd ?? 0;
+  const v = textarea.value;
+  const sel = v.slice(start, end);
+  textarea.value = v.slice(0, start) + before + sel + after + v.slice(end);
+  const ns = start + before.length;
+  const ne = ns + sel.length;
+  textarea.focus();
+  textarea.setSelectionRange(ns, ne);
+}
+
+function bindCommunityCommentComposerExtras() {
+  const formatRow = document.getElementById("communityCommentFormatRow");
+  const toggleFmt = document.getElementById("communityCommentToggleFormat");
+  if (toggleFmt && formatRow && !toggleFmt.__dewBound) {
+    toggleFmt.__dewBound = true;
+    toggleFmt.addEventListener("click", () => {
+      const hid = formatRow.hasAttribute("hidden");
+      if (hid) formatRow.removeAttribute("hidden");
+      else formatRow.setAttribute("hidden", "");
+      toggleFmt.setAttribute("aria-expanded", String(hid));
+      toggleFmt.title = hid ? "Hide formatting options" : "Show formatting options";
+    });
+  }
+
+  const cancelBtn = document.getElementById("communityCommentCancel");
+  if (cancelBtn && !cancelBtn.__dewBound) {
+    cancelBtn.__dewBound = true;
+    cancelBtn.addEventListener("click", () => {
+      const bodyEl = document.getElementById("communityCommentBody");
+      const parentIdEl = document.getElementById("communityCommentParentId");
+      if (bodyEl) {
+        bodyEl.value = "";
+        bodyEl.placeholder = communityCommentComposerDefaultPlaceholder();
+      }
+      if (parentIdEl) parentIdEl.value = "";
+    });
+  }
+
+  const boldBtn = document.getElementById("communityCommentFmtBold");
+  const italicBtn = document.getElementById("communityCommentFmtItalic");
+  const linkBtn = document.getElementById("communityCommentFmtLink");
+  if (boldBtn && !boldBtn.__dewBound) {
+    boldBtn.__dewBound = true;
+    boldBtn.addEventListener("click", () => {
+      const ta = document.getElementById("communityCommentBody");
+      communityCommentWrapSelection(ta, "**", "**");
+    });
+  }
+  if (italicBtn && !italicBtn.__dewBound) {
+    italicBtn.__dewBound = true;
+    italicBtn.addEventListener("click", () => {
+      const ta = document.getElementById("communityCommentBody");
+      communityCommentWrapSelection(ta, "*", "*");
+    });
+  }
+  if (linkBtn && !linkBtn.__dewBound) {
+    linkBtn.__dewBound = true;
+    linkBtn.addEventListener("click", () => {
+      const ta = document.getElementById("communityCommentBody");
+      if (!ta) return;
+      const rawUrl = window.prompt("Paste link URL (https://…)", "https://");
+      if (rawUrl == null) return;
+      const url = String(rawUrl).trim();
+      if (!isSafeHttpUrl(url)) {
+        showToast("Enter a valid http(s) URL.", "error");
+        return;
+      }
+      const start = ta.selectionStart ?? 0;
+      const end = ta.selectionEnd ?? 0;
+      const sel = ta.value.slice(start, end).trim();
+      const label = sel || url;
+      const v = ta.value;
+      ta.value = v.slice(0, start) + `[${label}](${url})` + v.slice(end);
+      const pos = start + `[${label}](${url})`.length;
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+    });
+  }
+
+  const attachBtn = document.getElementById("communityCommentAttachBtn");
+  const mediaInput = document.getElementById("communityCommentMediaInput");
+  if (attachBtn && mediaInput && !attachBtn.__dewBound) {
+    attachBtn.__dewBound = true;
+    attachBtn.addEventListener("click", () => mediaInput.click());
+  }
+
+  if (mediaInput && !mediaInput.__dewBound) {
+    mediaInput.__dewBound = true;
+    mediaInput.addEventListener("change", async () => {
+      const file = mediaInput.files?.[0];
+      mediaInput.value = "";
+      const bodyEl = document.getElementById("communityCommentBody");
+      if (!file || !bodyEl) return;
+      const postId = communityPostDetailOpenPostId;
+      const slug = communityPostDetailCommunitySlug;
+      if (!postId || !slug) {
+        showToast("Open a post to attach media.", "error");
+        return;
+      }
+      try {
+        if (!currentProfileUser?.uid) {
+          showToast("Sign in to attach images.", "error");
+          return;
+        }
+        const auth = await authReady;
+        const token = await auth.currentUser?.getIdToken?.();
+        if (!token) {
+          showToast("Sign in to attach images.", "error");
+          return;
+        }
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("postId", String(postId));
+        fd.append("communitySlug", String(slug));
+        fd.append("originalName", String(file.name || "image"));
+        const upRes = await fetch("/api/upload/comment-media", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        const upJson = await upRes.json().catch(() => ({}));
+        if (!upRes.ok || !upJson.url) throw new Error(upJson.error || "Upload failed");
+        const url = String(upJson.url);
+        const prefix = bodyEl.value.trim() ? `${bodyEl.value.trimEnd()}\n\n` : "";
+        bodyEl.value = `${prefix}![](${url})`;
+        bodyEl.focus();
+      } catch (e) {
+        showToast(e?.message || "Could not upload image.", "error");
+      }
+    });
+  }
+
+  let searchTimer = null;
+  const searchInp = document.getElementById("communityCommentsSearch");
+  if (searchInp && !searchInp.__dewSearchBound) {
+    searchInp.__dewSearchBound = true;
+    searchInp.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        if (communityPostDetailOpenPostId) renderCommunityPostComments(communityPostDetailOpenPostId, { skipFetch: true });
+      }, 200);
+    });
+  }
 }
 
 

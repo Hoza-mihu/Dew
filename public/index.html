@@ -7,10 +7,21 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#0a0f0d" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f5faf7" media="(prefers-color-scheme: light)" />
+    <meta
+      name="theme-color"
+      content="#0a0f0d"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#f5faf7"
+      media="(prefers-color-scheme: light)"
+    />
     <!-- Allow scripts from self and CDNs; unsafe-eval needed by some SDKs (Supabase/Firebase). Remove unsafe-eval if you lock down CSP. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://vercel.live;" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://vercel.live;"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -94,7 +105,9 @@
             </li>
             <li class="nav-item" data-view="bots">
               <div class="nav-item-left">
-                <div class="nav-icon"><i class="ri-robot-2-line" aria-hidden="true"></i></div>
+                <div class="nav-icon">
+                  <i class="ri-robot-2-line" aria-hidden="true"></i>
+                </div>
                 <span>Bots</span>
               </div>
               <span class="nav-badge" id="navBotsCount">0</span>
@@ -164,7 +177,8 @@
             hidden
             aria-label="Exit demo and return to login"
           >
-            <i class="ri-flask-line" aria-hidden="true"></i><span>Exit Demo</span>
+            <i class="ri-flask-line" aria-hidden="true"></i
+            ><span>Exit Demo</span>
           </button>
           <div class="signout" id="btnSignOut">
             <i class="ri-logout-circle-r-line"></i><span>Sign Out</span>
@@ -172,7 +186,10 @@
         </div>
       </aside>
       <main class="main">
-        <div class="main-inner dashboard-shell dashboard-fade-in" id="dashboardView">
+        <div
+          class="main-inner dashboard-shell dashboard-fade-in"
+          id="dashboardView"
+        >
           <section class="top-bar dashboard-section dashboard-section--header">
             <div class="top-left">
               <h1>
@@ -185,8 +202,15 @@
               <p>DEW watches over your plants 24/7.</p>
             </div>
             <div class="top-right">
-              <div class="chip chip--live" id="dashboardLiveChip" title="Sensor data freshness">
-                <span class="chip-dot chip-dot--pulse" id="dashboardLiveDot"></span
+              <div
+                class="chip chip--live"
+                id="dashboardLiveChip"
+                title="Sensor data freshness"
+              >
+                <span
+                  class="chip-dot chip-dot--pulse"
+                  id="dashboardLiveDot"
+                ></span
                 ><span id="dashboardLiveLabel"
                   ><span class="dashboard-live-strong">Live</span> · last update
                   <span id="lastSyncLabel">—</span></span
@@ -200,25 +224,78 @@
               </button>
             </div>
           </section>
-          <section class="dashboard-weather-hero dashboard-section dashboard-section--weather" id="dashboardWeatherHero" data-weather="sunny" data-temp="moderate" data-windy="false" style="display: none;" aria-hidden="true">
+          <section
+            class="dashboard-weather-hero dashboard-section dashboard-section--weather"
+            id="dashboardWeatherHero"
+            data-weather="sunny"
+            data-temp="moderate"
+            data-windy="false"
+            style="display: none"
+            aria-hidden="true"
+          >
             <div class="weather-hero-scene">
-              <div class="weather-hero-sunny"><div class="weather-hero-sun"></div><div class="weather-hero-sun-rays"></div><div class="weather-hero-sun-particles" id="weatherHeroSunParticles"></div></div>
-              <div class="weather-hero-cloudy"><div class="weather-hero-cloud-layer weather-hero-cloud-layer--back"></div><div class="weather-hero-cloud-layer weather-hero-cloud-layer--mid"></div><div class="weather-hero-cloud-layer weather-hero-cloud-layer--front"></div></div>
-              <div class="weather-hero-rainy" id="weatherHeroRain"><div class="weather-hero-rain" id="weatherHeroRainContainer"></div><div class="weather-hero-rain-ripples"></div></div>
-              <div class="weather-hero-snowy" id="weatherHeroSnow"><div class="weather-hero-snow" id="weatherHeroSnowContainer"></div></div>
-              <div class="weather-hero-thunderstorm"><div class="weather-hero-lightning"></div><div class="weather-hero-rain weather-hero-rain--dark"><div id="weatherHeroStormRainContainer"></div></div></div>
-              <div class="weather-hero-windy" id="weatherHeroWindy"><div class="weather-hero-wind-particles" id="weatherHeroWindParticles"></div></div>
+              <div class="weather-hero-sunny">
+                <div class="weather-hero-sun"></div>
+                <div class="weather-hero-sun-rays"></div>
+                <div
+                  class="weather-hero-sun-particles"
+                  id="weatherHeroSunParticles"
+                ></div>
+              </div>
+              <div class="weather-hero-cloudy">
+                <div
+                  class="weather-hero-cloud-layer weather-hero-cloud-layer--back"
+                ></div>
+                <div
+                  class="weather-hero-cloud-layer weather-hero-cloud-layer--mid"
+                ></div>
+                <div
+                  class="weather-hero-cloud-layer weather-hero-cloud-layer--front"
+                ></div>
+              </div>
+              <div class="weather-hero-rainy" id="weatherHeroRain">
+                <div
+                  class="weather-hero-rain"
+                  id="weatherHeroRainContainer"
+                ></div>
+                <div class="weather-hero-rain-ripples"></div>
+              </div>
+              <div class="weather-hero-snowy" id="weatherHeroSnow">
+                <div
+                  class="weather-hero-snow"
+                  id="weatherHeroSnowContainer"
+                ></div>
+              </div>
+              <div class="weather-hero-thunderstorm">
+                <div class="weather-hero-lightning"></div>
+                <div class="weather-hero-rain weather-hero-rain--dark">
+                  <div id="weatherHeroStormRainContainer"></div>
+                </div>
+              </div>
+              <div class="weather-hero-windy" id="weatherHeroWindy">
+                <div
+                  class="weather-hero-wind-particles"
+                  id="weatherHeroWindParticles"
+                ></div>
+              </div>
             </div>
             <div class="weather-hero-frost" aria-hidden="true"></div>
             <div class="weather-hero-heat" aria-hidden="true"></div>
             <div class="weather-hero-content">
               <div class="weather-hero-head">
                 <div class="weather-hero-temp-wrap">
-                  <span class="weather-hero-icon" id="weatherHeroIcon" aria-hidden="true"><i class="ri-sun-line" id="weatherHeroIconI"></i></span>
+                  <span
+                    class="weather-hero-icon"
+                    id="weatherHeroIcon"
+                    aria-hidden="true"
+                    ><i class="ri-sun-line" id="weatherHeroIconI"></i
+                  ></span>
                   <div class="weather-hero-temp" id="weatherHeroTemp">—</div>
                 </div>
               </div>
-              <h2 class="weather-hero-title">Weather in <span id="weatherHeroLocation">—</span></h2>
+              <h2 class="weather-hero-title">
+                Weather in <span id="weatherHeroLocation">—</span>
+              </h2>
               <button
                 type="button"
                 class="btn btn-ghost btn-sm"
@@ -227,12 +304,24 @@
               >
                 <i class="ri-map-pin-line"></i> Change location
               </button>
-              <div class="weather-hero-condition" id="weatherHeroCondition">—</div>
-              <div class="weather-hero-meta">
-                <span><i class="ri-drop-line"></i> <span id="weatherHeroHumidity">—</span></span>
-                <span><i class="ri-windy-line"></i> <span id="weatherHeroWind">—</span></span>
+              <div class="weather-hero-condition" id="weatherHeroCondition">
+                —
               </div>
-              <p class="weather-hero-tip" id="weatherHeroTip" aria-live="polite"></p>
+              <div class="weather-hero-meta">
+                <span
+                  ><i class="ri-drop-line"></i>
+                  <span id="weatherHeroHumidity">—</span></span
+                >
+                <span
+                  ><i class="ri-windy-line"></i>
+                  <span id="weatherHeroWind">—</span></span
+                >
+              </div>
+              <p
+                class="weather-hero-tip"
+                id="weatherHeroTip"
+                aria-live="polite"
+              ></p>
             </div>
           </section>
           <section
@@ -270,7 +359,11 @@
                     <span id="dashboardWeatherWind">—</span></span
                   >
                 </div>
-                <p class="dashboard-weather-tip" id="dashboardWeatherTip" aria-live="polite"></p>
+                <p
+                  class="dashboard-weather-tip"
+                  id="dashboardWeatherTip"
+                  aria-live="polite"
+                ></p>
               </div>
             </div>
           </section>
@@ -280,38 +373,94 @@
             style="display: none"
           >
             <p class="dashboard-weather-empty-text">
-              <i class="ri-map-pin-line"></i> Weather data unavailable. Please set your location in
-              <a href="#" data-view="settings">Settings</a> to see local weather.
+              <i class="ri-map-pin-line"></i> Weather data unavailable. Please
+              set your location in
+              <a href="#" data-view="settings">Settings</a> to see local
+              weather.
             </p>
           </section>
           <!-- Weather location prompt (first-time + quick changes) -->
-          <div class="modal" id="weatherLocationPromptModal" style="display: none" aria-hidden="true">
-            <div class="modal-content" role="dialog" aria-modal="true" aria-label="Set weather location">
+          <div
+            class="modal"
+            id="weatherLocationPromptModal"
+            style="display: none"
+            aria-hidden="true"
+          >
+            <div
+              class="modal-content"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Set weather location"
+            >
               <div class="modal-header">
-                <h2><i class="ri-map-pin-line"></i> Set your weather location</h2>
-                <button type="button" class="modal-close" id="weatherLocationPromptCloseBtn" aria-label="Close">
+                <h2>
+                  <i class="ri-map-pin-line"></i> Set your weather location
+                </h2>
+                <button
+                  type="button"
+                  class="modal-close"
+                  id="weatherLocationPromptCloseBtn"
+                  aria-label="Close"
+                >
                   <i class="ri-close-line"></i>
                 </button>
               </div>
               <p class="modal-subtitle">
-                Choose how you'd like to set your location for weather and IoT updates.
+                Choose how you'd like to set your location for weather and IoT
+                updates.
               </p>
-              <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
-                <button type="button" class="btn btn-ghost" id="weatherLocationPromptBtnSearch">
+              <div
+                class="modal-actions"
+                style="display: flex; gap: 10px; justify-content: flex-end"
+              >
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  id="weatherLocationPromptBtnSearch"
+                >
                   <i class="ri-search-line"></i> Search location
                 </button>
-                <button type="button" class="btn btn-primary" id="weatherLocationPromptBtnDetect">
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  id="weatherLocationPromptBtnDetect"
+                >
                   <i class="ri-scan-line"></i> Use current location
                 </button>
               </div>
-              <div id="weatherLocationPromptStatus" class="location-message" style="display: none; margin-top: 14px" role="status" aria-live="polite"></div>
+              <div
+                id="weatherLocationPromptStatus"
+                class="location-message"
+                style="display: none; margin-top: 14px"
+                role="status"
+                aria-live="polite"
+              ></div>
             </div>
           </div>
           <!-- Logo preview (Instagram-style lightbox) -->
-          <div class="dew-logo-lightbox" id="dewLogoModal" style="display: none" aria-hidden="true">
-            <div class="dew-logo-lightbox-backdrop" id="dewLogoModalBackdrop" aria-hidden="true"></div>
-            <div class="dew-logo-lightbox-content" role="dialog" aria-modal="true" aria-label="DEW logo preview">
-              <button type="button" class="dew-logo-lightbox-close" id="dewLogoModalClose" aria-label="Close">
+          <div
+            class="dew-logo-lightbox"
+            id="dewLogoModal"
+            style="display: none"
+            aria-hidden="true"
+          >
+            <div
+              class="dew-logo-lightbox-backdrop"
+              id="dewLogoModalBackdrop"
+              aria-hidden="true"
+            ></div>
+            <div
+              class="dew-logo-lightbox-content"
+              role="dialog"
+              aria-modal="true"
+              aria-label="DEW logo preview"
+            >
+              <button
+                type="button"
+                class="dew-logo-lightbox-close"
+                id="dewLogoModalClose"
+                aria-label="Close"
+              >
                 <i class="ri-close-line"></i>
               </button>
               <img
@@ -323,8 +472,15 @@
               />
             </div>
           </div>
-          <section class="metrics-row dashboard-section dashboard-section--metrics" id="metricsRow" aria-label="Environmental metrics"></section>
-          <section class="dashboard-insights-row dew-insights-grid dashboard-section dashboard-section--insights" id="dashboardInsightsRow">
+          <section
+            class="metrics-row dashboard-section dashboard-section--metrics"
+            id="metricsRow"
+            aria-label="Environmental metrics"
+          ></section>
+          <section
+            class="dashboard-insights-row dew-insights-grid dashboard-section dashboard-section--insights"
+            id="dashboardInsightsRow"
+          >
             <div class="card dew-enhance-card dew-insight-card dew-panel-card">
               <div class="card-header">
                 <h2><i class="ri-mental-health-line"></i> Smart insights</h2>
@@ -341,14 +497,29 @@
                 <p class="dew-muted">—</p>
               </div>
             </div>
-            <div class="card dew-enhance-card dew-alerts-preview-card dew-panel-card">
+            <div
+              class="card dew-enhance-card dew-alerts-preview-card dew-panel-card"
+            >
               <div class="card-header">
-                <h2><i class="ri-alarm-warning-line"></i> Alerts <span class="card-header-sub">(Recent)</span></h2>
-                <button type="button" class="btn btn-ghost btn-sm" id="btnAlertsPreviewMore" data-view="alerts">
+                <h2>
+                  <i class="ri-alarm-warning-line"></i> Alerts
+                  <span class="card-header-sub">(Recent)</span>
+                </h2>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  id="btnAlertsPreviewMore"
+                  data-view="alerts"
+                >
                   View all
                 </button>
               </div>
-              <div class="dew-alerts-preview-scroll" tabindex="0" role="region" aria-label="Recent alerts">
+              <div
+                class="dew-alerts-preview-scroll"
+                tabindex="0"
+                role="region"
+                aria-label="Recent alerts"
+              >
                 <ul class="dew-alerts-preview-list" id="alertsPreviewList"></ul>
               </div>
             </div>
@@ -356,7 +527,9 @@
               <div class="card-header">
                 <h2>
                   <i class="ri-bar-chart-grouped-line"></i> Activity
-                  <span class="dew-usage-range" id="usageStatsRangeLabel">(24h)</span>
+                  <span class="dew-usage-range" id="usageStatsRangeLabel"
+                    >(24h)</span
+                  >
                 </h2>
               </div>
               <div class="dew-usage-body" id="usageStatsBody">
@@ -364,7 +537,9 @@
               </div>
             </div>
           </section>
-          <section class="middle-row dashboard-section dashboard-section--timeline">
+          <section
+            class="middle-row dashboard-section dashboard-section--timeline"
+          >
             <div class="card dew-chart-card dew-chart-card--focus">
               <div class="card-header">
                 <h2><i class="ri-timeline-view"></i> Sensor Timeline</h2>
@@ -374,19 +549,62 @@
                   <div class="tab" data-metric="light">Light</div>
                 </div>
               </div>
-              <div class="chart-range-row" id="chartRangeTabs" role="tablist" aria-label="Chart time range">
-                <button type="button" class="chart-range-tab active" data-range="24h" role="tab" aria-selected="true">24h</button>
-                <button type="button" class="chart-range-tab" data-range="7d" role="tab" aria-selected="false">7d</button>
-                <button type="button" class="chart-range-tab" data-range="30d" role="tab" aria-selected="false">30d</button>
-                <button type="button" class="chart-range-tab" data-range="all" role="tab" aria-selected="false">All</button>
+              <div
+                class="chart-range-row"
+                id="chartRangeTabs"
+                role="tablist"
+                aria-label="Chart time range"
+              >
+                <button
+                  type="button"
+                  class="chart-range-tab active"
+                  data-range="24h"
+                  role="tab"
+                  aria-selected="true"
+                >
+                  24h
+                </button>
+                <button
+                  type="button"
+                  class="chart-range-tab"
+                  data-range="7d"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  7d
+                </button>
+                <button
+                  type="button"
+                  class="chart-range-tab"
+                  data-range="30d"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  30d
+                </button>
+                <button
+                  type="button"
+                  class="chart-range-tab"
+                  data-range="all"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  All
+                </button>
               </div>
               <div class="chart-wrapper" id="sensorChartWrap">
-                <div class="chart-skeleton" id="chartSkeleton" aria-hidden="true"></div>
+                <div
+                  class="chart-skeleton"
+                  id="chartSkeleton"
+                  aria-hidden="true"
+                ></div>
                 <canvas id="sensorChart"></canvas>
               </div>
             </div>
           </section>
-          <section class="bottom-row dashboard-section dashboard-section--bottom">
+          <section
+            class="bottom-row dashboard-section dashboard-section--bottom"
+          >
             <div class="card plant-fleet-card">
               <div class="card-header">
                 <h2><i class="ri-plant-line"></i> Plant Fleet</h2>
@@ -400,23 +618,55 @@
                   View all
                 </button>
               </div>
-              <p class="plant-fleet-summary" id="plantFleetSummary" aria-live="polite">
+              <p
+                class="plant-fleet-summary"
+                id="plantFleetSummary"
+                aria-live="polite"
+              >
                 Loading sensor overview…
               </p>
-              <details class="plant-fleet-uid-setup" id="plantFleetDeviceSetup" hidden>
+              <details
+                class="plant-fleet-uid-setup"
+                id="plantFleetDeviceSetup"
+                hidden
+              >
                 <summary>How to connect your plant sensor</summary>
                 <div class="plant-fleet-simple-help">
-                  <p><strong>1. Your private key.</strong> DEW creates this for you when you open the dashboard. You don’t need to set anything up by hand.</p>
-                  <p><strong>2. Copy once.</strong> Tap <strong>Copy</strong> and paste the key into your <strong>Plant Bot</strong> (or the DEW test tool on your computer). You only need to do this <em>once</em> per bot.</p>
-                  <p><strong>3. See your plants here.</strong> When your bot sends readings, your plants show up in the table above.</p>
-                  <p><strong>Lost the key?</strong> Tap <strong>Regenerate</strong> to get a new one, then paste the new key into your bot. The old key will stop working.</p>
+                  <p>
+                    <strong>1. Your private key.</strong> DEW creates this for
+                    you when you open the dashboard. You don’t need to set
+                    anything up by hand.
+                  </p>
+                  <p>
+                    <strong>2. Copy once.</strong> Tap <strong>Copy</strong> and
+                    paste the key into your <strong>Plant Bot</strong> (or the
+                    DEW test tool on your computer). You only need to do this
+                    <em>once</em> per bot.
+                  </p>
+                  <p>
+                    <strong>3. See your plants here.</strong> When your bot
+                    sends readings, your plants show up in the table above.
+                  </p>
+                  <p>
+                    <strong>Lost the key?</strong> Tap
+                    <strong>Regenerate</strong> to get a new one, then paste the
+                    new key into your bot. The old key will stop working.
+                  </p>
                   <p class="plant-fleet-tech-note">
-                    Technical note: your bot sends this value as <code>ingestToken</code> when posting data to DEW.
+                    Technical note: your bot sends this value as
+                    <code>ingestToken</code> when posting data to DEW.
                   </p>
                 </div>
-                <p class="plant-fleet-uid-hint" id="plantFleetIngestStatus">Preparing your key…</p>
+                <p class="plant-fleet-uid-hint" id="plantFleetIngestStatus">
+                  Preparing your key…
+                </p>
                 <div class="plant-fleet-uid-row">
-                  <code id="plantFleetIngestTokenValue" class="plant-fleet-uid-code" title="Device ingest token">—</code>
+                  <code
+                    id="plantFleetIngestTokenValue"
+                    class="plant-fleet-uid-code"
+                    title="Device ingest token"
+                    >—</code
+                  >
                   <button
                     type="button"
                     class="btn btn-ghost"
@@ -476,117 +726,412 @@
                       </div>
                     </div>
                   </div>
-                  <p class="deskbot-preview-hint" id="deskbotPreviewHint" aria-hidden="true">
+                  <p
+                    class="deskbot-preview-hint"
+                    id="deskbotPreviewHint"
+                    aria-hidden="true"
+                  >
                     Tap or click to nudge
                   </p>
                 </div>
                 <div class="deskbot-settings">
                   <div class="deskbot-hero-row">
-                    <div class="deskbot-live-pill" id="deskbotLivePill" title="Desk Bot connection">
+                    <div
+                      class="deskbot-live-pill"
+                      id="deskbotLivePill"
+                      title="Desk Bot connection"
+                    >
                       <span class="deskbot-live-dot" id="deskbotLiveDot"></span>
                       <span id="deskbotLivePillText">Checking…</span>
                     </div>
-                    <p class="deskbot-sync-line" id="deskbotSyncLine">Last sync —</p>
+                    <p class="deskbot-sync-line" id="deskbotSyncLine">
+                      Last sync —
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
           </section>
-          <div id="createCommunityModal" class="modal community-create-modal" aria-hidden="true" style="display: none">
+          <div
+            id="createCommunityModal"
+            class="modal community-create-modal"
+            aria-hidden="true"
+            style="display: none"
+          >
             <div class="modal-backdrop" id="createCommunityModalBackdrop"></div>
-            <div class="modal-content community-create-modal-content community-create-wizard">
+            <div
+              class="modal-content community-create-modal-content community-create-wizard"
+            >
               <div class="community-create-modal-header">
-                <h2 id="createCommunityWizardTitle"><i class="ri-add-circle-line"></i> What will your community be about?</h2>
-                <button type="button" class="modal-close" id="createCommunityModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+                <h2 id="createCommunityWizardTitle">
+                  <i class="ri-add-circle-line"></i> What will your community be
+                  about?
+                </h2>
+                <button
+                  type="button"
+                  class="modal-close"
+                  id="createCommunityModalClose"
+                  aria-label="Close"
+                >
+                  <i class="ri-close-line"></i>
+                </button>
               </div>
-              <p class="community-create-wizard-subtitle" id="createCommunityWizardSubtitle">Choose a topic to help people discover your community.</p>
+              <p
+                class="community-create-wizard-subtitle"
+                id="createCommunityWizardSubtitle"
+              >
+                Choose a topic to help people discover your community.
+              </p>
               <form id="createCommunityForm" class="community-create-form">
                 <div class="community-create-step" id="createCommunityStep1">
-                  <div class="community-topic-grid" id="createCommunityTopicGrid">
-                    <button type="button" class="community-topic-chip" data-topic="Anime & Cosplay">Anime &amp; Cosplay</button>
-                    <button type="button" class="community-topic-chip" data-topic="Art">Art</button>
-                    <button type="button" class="community-topic-chip" data-topic="Business & Finance">Business &amp; Finance</button>
-                    <button type="button" class="community-topic-chip" data-topic="Collectibles & Hobbies">Collectibles &amp; Hobbies</button>
-                    <button type="button" class="community-topic-chip" data-topic="Education & Career">Education &amp; Career</button>
-                    <button type="button" class="community-topic-chip" data-topic="Fashion & Beauty">Fashion &amp; Beauty</button>
-                    <button type="button" class="community-topic-chip" data-topic="Food & Drinks">Food &amp; Drinks</button>
-                    <button type="button" class="community-topic-chip" data-topic="Games">Games</button>
-                    <button type="button" class="community-topic-chip" data-topic="Health">Health</button>
-                    <button type="button" class="community-topic-chip" data-topic="Home & Garden">Home &amp; Garden</button>
-                    <button type="button" class="community-topic-chip" data-topic="Humanities & Law">Humanities &amp; Law</button>
-                    <button type="button" class="community-topic-chip" data-topic="Identity & Relationships">Identity &amp; Relationships</button>
-                    <button type="button" class="community-topic-chip" data-topic="Internet Culture">Internet Culture</button>
-                    <button type="button" class="community-topic-chip" data-topic="Movies & TV">Movies &amp; TV</button>
-                    <button type="button" class="community-topic-chip" data-topic="Music">Music</button>
-                    <button type="button" class="community-topic-chip" data-topic="Nature & Outdoors">Nature &amp; Outdoors</button>
-                    <button type="button" class="community-topic-chip" data-topic="News & Politics">News &amp; Politics</button>
-                    <button type="button" class="community-topic-chip" data-topic="Places & Travel">Places &amp; Travel</button>
-                    <button type="button" class="community-topic-chip" data-topic="Pop Culture">Pop Culture</button>
-                    <button type="button" class="community-topic-chip" data-topic="Q&As & Stories">Q&amp;As &amp; Stories</button>
-                    <button type="button" class="community-topic-chip" data-topic="Reading & Writing">Reading &amp; Writing</button>
-                    <button type="button" class="community-topic-chip" data-topic="Sciences">Sciences</button>
-                    <button type="button" class="community-topic-chip" data-topic="Sports">Sports</button>
-                    <button type="button" class="community-topic-chip" data-topic="Technology">Technology</button>
-                    <button type="button" class="community-topic-chip" data-topic="Vehicles">Vehicles</button>
-                    <button type="button" class="community-topic-chip" data-topic="Wellness">Wellness</button>
-                    <button type="button" class="community-topic-chip" data-topic="Sustainable Living">Sustainable Living</button>
-                    <button type="button" class="community-topic-chip" data-topic="Indoor Plants">Indoor Plants</button>
-                    <button type="button" class="community-topic-chip" data-topic="Plant Care Help">Plant Care Help</button>
-                    <button type="button" class="community-topic-chip" data-topic="Smart Plant Tech">Smart Plant Tech</button>
-                    <button type="button" class="community-topic-chip" data-topic="Other">Other</button>
+                  <div
+                    class="community-topic-grid"
+                    id="createCommunityTopicGrid"
+                  >
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Anime & Cosplay"
+                    >
+                      Anime &amp; Cosplay
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Art"
+                    >
+                      Art
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Business & Finance"
+                    >
+                      Business &amp; Finance
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Collectibles & Hobbies"
+                    >
+                      Collectibles &amp; Hobbies
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Education & Career"
+                    >
+                      Education &amp; Career
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Fashion & Beauty"
+                    >
+                      Fashion &amp; Beauty
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Food & Drinks"
+                    >
+                      Food &amp; Drinks
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Games"
+                    >
+                      Games
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Health"
+                    >
+                      Health
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Home & Garden"
+                    >
+                      Home &amp; Garden
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Humanities & Law"
+                    >
+                      Humanities &amp; Law
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Identity & Relationships"
+                    >
+                      Identity &amp; Relationships
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Internet Culture"
+                    >
+                      Internet Culture
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Movies & TV"
+                    >
+                      Movies &amp; TV
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Music"
+                    >
+                      Music
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Nature & Outdoors"
+                    >
+                      Nature &amp; Outdoors
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="News & Politics"
+                    >
+                      News &amp; Politics
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Places & Travel"
+                    >
+                      Places &amp; Travel
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Pop Culture"
+                    >
+                      Pop Culture
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Q&As & Stories"
+                    >
+                      Q&amp;As &amp; Stories
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Reading & Writing"
+                    >
+                      Reading &amp; Writing
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Sciences"
+                    >
+                      Sciences
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Sports"
+                    >
+                      Sports
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Technology"
+                    >
+                      Technology
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Vehicles"
+                    >
+                      Vehicles
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Wellness"
+                    >
+                      Wellness
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Sustainable Living"
+                    >
+                      Sustainable Living
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Indoor Plants"
+                    >
+                      Indoor Plants
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Plant Care Help"
+                    >
+                      Plant Care Help
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Smart Plant Tech"
+                    >
+                      Smart Plant Tech
+                    </button>
+                    <button
+                      type="button"
+                      class="community-topic-chip"
+                      data-topic="Other"
+                    >
+                      Other
+                    </button>
                   </div>
                 </div>
 
-                <div class="community-create-step" id="createCommunityStep2" style="display:none">
+                <div
+                  class="community-create-step"
+                  id="createCommunityStep2"
+                  style="display: none"
+                >
                   <div class="community-type-list">
                     <label class="community-type-item">
-                      <input type="radio" name="createCommunityType" value="public" checked />
-                      <span><strong>Public</strong><small>Anyone can view, post, and comment.</small></span>
+                      <input
+                        type="radio"
+                        name="createCommunityType"
+                        value="public"
+                        checked
+                      />
+                      <span
+                        ><strong>Public</strong
+                        ><small
+                          >Anyone can view, post, and comment.</small
+                        ></span
+                      >
                     </label>
                     <label class="community-type-item">
-                      <input type="radio" name="createCommunityType" value="restricted" />
-                      <span><strong>Restricted</strong><small>Anyone can view, approved users can post.</small></span>
+                      <input
+                        type="radio"
+                        name="createCommunityType"
+                        value="restricted"
+                      />
+                      <span
+                        ><strong>Restricted</strong
+                        ><small
+                          >Anyone can view, approved users can post.</small
+                        ></span
+                      >
                     </label>
                     <label class="community-type-item">
-                      <input type="radio" name="createCommunityType" value="private" />
-                      <span><strong>Private</strong><small>Only approved users can view and contribute.</small></span>
+                      <input
+                        type="radio"
+                        name="createCommunityType"
+                        value="private"
+                      />
+                      <span
+                        ><strong>Private</strong
+                        ><small
+                          >Only approved users can view and contribute.</small
+                        ></span
+                      >
                     </label>
                     <label class="community-mature-toggle">
-                      <span><strong>Mature (18+)</strong><small>Users must be 18+ to view and contribute.</small></span>
+                      <span
+                        ><strong>Mature (18+)</strong
+                        ><small
+                          >Users must be 18+ to view and contribute.</small
+                        ></span
+                      >
                       <input id="createCommunityMature" type="checkbox" />
                     </label>
                   </div>
                 </div>
 
-                <div class="community-create-step" id="createCommunityStep3" style="display:none">
+                <div
+                  class="community-create-step"
+                  id="createCommunityStep3"
+                  style="display: none"
+                >
                   <div class="community-create-step-grid">
                     <div>
                       <label class="community-field">
                         <span class="label">Community name</span>
-                        <input id="createCommunityName" class="community-input" type="text" placeholder="e.g. Indoor Plant Lovers" required />
+                        <input
+                          id="createCommunityName"
+                          class="community-input"
+                          type="text"
+                          placeholder="e.g. Indoor Plant Lovers"
+                          required
+                        />
                       </label>
                       <label class="community-field">
                         <span class="label">Community slug</span>
-                        <input id="createCommunitySlug" class="community-input" type="text" placeholder="e.g. indoor-plant-lovers" required />
+                        <input
+                          id="createCommunitySlug"
+                          class="community-input"
+                          type="text"
+                          placeholder="e.g. indoor-plant-lovers"
+                          required
+                        />
                       </label>
                       <label class="community-field">
                         <span class="label">Description</span>
-                        <textarea id="createCommunityDescription" class="community-textarea" rows="5" placeholder="What is this community about?"></textarea>
+                        <textarea
+                          id="createCommunityDescription"
+                          class="community-textarea"
+                          rows="5"
+                          placeholder="What is this community about?"
+                        ></textarea>
                       </label>
                       <label class="community-field">
                         <span class="label">Banner image (optional)</span>
-                        <input id="createCommunityBanner" class="community-input" type="file" accept="image/*" aria-label="Banner image" />
+                        <input
+                          id="createCommunityBanner"
+                          class="community-input"
+                          type="file"
+                          accept="image/*"
+                          aria-label="Banner image"
+                        />
                       </label>
                       <label class="community-field">
                         <span class="label">Logo image (optional)</span>
-                        <input id="createCommunityLogo" class="community-input" type="file" accept="image/*" aria-label="Logo image" />
+                        <input
+                          id="createCommunityLogo"
+                          class="community-input"
+                          type="file"
+                          accept="image/*"
+                          aria-label="Logo image"
+                        />
                       </label>
                     </div>
                     <aside class="community-preview-card">
                       <div class="community-preview-badge">r/</div>
                       <h3 id="createCommunityPreviewName">communityname</h3>
-                      <p id="createCommunityPreviewMeta">0 weekly visitor · 0 weekly contributor</p>
-                      <p id="createCommunityPreviewDesc">Your community description</p>
+                      <p id="createCommunityPreviewMeta">
+                        0 weekly visitor · 0 weekly contributor
+                      </p>
+                      <p id="createCommunityPreviewDesc">
+                        Your community description
+                      </p>
                     </aside>
                   </div>
                 </div>
@@ -597,65 +1142,191 @@
                   <span class="dot" data-step-dot="3"></span>
                 </div>
                 <div class="community-create-modal-actions">
-                  <button type="button" class="btn btn-ghost" id="createCommunityCancel">Cancel</button>
-                  <button type="button" class="btn btn-ghost" id="createCommunityBack" style="display:none">Back</button>
-                  <button type="button" class="btn btn-primary" id="createCommunityNext">Next</button>
-                  <button type="submit" class="btn btn-primary" id="createCommunitySubmit" style="display:none"><i class="ri-add-line"></i> Create Community</button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    id="createCommunityCancel"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    id="createCommunityBack"
+                    style="display: none"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="createCommunityNext"
+                  >
+                    Next
+                  </button>
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="createCommunitySubmit"
+                    style="display: none"
+                  >
+                    <i class="ri-add-line"></i> Create Community
+                  </button>
                 </div>
               </form>
             </div>
           </div>
-          <div id="editCommunityModal" class="modal community-create-modal" aria-hidden="true" style="display: none">
+          <div
+            id="editCommunityModal"
+            class="modal community-create-modal"
+            aria-hidden="true"
+            style="display: none"
+          >
             <div class="modal-backdrop" id="editCommunityModalBackdrop"></div>
             <div class="modal-content community-create-modal-content">
               <div class="community-create-modal-header">
                 <h2>Edit community</h2>
-                <button type="button" class="modal-close" id="editCommunityModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+                <button
+                  type="button"
+                  class="modal-close"
+                  id="editCommunityModalClose"
+                  aria-label="Close"
+                >
+                  <i class="ri-close-line"></i>
+                </button>
               </div>
-              <p class="community-create-wizard-subtitle">Only the community creator can change visibility (public or private), banner, logo, and description. Private communities are only visible to members.</p>
+              <p class="community-create-wizard-subtitle">
+                Only the community creator can change visibility (public or
+                private), banner, logo, and description. Private communities are
+                only visible to members.
+              </p>
               <form id="editCommunityForm" class="community-create-form">
-                <fieldset class="community-field community-edit-visibility" style="border: none; padding: 0; margin: 0 0 16px">
-                  <legend class="label" style="margin-bottom: 8px">Visibility</legend>
-                  <label class="community-edit-visibility-option" style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; cursor: pointer">
-                    <input type="radio" name="editCommunityStatus" id="editCommunityStatusPublic" value="public" />
-                    <span><strong>Public</strong> — anyone can view posts; signed-in users can post.</span>
+                <fieldset
+                  class="community-field community-edit-visibility"
+                  style="border: none; padding: 0; margin: 0 0 16px"
+                >
+                  <legend class="label" style="margin-bottom: 8px">
+                    Visibility
+                  </legend>
+                  <label
+                    class="community-edit-visibility-option"
+                    style="
+                      display: flex;
+                      align-items: flex-start;
+                      gap: 10px;
+                      margin-bottom: 10px;
+                      cursor: pointer;
+                    "
+                  >
+                    <input
+                      type="radio"
+                      name="editCommunityStatus"
+                      id="editCommunityStatusPublic"
+                      value="public"
+                    />
+                    <span
+                      ><strong>Public</strong> — anyone can view posts;
+                      signed-in users can post.</span
+                    >
                   </label>
-                  <label class="community-edit-visibility-option" style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer">
-                    <input type="radio" name="editCommunityStatus" id="editCommunityStatusPrivate" value="private" />
-                    <span><strong>Private</strong> — only members can view the feed, comment, and post (invite people or share the link so they can join).</span>
+                  <label
+                    class="community-edit-visibility-option"
+                    style="
+                      display: flex;
+                      align-items: flex-start;
+                      gap: 10px;
+                      cursor: pointer;
+                    "
+                  >
+                    <input
+                      type="radio"
+                      name="editCommunityStatus"
+                      id="editCommunityStatusPrivate"
+                      value="private"
+                    />
+                    <span
+                      ><strong>Private</strong> — only members can view the
+                      feed, comment, and post (invite people or share the link
+                      so they can join).</span
+                    >
                   </label>
                 </fieldset>
                 <div class="community-edit-media-grid">
                   <div class="community-edit-banner-block">
                     <div class="community-edit-media-label">Banner</div>
-                    <button type="button" class="community-edit-banner-preview" id="editCommunityBannerPreviewBtn">
-                      <span class="community-edit-banner-preview__img" id="editCommunityBannerPreview"></span>
-                      <span class="community-edit-banner-preview__hint"><i class="ri-image-edit-line"></i> Click to change banner</span>
+                    <button
+                      type="button"
+                      class="community-edit-banner-preview"
+                      id="editCommunityBannerPreviewBtn"
+                    >
+                      <span
+                        class="community-edit-banner-preview__img"
+                        id="editCommunityBannerPreview"
+                      ></span>
+                      <span class="community-edit-banner-preview__hint"
+                        ><i class="ri-image-edit-line"></i> Click to change
+                        banner</span
+                      >
                     </button>
                   </div>
                   <div class="community-edit-logo-block">
                     <div class="community-edit-media-label">Icon</div>
-                    <button type="button" class="community-edit-logo-preview" id="editCommunityLogoPreviewBtn">
-                      <span class="community-edit-logo-preview__img" id="editCommunityLogoPreview">r</span>
-                      <span class="community-edit-logo-preview__hint">Change</span>
+                    <button
+                      type="button"
+                      class="community-edit-logo-preview"
+                      id="editCommunityLogoPreviewBtn"
+                    >
+                      <span
+                        class="community-edit-logo-preview__img"
+                        id="editCommunityLogoPreview"
+                        >r</span
+                      >
+                      <span class="community-edit-logo-preview__hint"
+                        >Change</span
+                      >
                     </button>
                   </div>
                 </div>
                 <label class="community-field">
                   <span class="label">Description</span>
-                  <textarea id="editCommunityDescription" class="community-textarea" rows="4" placeholder="Community description"></textarea>
+                  <textarea
+                    id="editCommunityDescription"
+                    class="community-textarea"
+                    rows="4"
+                    placeholder="Community description"
+                  ></textarea>
                 </label>
                 <label class="community-field community-edit-file-row">
                   <span class="label">Banner image (optional)</span>
-                  <input id="editCommunityBanner" type="file" accept="image/*" aria-label="Banner image" class="community-edit-file-input" />
+                  <input
+                    id="editCommunityBanner"
+                    type="file"
+                    accept="image/*"
+                    aria-label="Banner image"
+                    class="community-edit-file-input"
+                  />
                 </label>
                 <label class="community-field community-edit-file-row">
                   <span class="label">Logo image (optional)</span>
-                  <input id="editCommunityLogo" type="file" accept="image/*" aria-label="Logo image" class="community-edit-file-input" />
+                  <input
+                    id="editCommunityLogo"
+                    type="file"
+                    accept="image/*"
+                    aria-label="Logo image"
+                    class="community-edit-file-input"
+                  />
                 </label>
                 <div class="community-create-modal-actions">
-                  <button type="button" class="btn btn-ghost" id="editCommunityCancel">Cancel</button>
-                  <button type="submit" class="btn btn-primary"><i class="ri-save-line"></i> Save</button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    id="editCommunityCancel"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" class="btn btn-primary">
+                    <i class="ri-save-line"></i> Save
+                  </button>
                 </div>
               </form>
             </div>
@@ -668,7 +1339,13 @@
               <p>Sensor insights for plants with connected IoT devices.</p>
             </div>
             <div class="top-right">
-              <button type="button" class="btn btn-ghost" id="btnRefreshAnalytics"><i class="ri-refresh-line"></i> Refresh</button>
+              <button
+                type="button"
+                class="btn btn-ghost"
+                id="btnRefreshAnalytics"
+              >
+                <i class="ri-refresh-line"></i> Refresh
+              </button>
             </div>
           </section>
           <section class="analytics-plant-list card">
@@ -677,23 +1354,48 @@
               <span class="analytics-subtitle">ESP32 sensor hubs</span>
             </div>
             <div class="analytics-cards" id="analyticsPlantCards"></div>
-            <div class="analytics-empty" id="analyticsEmpty" style="display: none">
+            <div
+              class="analytics-empty"
+              id="analyticsEmpty"
+              style="display: none"
+            >
               <div class="alerts-empty-icon"><i class="ri-leaf-line"></i></div>
               <p>No plants with connected devices yet.</p>
-              <span>Connect an ESP32 sensor to a plant via the dashboard or Sync IoT to see analytics here.</span>
+              <span
+                >Connect an ESP32 sensor to a plant via the dashboard or Sync
+                IoT to see analytics here.</span
+              >
             </div>
           </section>
         </div>
-        <div id="analyticsDetailModal" class="modal analytics-modal" aria-hidden="true" style="display: none">
+        <div
+          id="analyticsDetailModal"
+          class="modal analytics-modal"
+          aria-hidden="true"
+          style="display: none"
+        >
           <div class="modal-backdrop" id="analyticsModalBackdrop"></div>
           <div class="modal-content analytics-modal-content">
             <div class="analytics-modal-header">
               <h2 id="analyticsDetailPlantName">—</h2>
-              <p class="analytics-modal-device" id="analyticsDetailDevice">Device: ESP32 Sensor Hub</p>
-              <button type="button" class="modal-close" id="analyticsModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+              <p class="analytics-modal-device" id="analyticsDetailDevice">
+                Device: ESP32 Sensor Hub
+              </p>
+              <button
+                type="button"
+                class="modal-close"
+                id="analyticsModalClose"
+                aria-label="Close"
+              >
+                <i class="ri-close-line"></i>
+              </button>
             </div>
             <div class="analytics-modal-body">
-              <div class="analytics-live-bar" id="analyticsLiveBar" style="display: none;">
+              <div
+                class="analytics-live-bar"
+                id="analyticsLiveBar"
+                style="display: none"
+              >
                 <span class="analytics-live-dot"></span>
                 <span>Live</span> — updates every 1 hour
               </div>
@@ -704,7 +1406,10 @@
                 <div class="tab" data-hours="720">Last 30 days</div>
                 <div class="tab" data-hours="all">All time</div>
               </div>
-              <div class="analytics-sensor-sections" id="analyticsSensorSections"></div>
+              <div
+                class="analytics-sensor-sections"
+                id="analyticsSensorSections"
+              ></div>
               <div class="analytics-timeline-section">
                 <h3>Recent readings</h3>
                 <ul class="analytics-timeline" id="analyticsTimeline"></ul>
@@ -714,26 +1419,40 @@
         </div>
 
         <!-- Bots: unified full-width page (/bots, /bots/plant-bot, /bots/desk-bot scroll to section) -->
-        <div class="bots-view bots-page-unified main-inner dashboard-shell" id="botsHubView" style="display: none">
+        <div
+          class="bots-view bots-page-unified main-inner dashboard-shell"
+          id="botsHubView"
+          style="display: none"
+        >
           <header class="bots-hero" aria-labelledby="botsHeroTitle">
             <div class="bots-hero-bg" aria-hidden="true"></div>
             <div class="bots-hero-inner">
               <h1 class="bots-hero-title" id="botsHeroTitle">Bots</h1>
-              <p class="bots-hero-subtitle">Monitor and customize your connected garden devices</p>
+              <p class="bots-hero-subtitle">
+                Monitor and customize your connected garden devices
+              </p>
               <nav class="bots-jump-nav" aria-label="Section navigation">
-                <a href="#bots-section-plant" class="bots-jump-link">Plant Bot</a>
+                <a href="#bots-section-plant" class="bots-jump-link"
+                  >Plant Bot</a
+                >
                 <span class="bots-jump-sep" aria-hidden="true">·</span>
                 <a href="#bots-section-desk" class="bots-jump-link">Desk Bot</a>
               </nav>
             </div>
           </header>
 
-          <section id="bots-section-plant" class="bots-feature bots-feature--plant" tabindex="-1">
+          <section
+            id="bots-section-plant"
+            class="bots-feature bots-feature--plant"
+            tabindex="-1"
+          >
             <div class="bots-feature-glow" aria-hidden="true"></div>
             <div class="bots-feature-inner">
               <div class="bots-feature-head">
                 <div class="bots-feature-head-left">
-                  <span class="bots-feature-icon" aria-hidden="true"><i class="ri-leaf-line"></i></span>
+                  <span class="bots-feature-icon" aria-hidden="true"
+                    ><i class="ri-leaf-line"></i
+                  ></span>
                   <div>
                     <h2 class="bots-feature-title">Plant Bot</h2>
                     <div class="bots-live-strip" id="plantBotLiveStrip">
@@ -743,33 +1462,116 @@
                   </div>
                 </div>
                 <div class="bots-feature-head-right">
-                  <span class="bots-status-badge" id="plantBotOverviewStatus">—</span>
+                  <span class="bots-status-badge" id="plantBotOverviewStatus"
+                    >—</span
+                  >
                   <span class="bots-sync-label">Last sync</span>
-                  <span class="bots-sync-time" id="plantBotOverviewSync">—</span>
-                  <select id="plantBotPlantSelect" class="bots-select" aria-label="Choose plant"></select>
-                  <p class="bots-panel-hint">Choose your plant in the dropdown, then enter the Plant Fleet ingest token in the bot WiFi setup.</p>
-                  <button type="button" class="btn btn-ghost bots-icon-btn" id="btnRefreshPlantBotPage" title="Refresh data">
+                  <span class="bots-sync-time" id="plantBotOverviewSync"
+                    >—</span
+                  >
+                  <select
+                    id="plantBotPlantSelect"
+                    class="bots-select"
+                    aria-label="Choose plant"
+                  ></select>
+                  <p class="bots-panel-hint">
+                    Choose your plant in the dropdown, then enter the Plant
+                    Fleet ingest token in the bot WiFi setup.
+                  </p>
+                  <button
+                    type="button"
+                    class="btn btn-ghost bots-icon-btn"
+                    id="btnRefreshPlantBotPage"
+                    title="Refresh data"
+                  >
                     <i class="ri-refresh-line"></i>
                   </button>
                 </div>
               </div>
 
-              <div class="bots-sensor-grid bots-metrics-hero" id="plantBotSensorGrid"></div>
+              <div
+                class="bots-sensor-grid bots-metrics-hero"
+                id="plantBotSensorGrid"
+              ></div>
 
               <div class="bots-chart-block card">
                 <div class="bots-chart-head">
-                  <h3 class="bots-chart-title"><i class="ri-line-chart-line" aria-hidden="true"></i> Sensor graph</h3>
+                  <h3 class="bots-chart-title">
+                    <i class="ri-line-chart-line" aria-hidden="true"></i> Sensor
+                    graph
+                  </h3>
                 </div>
-                <div class="tab-row bots-metric-tabs" id="plantBotMetricTabs" role="tablist">
-                  <button type="button" class="tab active" data-metric="moisture" role="tab">Moisture</button>
-                  <button type="button" class="tab" data-metric="temperature" role="tab">Temp</button>
-                  <button type="button" class="tab" data-metric="light" role="tab">Light</button>
+                <div
+                  class="tab-row bots-metric-tabs"
+                  id="plantBotMetricTabs"
+                  role="tablist"
+                >
+                  <button
+                    type="button"
+                    class="tab active"
+                    data-metric="moisture"
+                    role="tab"
+                  >
+                    Moisture
+                  </button>
+                  <button
+                    type="button"
+                    class="tab"
+                    data-metric="temperature"
+                    role="tab"
+                  >
+                    Temp
+                  </button>
+                  <button
+                    type="button"
+                    class="tab"
+                    data-metric="light"
+                    role="tab"
+                  >
+                    Light
+                  </button>
                 </div>
-                <div class="tab-row bots-range-tabs" id="plantBotRangeTabs" role="tablist">
-                  <button type="button" class="tab chart-range-tab active" data-range="24h" data-hours="24" role="tab">24h</button>
-                  <button type="button" class="tab chart-range-tab" data-range="7d" data-hours="168" role="tab">7d</button>
-                  <button type="button" class="tab chart-range-tab" data-range="30d" data-hours="720" role="tab">30d</button>
-                  <button type="button" class="tab chart-range-tab" data-range="all" data-hours="all" role="tab">All</button>
+                <div
+                  class="tab-row bots-range-tabs"
+                  id="plantBotRangeTabs"
+                  role="tablist"
+                >
+                  <button
+                    type="button"
+                    class="tab chart-range-tab active"
+                    data-range="24h"
+                    data-hours="24"
+                    role="tab"
+                  >
+                    24h
+                  </button>
+                  <button
+                    type="button"
+                    class="tab chart-range-tab"
+                    data-range="7d"
+                    data-hours="168"
+                    role="tab"
+                  >
+                    7d
+                  </button>
+                  <button
+                    type="button"
+                    class="tab chart-range-tab"
+                    data-range="30d"
+                    data-hours="720"
+                    role="tab"
+                  >
+                    30d
+                  </button>
+                  <button
+                    type="button"
+                    class="tab chart-range-tab"
+                    data-range="all"
+                    data-hours="all"
+                    role="tab"
+                  >
+                    All
+                  </button>
                 </div>
                 <div class="bots-chart-wrap" id="plantBotChartWrap">
                   <canvas id="botsPlantChartCanvas" height="260"></canvas>
@@ -790,12 +1592,21 @@
             </div>
           </section>
 
-          <section id="bots-section-desk" class="bots-feature bots-feature--desk" tabindex="-1">
-            <div class="bots-feature-glow bots-feature-glow--desk" aria-hidden="true"></div>
+          <section
+            id="bots-section-desk"
+            class="bots-feature bots-feature--desk"
+            tabindex="-1"
+          >
+            <div
+              class="bots-feature-glow bots-feature-glow--desk"
+              aria-hidden="true"
+            ></div>
             <div class="bots-feature-inner">
               <div class="bots-feature-head">
                 <div class="bots-feature-head-left">
-                  <span class="bots-feature-icon" aria-hidden="true"><i class="ri-dashboard-3-line"></i></span>
+                  <span class="bots-feature-icon" aria-hidden="true"
+                    ><i class="ri-dashboard-3-line"></i
+                  ></span>
                   <div>
                     <h2 class="bots-feature-title">Desk Bot</h2>
                     <div class="bots-live-strip" id="deskBotLiveStrip">
@@ -805,10 +1616,16 @@
                   </div>
                 </div>
                 <div class="bots-feature-head-right">
-                  <span class="bots-status-badge" id="deskBotOverviewStatus">—</span>
+                  <span class="bots-status-badge" id="deskBotOverviewStatus"
+                    >—</span
+                  >
                   <span class="bots-sync-label">Last sync</span>
                   <span class="bots-sync-time" id="deskBotOverviewSync">—</span>
-                  <button type="button" class="btn btn-primary" id="btnSaveDeskBotPage">
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="btnSaveDeskBotPage"
+                  >
                     <i class="ri-send-plane-2-line"></i> Save to Desk Bot
                   </button>
                 </div>
@@ -820,14 +1637,25 @@
                     <h3 class="bots-panel-title">Appearance</h3>
                     <div class="bots-field">
                       <span class="bots-field-label">Theme</span>
-                      <div class="bots-theme-row" id="deskBotThemeRow" role="group" aria-label="Desk theme">
+                      <div
+                        class="bots-theme-row"
+                        id="deskBotThemeRow"
+                        role="group"
+                        aria-label="Desk theme"
+                      >
                         <div class="bots-theme-item">
                           <button
                             type="button"
                             class="bots-theme-swatch active"
                             data-theme="mint"
                             title="Mint"
-                            style="background: linear-gradient(130deg, #75ffd3, #2abc86)"
+                            style="
+                              background: linear-gradient(
+                                130deg,
+                                #75ffd3,
+                                #2abc86
+                              );
+                            "
                           ></button>
                           <span class="bots-theme-name">Mint</span>
                         </div>
@@ -837,7 +1665,13 @@
                             class="bots-theme-swatch"
                             data-theme="sakura"
                             title="Pink"
-                            style="background: linear-gradient(130deg, #ffd4f1, #ff74a4)"
+                            style="
+                              background: linear-gradient(
+                                130deg,
+                                #ffd4f1,
+                                #ff74a4
+                              );
+                            "
                           ></button>
                           <span class="bots-theme-name">Pink</span>
                         </div>
@@ -847,7 +1681,13 @@
                             class="bots-theme-swatch"
                             data-theme="midnight"
                             title="Blue"
-                            style="background: linear-gradient(130deg, #2b3565, #44d2ff)"
+                            style="
+                              background: linear-gradient(
+                                130deg,
+                                #2b3565,
+                                #44d2ff
+                              );
+                            "
                           ></button>
                           <span class="bots-theme-name">Blue</span>
                         </div>
@@ -855,30 +1695,112 @@
                     </div>
                     <div class="bots-field">
                       <span class="bots-field-label">Expression</span>
-                      <div class="bots-segmented" id="deskBotMoodRow" role="tablist" aria-label="Expression">
-                        <button type="button" class="bots-seg-btn active" data-mood="happy" role="tab" aria-selected="true">Happy</button>
-                        <button type="button" class="bots-seg-btn" data-mood="neutral" role="tab" aria-selected="false">Neutral</button>
-                        <button type="button" class="bots-seg-btn" data-mood="alert" role="tab" aria-selected="false">Alert</button>
+                      <div
+                        class="bots-segmented"
+                        id="deskBotMoodRow"
+                        role="tablist"
+                        aria-label="Expression"
+                      >
+                        <button
+                          type="button"
+                          class="bots-seg-btn active"
+                          data-mood="happy"
+                          role="tab"
+                          aria-selected="true"
+                        >
+                          Happy
+                        </button>
+                        <button
+                          type="button"
+                          class="bots-seg-btn"
+                          data-mood="neutral"
+                          role="tab"
+                          aria-selected="false"
+                        >
+                          Neutral
+                        </button>
+                        <button
+                          type="button"
+                          class="bots-seg-btn"
+                          data-mood="alert"
+                          role="tab"
+                          aria-selected="false"
+                        >
+                          Alert
+                        </button>
                       </div>
                     </div>
                   </div>
 
                   <div class="bots-panel">
                     <h3 class="bots-panel-title">Display settings</h3>
-                    <p class="bots-panel-hint">Choose what appears on the desk display.</p>
-                    <div class="bots-display-chips" id="deskBotShowToggles" role="group" aria-label="Display toggles">
-                      <button type="button" class="bots-display-chip" data-show="temp" aria-pressed="false">Temperature</button>
-                      <button type="button" class="bots-display-chip" data-show="moisture" aria-pressed="false">Moisture</button>
-                      <button type="button" class="bots-display-chip" data-show="humidity" aria-pressed="false">Humidity</button>
-                      <button type="button" class="bots-display-chip" data-show="light" aria-pressed="false">Light</button>
-                      <button type="button" class="bots-display-chip" data-show="weather" aria-pressed="false">Weather</button>
-                      <button type="button" class="bots-display-chip" data-show="health" aria-pressed="false">Plant health</button>
+                    <p class="bots-panel-hint">
+                      Choose what appears on the desk display.
+                    </p>
+                    <div
+                      class="bots-display-chips"
+                      id="deskBotShowToggles"
+                      role="group"
+                      aria-label="Display toggles"
+                    >
+                      <button
+                        type="button"
+                        class="bots-display-chip"
+                        data-show="temp"
+                        aria-pressed="false"
+                      >
+                        Temperature
+                      </button>
+                      <button
+                        type="button"
+                        class="bots-display-chip"
+                        data-show="moisture"
+                        aria-pressed="false"
+                      >
+                        Moisture
+                      </button>
+                      <button
+                        type="button"
+                        class="bots-display-chip"
+                        data-show="humidity"
+                        aria-pressed="false"
+                      >
+                        Humidity
+                      </button>
+                      <button
+                        type="button"
+                        class="bots-display-chip"
+                        data-show="light"
+                        aria-pressed="false"
+                      >
+                        Light
+                      </button>
+                      <button
+                        type="button"
+                        class="bots-display-chip"
+                        data-show="weather"
+                        aria-pressed="false"
+                      >
+                        Weather
+                      </button>
+                      <button
+                        type="button"
+                        class="bots-display-chip"
+                        data-show="health"
+                        aria-pressed="false"
+                      >
+                        Plant health
+                      </button>
                     </div>
                   </div>
 
                   <div class="bots-panel">
                     <h3 class="bots-panel-title">Focus plant</h3>
-                    <select id="deskBotPlantSelect" class="bots-select bots-select-wide" aria-label="Focus plant"></select>
+                    <select
+                      id="deskBotPlantSelect"
+                      class="bots-select bots-select-wide"
+                      aria-label="Focus plant"
+                    ></select>
                   </div>
 
                   <div class="bots-panel">
@@ -896,7 +1818,9 @@
 
                 <div class="bots-desk-preview-wrap">
                   <h3 class="bots-preview-heading">Live preview</h3>
-                  <p class="bots-preview-hint" id="deskBotPreviewHint">Updates as you change settings</p>
+                  <p class="bots-preview-hint" id="deskBotPreviewHint">
+                    Updates as you change settings
+                  </p>
                   <div
                     class="desk-bot-page-preview deskbot-preview-card deskbot-preview-card--float"
                     id="deskBotPagePreview"
@@ -908,28 +1832,52 @@
                           <span class="deskbot-eye" aria-hidden="true"></span>
                           <span class="deskbot-eye" aria-hidden="true"></span>
                         </div>
-                        <p class="deskbot-preview-line" id="deskBotPreviewLine">—</p>
-                        <p class="deskbot-preview-badges" id="deskBotPreviewBadges"></p>
+                        <p class="deskbot-preview-line" id="deskBotPreviewLine">
+                          —
+                        </p>
+                        <p
+                          class="deskbot-preview-badges"
+                          id="deskBotPreviewBadges"
+                        ></p>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <p class="bots-save-status" id="deskBotSaveStatus" aria-live="polite"></p>
+              <p
+                class="bots-save-status"
+                id="deskBotSaveStatus"
+                aria-live="polite"
+              ></p>
             </div>
           </section>
         </div>
 
         <!-- Sync Data: live sensor dashboard -->
-        <div class="sync-data-view main-inner dashboard-shell" id="syncDataView" style="display: none">
+        <div
+          class="sync-data-view main-inner dashboard-shell"
+          id="syncDataView"
+          style="display: none"
+        >
           <header class="sync-data-hero">
             <div class="sync-data-hero-text">
-              <h1><i class="ri-base-station-line" aria-hidden="true"></i> Sync Data</h1>
-              <p>Sensor readings from your Plant Bot — structured, comparable, and easy to scan.</p>
+              <h1>
+                <i class="ri-base-station-line" aria-hidden="true"></i> Sync
+                Data
+              </h1>
+              <p>
+                Sensor readings from your Plant Bot — structured, comparable,
+                and easy to scan.
+              </p>
             </div>
             <div class="sync-data-hero-actions">
-              <span class="sync-data-last" id="syncDataLastSynced" aria-live="polite">Last synced: —</span>
+              <span
+                class="sync-data-last"
+                id="syncDataLastSynced"
+                aria-live="polite"
+                >Last synced: —</span
+              >
               <button type="button" class="btn btn-primary" id="btnSyncNow">
                 <i class="ri-refresh-line" aria-hidden="true"></i> Sync now
               </button>
@@ -940,56 +1888,144 @@
             <div class="sync-data-toolbar-row">
               <div class="sync-data-toolbar-group">
                 <span class="sync-toolbar-label">Time range</span>
-                <div class="tab-row sync-range-tabs" id="syncRangeTabs" role="tablist">
-                  <button type="button" class="tab active" data-range="24h" role="tab">24h</button>
-                  <button type="button" class="tab" data-range="7d" role="tab">7d</button>
-                  <button type="button" class="tab" data-range="30d" role="tab">30d</button>
-                  <button type="button" class="tab" data-range="all" role="tab">All</button>
+                <div
+                  class="tab-row sync-range-tabs"
+                  id="syncRangeTabs"
+                  role="tablist"
+                >
+                  <button
+                    type="button"
+                    class="tab active"
+                    data-range="24h"
+                    role="tab"
+                  >
+                    24h
+                  </button>
+                  <button type="button" class="tab" data-range="7d" role="tab">
+                    7d
+                  </button>
+                  <button type="button" class="tab" data-range="30d" role="tab">
+                    30d
+                  </button>
+                  <button type="button" class="tab" data-range="all" role="tab">
+                    All
+                  </button>
                 </div>
               </div>
-              <div class="sync-data-toolbar-group sync-data-toolbar-group--grow">
+              <div
+                class="sync-data-toolbar-group sync-data-toolbar-group--grow"
+              >
                 <span class="sync-toolbar-label">Plant</span>
-                <select id="syncPlantSelect" class="bots-select sync-plant-select" aria-label="Plant for sensors"></select>
+                <select
+                  id="syncPlantSelect"
+                  class="bots-select sync-plant-select"
+                  aria-label="Plant for sensors"
+                ></select>
               </div>
             </div>
             <div class="sync-data-toolbar-row sync-data-toolbar-row--filters">
               <span class="sync-toolbar-label">Sensors</span>
-              <div class="sync-sensor-filters" id="syncSensorFilters" role="group" aria-label="Show sensors">
-                <button type="button" class="sync-filter-chip active" data-sensor="temperature" aria-pressed="true">Temperature</button>
-                <button type="button" class="sync-filter-chip active" data-sensor="humidity" aria-pressed="true">Humidity</button>
-                <button type="button" class="sync-filter-chip active" data-sensor="moisture" aria-pressed="true">Moisture</button>
-                <button type="button" class="sync-filter-chip active" data-sensor="light" aria-pressed="true">Light</button>
+              <div
+                class="sync-sensor-filters"
+                id="syncSensorFilters"
+                role="group"
+                aria-label="Show sensors"
+              >
+                <button
+                  type="button"
+                  class="sync-filter-chip active"
+                  data-sensor="temperature"
+                  aria-pressed="true"
+                >
+                  Temperature
+                </button>
+                <button
+                  type="button"
+                  class="sync-filter-chip active"
+                  data-sensor="humidity"
+                  aria-pressed="true"
+                >
+                  Humidity
+                </button>
+                <button
+                  type="button"
+                  class="sync-filter-chip active"
+                  data-sensor="moisture"
+                  aria-pressed="true"
+                >
+                  Moisture
+                </button>
+                <button
+                  type="button"
+                  class="sync-filter-chip active"
+                  data-sensor="light"
+                  aria-pressed="true"
+                >
+                  Light
+                </button>
               </div>
             </div>
           </div>
 
-          <div id="syncDataAlert" class="sync-data-alert" style="display: none" role="alert"></div>
+          <div
+            id="syncDataAlert"
+            class="sync-data-alert"
+            style="display: none"
+            role="alert"
+          ></div>
 
-          <div class="sync-data-grid" id="syncDataGrid" aria-live="polite"></div>
+          <div
+            class="sync-data-grid"
+            id="syncDataGrid"
+            aria-live="polite"
+          ></div>
 
           <div class="sync-data-empty" id="syncDataEmpty" style="display: none">
             <div class="sync-data-empty-inner">
-              <div class="sync-data-empty-icon" aria-hidden="true"><i class="ri-radar-line"></i></div>
+              <div class="sync-data-empty-icon" aria-hidden="true">
+                <i class="ri-radar-line"></i>
+              </div>
               <h2>No sensors connected yet</h2>
-              <p>Link a Plant Bot or open the dashboard so we can show temperature, humidity, soil moisture, and light here.</p>
-              <button type="button" class="btn btn-primary" id="syncDataConnectCta">
+              <p>
+                Link a Plant Bot or open the dashboard so we can show
+                temperature, humidity, soil moisture, and light here.
+              </p>
+              <button
+                type="button"
+                class="btn btn-primary"
+                id="syncDataConnectCta"
+              >
                 <i class="ri-robot-2-line"></i> Connect Plant Bot
               </button>
             </div>
           </div>
 
-          <div class="sync-data-insights" id="syncDataInsights" aria-live="polite"></div>
+          <div
+            class="sync-data-insights"
+            id="syncDataInsights"
+            aria-live="polite"
+          ></div>
         </div>
 
         <!-- IoT Setup: create Plant Boards + Tearboards + mapping -->
-        <div class="main-inner dashboard-shell" id="iotSetupView" style="display: none">
+        <div
+          class="main-inner dashboard-shell"
+          id="iotSetupView"
+          style="display: none"
+        >
           <section class="top-bar dashboard-section dashboard-section--header">
             <div class="top-left">
               <h1>
                 IoT Setup
-                <span class="accent"><i class="ri-base-station-line"></i> devices + tearboards</span>
+                <span class="accent"
+                  ><i class="ri-base-station-line"></i> devices +
+                  tearboards</span
+                >
               </h1>
-              <p>Create device tokens, map them to Tearboards, and test secure reads.</p>
+              <p>
+                Create device tokens, map them to Tearboards, and test secure
+                reads.
+              </p>
             </div>
             <div class="top-right">
               <button class="btn btn-ghost" id="btnIotRefresh">
@@ -1004,36 +2040,77 @@
                 <h2><i class="ri-device-line"></i> Plant Boards (Devices)</h2>
               </div>
               <div class="card-body">
-                <div class="bots-field" style="max-width: 760px; margin-bottom: 14px">
+                <div
+                  class="bots-field"
+                  style="max-width: 760px; margin-bottom: 14px"
+                >
                   <span class="bots-field-label">IoT admin key (optional)</span>
-                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
-                    <input class="bots-input" id="iotAdminKey" placeholder="DEW_IOT_ADMIN_TOKEN (enables public device management)" style="flex:1; min-width: 320px" />
-                    <button class="btn btn-ghost" id="btnIotSaveAdminKey" type="button">
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                    <input
+                      class="bots-input"
+                      id="iotAdminKey"
+                      placeholder="DEW_IOT_ADMIN_TOKEN (enables public device management)"
+                      style="flex: 1; min-width: 320px"
+                    />
+                    <button
+                      class="btn btn-ghost"
+                      id="btnIotSaveAdminKey"
+                      type="button"
+                    >
                       <i class="ri-key-2-line"></i> Save
                     </button>
-                    <button class="btn btn-ghost" id="btnIotClearAdminKey" type="button">
+                    <button
+                      class="btn btn-ghost"
+                      id="btnIotClearAdminKey"
+                      type="button"
+                    >
                       <i class="ri-delete-bin-6-line"></i> Clear
                     </button>
                   </div>
                   <p class="bots-panel-hint" style="margin-top: 10px">
-                    If set, the IoT Setup page can list/create/rename devices without Firebase login. Keep this secret.
+                    If set, the IoT Setup page can list/create/rename devices
+                    without Firebase login. Keep this secret.
                   </p>
                 </div>
                 <div class="bots-field" style="max-width: 760px">
-                  <span class="bots-field-label">Create a device (returns a device token once)</span>
-                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
-                    <input class="bots-input" id="iotDeviceId" placeholder="device_id (e.g. plantboard_1)" style="flex:1; min-width: 220px" />
-                    <input class="bots-input" id="iotDeviceName" placeholder="device_name (e.g. Kitchen Board)" style="flex:1; min-width: 220px" />
-                    <button class="btn btn-primary" id="btnIotCreateDevice" type="button">
+                  <span class="bots-field-label"
+                    >Create a device (returns a device token once)</span
+                  >
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                    <input
+                      class="bots-input"
+                      id="iotDeviceId"
+                      placeholder="device_id (e.g. plantboard_1)"
+                      style="flex: 1; min-width: 220px"
+                    />
+                    <input
+                      class="bots-input"
+                      id="iotDeviceName"
+                      placeholder="device_name (e.g. Kitchen Board)"
+                      style="flex: 1; min-width: 220px"
+                    />
+                    <button
+                      class="btn btn-primary"
+                      id="btnIotCreateDevice"
+                      type="button"
+                    >
                       <i class="ri-add-line"></i> Create
                     </button>
                   </div>
                   <p class="bots-panel-hint" style="margin-top: 10px">
-                    The returned <code>dev_...</code> token is what firmware uses as <code>Authorization: Bearer dev_...</code> for <code>/api/upload-data</code>.
+                    The returned <code>dev_...</code> token is what firmware
+                    uses as <code>Authorization: Bearer dev_...</code> for
+                    <code>/api/upload-data</code>.
                   </p>
                 </div>
 
-                <div id="iotDevicesEmpty" class="bots-muted" style="display:none; margin-top: 14px">No devices yet.</div>
+                <div
+                  id="iotDevicesEmpty"
+                  class="bots-muted"
+                  style="display: none; margin-top: 14px"
+                >
+                  No devices yet.
+                </div>
                 <div id="iotDevicesList" style="margin-top: 14px"></div>
               </div>
             </div>
@@ -1044,53 +2121,118 @@
               </div>
               <div class="card-body">
                 <div class="bots-field" style="max-width: 760px">
-                  <span class="bots-field-label">Create a tearboard (returns a tearboard token once)</span>
-                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
-                    <input class="bots-input" id="iotTearboardName" placeholder="Name (e.g. Tearboard #1)" style="flex:1; min-width: 220px" />
-                    <input class="bots-input" id="iotTearboardDeviceId" placeholder="Optional initial device_id to map" style="flex:1; min-width: 220px" />
-                    <button class="btn btn-primary" id="btnIotCreateTearboard" type="button">
+                  <span class="bots-field-label"
+                    >Create a tearboard (returns a tearboard token once)</span
+                  >
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                    <input
+                      class="bots-input"
+                      id="iotTearboardName"
+                      placeholder="Name (e.g. Tearboard #1)"
+                      style="flex: 1; min-width: 220px"
+                    />
+                    <input
+                      class="bots-input"
+                      id="iotTearboardDeviceId"
+                      placeholder="Optional initial device_id to map"
+                      style="flex: 1; min-width: 220px"
+                    />
+                    <button
+                      class="btn btn-primary"
+                      id="btnIotCreateTearboard"
+                      type="button"
+                    >
                       <i class="ri-add-line"></i> Create
                     </button>
                   </div>
                   <p class="bots-panel-hint" style="margin-top: 10px">
-                    The returned <code>tb_...</code> token is what a Tearboard uses to call <code>/api/tearboard/get-device-data</code>.
+                    The returned <code>tb_...</code> token is what a Tearboard
+                    uses to call <code>/api/tearboard/get-device-data</code>.
                   </p>
                 </div>
 
-                <div class="bots-field" style="max-width: 760px; margin-top: 18px">
-                  <span class="bots-field-label">Map a device to a tearboard</span>
-                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
-                    <input class="bots-input" id="iotMapTearboardId" placeholder="tearboard_id (tb_...)" style="flex:1; min-width: 220px" />
-                    <input class="bots-input" id="iotMapDeviceId" placeholder="device_id (plantboard_1)" style="flex:1; min-width: 220px" />
-                    <button class="btn btn-ghost" id="btnIotMapDevice" type="button">
+                <div
+                  class="bots-field"
+                  style="max-width: 760px; margin-top: 18px"
+                >
+                  <span class="bots-field-label"
+                    >Map a device to a tearboard</span
+                  >
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                    <input
+                      class="bots-input"
+                      id="iotMapTearboardId"
+                      placeholder="tearboard_id (tb_...)"
+                      style="flex: 1; min-width: 220px"
+                    />
+                    <input
+                      class="bots-input"
+                      id="iotMapDeviceId"
+                      placeholder="device_id (plantboard_1)"
+                      style="flex: 1; min-width: 220px"
+                    />
+                    <button
+                      class="btn btn-ghost"
+                      id="btnIotMapDevice"
+                      type="button"
+                    >
                       <i class="ri-link"></i> Map
                     </button>
                   </div>
                 </div>
 
-                <div id="iotTearboardsEmpty" class="bots-muted" style="display:none; margin-top: 14px">No tearboards yet.</div>
+                <div
+                  id="iotTearboardsEmpty"
+                  class="bots-muted"
+                  style="display: none; margin-top: 14px"
+                >
+                  No tearboards yet.
+                </div>
                 <div id="iotTearboardsList" style="margin-top: 14px"></div>
               </div>
             </div>
 
             <div class="card">
               <div class="card-header">
-                <h2><i class="ri-shield-check-line"></i> Test tearboard read (secure)</h2>
+                <h2>
+                  <i class="ri-shield-check-line"></i> Test tearboard read
+                  (secure)
+                </h2>
               </div>
               <div class="card-body">
                 <div class="bots-field" style="max-width: 760px">
                   <span class="bots-field-label">Tearboard token (tb_...)</span>
-                  <div style="display:flex; gap: 10px; flex-wrap: wrap">
-                    <input class="bots-input" id="iotTestTbToken" placeholder="tb_..." style="flex:1; min-width: 320px" />
-                    <button class="btn btn-ghost" id="btnIotTestTbRead" type="button">
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                    <input
+                      class="bots-input"
+                      id="iotTestTbToken"
+                      placeholder="tb_..."
+                      style="flex: 1; min-width: 320px"
+                    />
+                    <button
+                      class="btn btn-ghost"
+                      id="btnIotTestTbRead"
+                      type="button"
+                    >
                       <i class="ri-play-line"></i> Fetch
                     </button>
                   </div>
                   <p class="bots-panel-hint" style="margin-top: 10px">
-                    This request is intentionally <strong>not</strong> Firebase-auth. It uses only the tearboard token to return mapped device data.
+                    This request is intentionally
+                    <strong>not</strong> Firebase-auth. It uses only the
+                    tearboard token to return mapped device data.
                   </p>
                 </div>
-                <pre id="iotTestOut" style="margin-top: 12px; white-space: pre-wrap; word-break: break-word; font-size: 12px; opacity: 0.92"></pre>
+                <pre
+                  id="iotTestOut"
+                  style="
+                    margin-top: 12px;
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    font-size: 12px;
+                    opacity: 0.92;
+                  "
+                ></pre>
               </div>
             </div>
           </section>
@@ -1366,13 +2508,16 @@
                 Set your location for local weather on the dashboard.
               </p>
               <div class="location-settings-note-wrap">
-                <i class="ri-robot-2-line location-settings-note-icon" aria-hidden="true"></i>
+                <i
+                  class="ri-robot-2-line location-settings-note-icon"
+                  aria-hidden="true"
+                ></i>
                 <p class="location-settings-note">
-                  This place is used for <strong>Plant Bot</strong> weather on your
-                  dashboard—not <strong>Desk Bot</strong>. Pick a spot near your
-                  plants (like home). Use <strong>Detect</strong> on your phone or
-                  computer so the map matches where you are, or type it in
-                  manually.
+                  This place is used for <strong>Plant Bot</strong> weather on
+                  your dashboard—not <strong>Desk Bot</strong>. Pick a spot near
+                  your plants (like home). Use <strong>Detect</strong> on your
+                  phone or computer so the map matches where you are, or type it
+                  in manually.
                 </p>
               </div>
             </div>
@@ -1665,14 +2810,30 @@
         </div>
         <div class="community-view" id="communityView" style="display: none">
           <nav class="community-top-nav" aria-label="Community navigation">
-            <a href="#" class="community-nav-link" id="communityNavHome" data-view="community" data-community-home="true"><i class="ri-home-5-line"></i> Home</a>
-            <a href="#" class="community-nav-link community-nav-link--active" data-view="community"><i class="ri-group-line"></i> Community</a>
-            <a href="#" class="community-nav-link" data-view="dashboard"><i class="ri-dashboard-3-line"></i> Dashboard</a>
+            <a
+              href="#"
+              class="community-nav-link"
+              id="communityNavHome"
+              data-view="community"
+              data-community-home="true"
+              ><i class="ri-home-5-line"></i> Home</a
+            >
+            <a
+              href="#"
+              class="community-nav-link community-nav-link--active"
+              data-view="community"
+              ><i class="ri-group-line"></i> Community</a
+            >
+            <a href="#" class="community-nav-link" data-view="dashboard"
+              ><i class="ri-dashboard-3-line"></i> Dashboard</a
+            >
           </nav>
           <section class="community-layout">
             <aside class="community-sidebar-left">
               <div class="card community-sidebar-card community-nav-card">
-                <div class="community-nav-card-title community-nav-card-title--brand">
+                <div
+                  class="community-nav-card-title community-nav-card-title--brand"
+                >
                   <img
                     src="/images/symbols/dew-logo.png"
                     alt="DEW"
@@ -1682,21 +2843,39 @@
                     class="dew-app-logo-img dew-app-logo-img--community-nav"
                   />
                 </div>
-                <a href="#" class="community-nav-card-link" data-view="community" data-community-home="true"><i class="ri-home-4-line"></i> Home</a>
-                <a href="#" class="community-nav-card-link"><i class="ri-line-chart-line"></i> Popular</a>
-                <a href="#" class="community-nav-card-link"><i class="ri-sparkling-2-line"></i> All</a>
-                <button type="button" class="btn btn-primary community-btn-start community-btn-start--card" id="communityStartCommunityBtn">
+                <a
+                  href="#"
+                  class="community-nav-card-link"
+                  data-view="community"
+                  data-community-home="true"
+                  ><i class="ri-home-4-line"></i> Home</a
+                >
+                <a href="#" class="community-nav-card-link"
+                  ><i class="ri-line-chart-line"></i> Popular</a
+                >
+                <a href="#" class="community-nav-card-link"
+                  ><i class="ri-sparkling-2-line"></i> All</a
+                >
+                <button
+                  type="button"
+                  class="btn btn-primary community-btn-start community-btn-start--card"
+                  id="communityStartCommunityBtn"
+                >
                   <i class="ri-add-line"></i> Start a community
                 </button>
               </div>
               <div class="card community-sidebar-card">
-                <h2 class="community-sidebar-title"><i class="ri-team-line"></i> Your Communities</h2>
+                <h2 class="community-sidebar-title">
+                  <i class="ri-team-line"></i> Your Communities
+                </h2>
                 <ul id="communityYourList" class="community-community-list">
                   <li class="community-list-loading">Loading…</li>
                 </ul>
               </div>
               <div class="card community-sidebar-card">
-                <h2 class="community-sidebar-title"><i class="ri-line-chart-line"></i> Popular Communities</h2>
+                <h2 class="community-sidebar-title">
+                  <i class="ri-line-chart-line"></i> Popular Communities
+                </h2>
                 <ul id="communityPopularList" class="community-community-list">
                   <li class="community-list-loading">Loading…</li>
                 </ul>
@@ -1705,66 +2884,224 @@
             <div class="community-main">
               <div class="community-main-header" id="communityControls">
                 <div class="community-search-row">
-                  <input type="search" id="communitySearch" class="community-search-input" placeholder="Search posts or communities…" aria-label="Search posts or communities" />
-                  <button type="button" class="btn btn-primary" id="communitySearchBtn"><i class="ri-search-line"></i> Search</button>
+                  <input
+                    type="search"
+                    id="communitySearch"
+                    class="community-search-input"
+                    placeholder="Search posts or communities…"
+                    aria-label="Search posts or communities"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="communitySearchBtn"
+                  >
+                    <i class="ri-search-line"></i> Search
+                  </button>
                 </div>
                 <div class="community-sort-row">
                   <div class="tab-row" id="communitySortTabs">
-                    <div class="tab" data-sort="best"><i class="ri-line-chart-line"></i> Best</div>
-                    <div class="tab" data-sort="hot"><i class="ri-fire-line"></i> Hot</div>
-                    <div class="tab active" data-sort="new"><i class="ri-time-line"></i> New</div>
-                    <div class="tab" data-sort="top"><i class="ri-trophy-line"></i> Top</div>
-                    <div class="tab" data-sort="controversial"><i class="ri-bubble-chart-line"></i> Controversial</div>
-                    <div class="tab" data-sort="old"><i class="ri-calendar-line"></i> Old</div>
-                    <div class="tab" data-sort="qa"><i class="ri-question-answer-line"></i> Q&amp;A</div>
+                    <div class="tab" data-sort="best">
+                      <i class="ri-line-chart-line"></i> Best
+                    </div>
+                    <div class="tab" data-sort="hot">
+                      <i class="ri-fire-line"></i> Hot
+                    </div>
+                    <div class="tab active" data-sort="new">
+                      <i class="ri-time-line"></i> New
+                    </div>
+                    <div class="tab" data-sort="top">
+                      <i class="ri-trophy-line"></i> Top
+                    </div>
+                    <div class="tab" data-sort="controversial">
+                      <i class="ri-bubble-chart-line"></i> Controversial
+                    </div>
+                    <div class="tab" data-sort="old">
+                      <i class="ri-calendar-line"></i> Old
+                    </div>
+                    <div class="tab" data-sort="qa">
+                      <i class="ri-question-answer-line"></i> Q&amp;A
+                    </div>
                   </div>
-                  <select id="communityCategoryFilter" class="community-category-select" aria-label="Category">
+                  <select
+                    id="communityCategoryFilter"
+                    class="community-category-select"
+                    aria-label="Category"
+                  >
                     <option value="all">All Categories</option>
                   </select>
-                  <button type="button" class="btn btn-primary" id="communityCreatePostBtn"><i class="ri-add-line"></i> Create Post</button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="communityCreatePostBtn"
+                  >
+                    <i class="ri-add-line"></i> Create Post
+                  </button>
                 </div>
               </div>
-              <section id="communityDetailCard" class="card community-detail-card" style="display: none">
+              <section
+                id="communityDetailCard"
+                class="card community-detail-card"
+                style="display: none"
+              >
                 <div class="community-detail-banner" id="communityDetailBanner">
-                  <button type="button" class="btn btn-ghost community-banner-edit-btn" id="communityBannerEditBtn" style="display: none" title="Edit banner, logo, description"><i class="ri-image-edit-line"></i> Edit Banner</button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost community-banner-edit-btn"
+                    id="communityBannerEditBtn"
+                    style="display: none"
+                    title="Edit banner, logo, description"
+                  >
+                    <i class="ri-image-edit-line"></i> Edit Banner
+                  </button>
                 </div>
                 <div class="community-detail-head">
                   <div class="community-detail-identity">
                     <div class="community-detail-logo-wrap">
-                      <div class="community-detail-logo" id="communityDetailLogo">r</div>
-                      <button type="button" class="btn btn-ghost community-logo-edit-btn" id="communityLogoEditBtn" style="display: none" title="Edit logo"><i class="ri-pencil-line"></i></button>
+                      <div
+                        class="community-detail-logo"
+                        id="communityDetailLogo"
+                      >
+                        r
+                      </div>
+                      <button
+                        type="button"
+                        class="btn btn-ghost community-logo-edit-btn"
+                        id="communityLogoEditBtn"
+                        style="display: none"
+                        title="Edit logo"
+                      >
+                        <i class="ri-pencil-line"></i>
+                      </button>
                     </div>
                     <div>
-                      <h2 id="communityDetailTitle">r/community <span class="community-detail-symbol" id="communityDetailSymbol"></span></h2>
-                      <p class="community-detail-desc-row"><span id="communityDetailDesc">Community description</span><button type="button" class="btn btn-ghost community-desc-edit-btn" id="communityDescEditBtn" style="display: none" title="Edit description"><i class="ri-pencil-line"></i></button></p>
-                      <div class="community-detail-meta" id="communityDetailMeta"></div>
+                      <h2 id="communityDetailTitle">
+                        r/community
+                        <span
+                          class="community-detail-symbol"
+                          id="communityDetailSymbol"
+                        ></span>
+                      </h2>
+                      <p class="community-detail-desc-row">
+                        <span id="communityDetailDesc"
+                          >Community description</span
+                        ><button
+                          type="button"
+                          class="btn btn-ghost community-desc-edit-btn"
+                          id="communityDescEditBtn"
+                          style="display: none"
+                          title="Edit description"
+                        >
+                          <i class="ri-pencil-line"></i>
+                        </button>
+                      </p>
+                      <div
+                        class="community-detail-meta"
+                        id="communityDetailMeta"
+                      ></div>
                     </div>
                   </div>
                   <div class="community-detail-actions">
-                    <button type="button" class="btn btn-ghost" id="communityJoinBtn">Join</button>
-                    <button type="button" class="btn btn-primary" id="communityCreatePostQuickBtn"><i class="ri-add-line"></i> Create Post</button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      id="communityJoinBtn"
+                    >
+                      Join
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-primary"
+                      id="communityCreatePostQuickBtn"
+                    >
+                      <i class="ri-add-line"></i> Create Post
+                    </button>
                     <div class="community-notify">
-                      <button type="button" class="btn btn-ghost" id="communityNotifyBtn" aria-haspopup="menu" aria-expanded="false"><i class="ri-notification-3-line"></i></button>
-                      <div class="community-notify-menu" id="communityNotifyMenu" role="menu" aria-label="Community notifications">
-                        <div class="community-notify-title">Community notifications</div>
-                        <button type="button" class="community-notify-option" data-notify-level="all" role="menuitem">
-                          <i class="ri-notification-3-line"></i><span>All new posts</span><i class="ri-check-line check"></i>
+                      <button
+                        type="button"
+                        class="btn btn-ghost"
+                        id="communityNotifyBtn"
+                        aria-haspopup="menu"
+                        aria-expanded="false"
+                      >
+                        <i class="ri-notification-3-line"></i>
+                      </button>
+                      <div
+                        class="community-notify-menu"
+                        id="communityNotifyMenu"
+                        role="menu"
+                        aria-label="Community notifications"
+                      >
+                        <div class="community-notify-title">
+                          Community notifications
+                        </div>
+                        <button
+                          type="button"
+                          class="community-notify-option"
+                          data-notify-level="all"
+                          role="menuitem"
+                        >
+                          <i class="ri-notification-3-line"></i
+                          ><span>All new posts</span
+                          ><i class="ri-check-line check"></i>
                         </button>
-                        <button type="button" class="community-notify-option" data-notify-level="high" role="menuitem">
-                          <i class="ri-notification-2-line"></i><span>Popular posts</span><i class="ri-check-line check"></i>
+                        <button
+                          type="button"
+                          class="community-notify-option"
+                          data-notify-level="high"
+                          role="menuitem"
+                        >
+                          <i class="ri-notification-2-line"></i
+                          ><span>Popular posts</span
+                          ><i class="ri-check-line check"></i>
                         </button>
-                        <button type="button" class="community-notify-option" data-notify-level="off" role="menuitem">
-                          <i class="ri-notification-off-line"></i><span>Off</span><i class="ri-check-line check"></i>
+                        <button
+                          type="button"
+                          class="community-notify-option"
+                          data-notify-level="off"
+                          role="menuitem"
+                        >
+                          <i class="ri-notification-off-line"></i
+                          ><span>Off</span><i class="ri-check-line check"></i>
                         </button>
                         <div class="community-notify-divider"></div>
-                        <button type="button" class="community-notify-option community-notify-option--mute" data-notify-mute="true" role="menuitem">
+                        <button
+                          type="button"
+                          class="community-notify-option community-notify-option--mute"
+                          data-notify-mute="true"
+                          role="menuitem"
+                        >
                           <i class="ri-volume-mute-line"></i><span>Mute</span>
                         </button>
                       </div>
                     </div>
-                    <button type="button" class="btn btn-ghost" id="communitySymbolBtn" style="display: none" title="Edit symbol"><i class="ri-shapes-line"></i></button>
-                    <button type="button" class="btn btn-ghost" id="communityManageModsBtn" style="display: none" title="Manage moderators"><i class="ri-shield-user-line"></i></button>
-                    <button type="button" class="btn btn-ghost" id="communityDeleteBtn" style="display: none" title="Delete community (admin only)"><i class="ri-delete-bin-line"></i></button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      id="communitySymbolBtn"
+                      style="display: none"
+                      title="Edit symbol"
+                    >
+                      <i class="ri-shapes-line"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      id="communityManageModsBtn"
+                      style="display: none"
+                      title="Manage moderators"
+                    >
+                      <i class="ri-shield-user-line"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      id="communityDeleteBtn"
+                      style="display: none"
+                      title="Delete community (admin only)"
+                    >
+                      <i class="ri-delete-bin-line"></i>
+                    </button>
                   </div>
                 </div>
                 <div class="community-highlights" id="communityHighlights">
@@ -1778,25 +3115,50 @@
                   </div>
                 </div>
               </section>
-              <section class="card community-highlights-cards" id="communityHighlightsCards" style="display:none">
+              <section
+                class="card community-highlights-cards"
+                id="communityHighlightsCards"
+                style="display: none"
+              >
                 <div class="community-highlights-cards-header">
-                  <h3><i class="ri-sparkling-2-line"></i> Community highlights</h3>
+                  <h3>
+                    <i class="ri-sparkling-2-line"></i> Community highlights
+                  </h3>
                 </div>
                 <div class="community-highlights-cards-grid">
                   <div class="community-highlight-card">
-                    <div class="community-highlight-card-title">Most popular</div>
-                    <ul id="communityHighlightsTop" class="community-highlight-list"></ul>
+                    <div class="community-highlight-card-title">
+                      Most popular
+                    </div>
+                    <ul
+                      id="communityHighlightsTop"
+                      class="community-highlight-list"
+                    ></ul>
                   </div>
                   <div class="community-highlight-card">
-                    <div class="community-highlight-card-title">Trending now</div>
-                    <ul id="communityHighlightsRecent" class="community-highlight-list"></ul>
+                    <div class="community-highlight-card-title">
+                      Trending now
+                    </div>
+                    <ul
+                      id="communityHighlightsRecent"
+                      class="community-highlight-list"
+                    ></ul>
                   </div>
                 </div>
               </section>
-              <div class="community-create card" id="communityCreateBlock" style="display: none">
+              <div
+                class="community-create card"
+                id="communityCreateBlock"
+                style="display: none"
+              >
                 <div class="community-create-header">
                   <h2><i class="ri-edit-2-line"></i> Create post</h2>
-                  <button type="button" class="community-create-modal-close" id="communityCreatePostModalClose" aria-label="Close">
+                  <button
+                    type="button"
+                    class="community-create-modal-close"
+                    id="communityCreatePostModalClose"
+                    aria-label="Close"
+                  >
                     <i class="ri-close-line"></i>
                   </button>
                 </div>
@@ -1811,62 +3173,177 @@
                         required
                         maxlength="300"
                       />
-                      <div class="community-post-title-counter" aria-live="polite">
+                      <div
+                        class="community-post-title-counter"
+                        aria-live="polite"
+                      >
                         <span id="communityPostTitleCount">0/300</span>
                       </div>
                     </div>
                   </div>
                   <div class="community-create-row">
-                    <textarea id="communityPostBody" class="community-textarea" rows="3" placeholder="Add details, question, or plant update…"></textarea>
+                    <textarea
+                      id="communityPostBody"
+                      class="community-textarea"
+                      rows="3"
+                      placeholder="Add details, question, or plant update…"
+                    ></textarea>
                   </div>
 
-                  <div class="community-post-tabs" id="communityPostTypeTabs" role="tablist" aria-label="Post type tabs">
-                    <button type="button" class="community-post-tab" data-post-type="text" role="tab" aria-selected="false">Text</button>
-                    <button type="button" class="community-post-tab active" data-post-type="media" role="tab" aria-selected="true">Images &amp; Video</button>
-                    <button type="button" class="community-post-tab" data-post-type="link" role="tab" aria-selected="false">Link</button>
-                    <button type="button" class="community-post-tab" data-post-type="poll" role="tab" aria-selected="false">Poll</button>
+                  <div
+                    class="community-post-tabs"
+                    id="communityPostTypeTabs"
+                    role="tablist"
+                    aria-label="Post type tabs"
+                  >
+                    <button
+                      type="button"
+                      class="community-post-tab"
+                      data-post-type="text"
+                      role="tab"
+                      aria-selected="false"
+                    >
+                      Text
+                    </button>
+                    <button
+                      type="button"
+                      class="community-post-tab active"
+                      data-post-type="media"
+                      role="tab"
+                      aria-selected="true"
+                    >
+                      Images &amp; Video
+                    </button>
+                    <button
+                      type="button"
+                      class="community-post-tab"
+                      data-post-type="link"
+                      role="tab"
+                      aria-selected="false"
+                    >
+                      Link
+                    </button>
+                    <button
+                      type="button"
+                      class="community-post-tab"
+                      data-post-type="poll"
+                      role="tab"
+                      aria-selected="false"
+                    >
+                      Poll
+                    </button>
                   </div>
 
-                  <div id="communityPostLinkFields" class="community-post-tab-panel" style="display: none;">
+                  <div
+                    id="communityPostLinkFields"
+                    class="community-post-tab-panel"
+                    style="display: none"
+                  >
                     <div class="community-create-row">
-                      <input id="communityPostLinkUrl" class="community-input" type="url" placeholder="Paste a link URL" />
+                      <input
+                        id="communityPostLinkUrl"
+                        class="community-input"
+                        type="url"
+                        placeholder="Paste a link URL"
+                      />
                     </div>
                   </div>
 
-                  <div id="communityPostPollFields" class="community-post-tab-panel" style="display: none;">
+                  <div
+                    id="communityPostPollFields"
+                    class="community-post-tab-panel"
+                    style="display: none"
+                  >
                     <div class="community-create-row">
-                      <textarea id="communityPostPollQuestion" class="community-textarea" rows="2" placeholder="Poll question (optional)"></textarea>
+                      <textarea
+                        id="communityPostPollQuestion"
+                        class="community-textarea"
+                        rows="2"
+                        placeholder="Poll question (optional)"
+                      ></textarea>
                     </div>
                     <div class="community-create-row">
-                      <input id="communityPostPollOption1" class="community-input" type="text" placeholder="Option 1" />
+                      <input
+                        id="communityPostPollOption1"
+                        class="community-input"
+                        type="text"
+                        placeholder="Option 1"
+                      />
                     </div>
                     <div class="community-create-row">
-                      <input id="communityPostPollOption2" class="community-input" type="text" placeholder="Option 2" />
+                      <input
+                        id="communityPostPollOption2"
+                        class="community-input"
+                        type="text"
+                        placeholder="Option 2"
+                      />
                     </div>
                     <div class="community-create-row">
-                      <input id="communityPostPollOption3" class="community-input" type="text" placeholder="Option 3 (optional)" />
+                      <input
+                        id="communityPostPollOption3"
+                        class="community-input"
+                        type="text"
+                        placeholder="Option 3 (optional)"
+                      />
                     </div>
                   </div>
 
-                  <div class="community-create-row" style="display: flex; flex-direction: column; gap: 10px;">
-                    <div class="community-post-media-preview" id="communityPostMediaPreview" style="display: none">
+                  <div
+                    class="community-create-row"
+                    style="display: flex; flex-direction: column; gap: 10px"
+                  >
+                    <div
+                      class="community-post-media-preview"
+                      id="communityPostMediaPreview"
+                      style="display: none"
+                    >
                       <div class="community-post-media-main">
-                        <button type="button" class="community-post-media-nav" id="communityPostMediaPrevBtn" aria-label="Previous media">
+                        <button
+                          type="button"
+                          class="community-post-media-nav"
+                          id="communityPostMediaPrevBtn"
+                          aria-label="Previous media"
+                        >
                           <i class="ri-arrow-left-s-line"></i>
                         </button>
 
-                        <div class="community-post-media-main-frame" id="communityPostMediaMainFrame">
-                          <img id="communityPostMediaMainImg" src="" alt="Selected media preview" style="display: none" />
-                          <video id="communityPostMediaMainVideo" controls style="display: none"></video>
-                          <audio id="communityPostMediaMainAudio" controls style="display: none"></audio>
+                        <div
+                          class="community-post-media-main-frame"
+                          id="communityPostMediaMainFrame"
+                        >
+                          <img
+                            id="communityPostMediaMainImg"
+                            src=""
+                            alt="Selected media preview"
+                            style="display: none"
+                          />
+                          <video
+                            id="communityPostMediaMainVideo"
+                            controls
+                            style="display: none"
+                          ></video>
+                          <audio
+                            id="communityPostMediaMainAudio"
+                            controls
+                            style="display: none"
+                          ></audio>
                         </div>
 
-                        <button type="button" class="community-post-media-nav" id="communityPostMediaNextBtn" aria-label="Next media">
+                        <button
+                          type="button"
+                          class="community-post-media-nav"
+                          id="communityPostMediaNextBtn"
+                          aria-label="Next media"
+                        >
                           <i class="ri-arrow-right-s-line"></i>
                         </button>
                       </div>
 
-                      <div class="community-post-media-thumbs" id="communityPostMediaThumbs" aria-label="Selected media thumbnails"></div>
+                      <div
+                        class="community-post-media-thumbs"
+                        id="communityPostMediaThumbs"
+                        aria-label="Selected media thumbnails"
+                      ></div>
 
                       <button
                         type="button"
@@ -1887,107 +3364,268 @@
                       </label>
                       <label class="community-field">
                         <span class="label">Tags</span>
-                        <input id="communityTags" class="community-input" type="text" placeholder="#IndoorPlants #PlantCare" />
+                        <input
+                          id="communityTags"
+                          class="community-input"
+                          type="text"
+                          placeholder="#IndoorPlants #PlantCare"
+                        />
                       </label>
                     </div>
                     <div class="community-create-meta-right">
-                      <label class="community-upload" id="communityPostMediaInputWrap">
-                        <input id="communityImage" type="file" accept="image/*,video/*,audio/*" multiple />
+                      <label
+                        class="community-upload"
+                        id="communityPostMediaInputWrap"
+                      >
+                        <input
+                          id="communityImage"
+                          type="file"
+                          accept="image/*,video/*,audio/*"
+                          multiple
+                        />
                         <span><i class="ri-image-add-line"></i> Add media</span>
                       </label>
                     </div>
                   </div>
 
                   <div class="community-create-modal-actions">
-                    <button type="button" class="btn btn-ghost" id="communityPostCancelBtn">Cancel</button>
-                    <button type="button" class="btn btn-ghost" id="communityPostSaveDraftBtn">Save Draft</button>
-                    <button type="submit" class="btn btn-primary btn-community-post"><i class="ri-send-plane-2-line"></i> Post</button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      id="communityPostCancelBtn"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      id="communityPostSaveDraftBtn"
+                    >
+                      Save Draft
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn btn-primary btn-community-post"
+                    >
+                      <i class="ri-send-plane-2-line"></i> Post
+                    </button>
                   </div>
                 </form>
               </div>
-              <div class="community-create-post-backdrop" id="communityCreatePostBackdrop" aria-hidden="true"></div>
+              <div
+                class="community-create-post-backdrop"
+                id="communityCreatePostBackdrop"
+                aria-hidden="true"
+              ></div>
               <div id="communityFeed" class="community-feed"></div>
-              <div id="communityFeedEmpty" class="community-feed-empty" style="display: none">
+              <div
+                id="communityFeedEmpty"
+                class="community-feed-empty"
+                style="display: none"
+              >
                 <div class="icon"><i class="ri-leaf-line"></i></div>
                 <p>No posts yet.</p>
                 <span>Be the first to post or try another category.</span>
               </div>
             </div>
             <aside class="community-sidebar-right">
-              <div class="card community-sidebar-card" id="communityInfoCard" style="display: none">
-                <h2 class="community-sidebar-title"><i class="ri-information-line"></i> Community Info</h2>
+              <div
+                class="card community-sidebar-card"
+                id="communityInfoCard"
+                style="display: none"
+              >
+                <h2 class="community-sidebar-title">
+                  <i class="ri-information-line"></i> Community Info
+                </h2>
                 <div class="community-info-grid" id="communityInfoGrid"></div>
                 <h3 class="community-info-subtitle">Moderators</h3>
-                <ul id="communityModeratorsList" class="community-recent-list"></ul>
+                <ul
+                  id="communityModeratorsList"
+                  class="community-recent-list"
+                ></ul>
                 <h3 class="community-info-subtitle">Message admin/mods</h3>
                 <div class="community-message-row">
-                  <input type="text" id="communityMessageInput" class="community-input" placeholder="Type your message" />
-                  <select id="communityMessageTarget" class="community-category-select" aria-label="Send to">
+                  <input
+                    type="text"
+                    id="communityMessageInput"
+                    class="community-input"
+                    placeholder="Type your message"
+                  />
+                  <select
+                    id="communityMessageTarget"
+                    class="community-category-select"
+                    aria-label="Send to"
+                  >
                     <option value="mods">Mods</option>
                   </select>
-                  <button type="button" class="btn btn-primary" id="communityMessageSendBtn">Send</button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="communityMessageSendBtn"
+                  >
+                    Send
+                  </button>
                 </div>
               </div>
-              <div class="card community-sidebar-card" id="communityAchievementsCard" style="display: none">
+              <div
+                class="card community-sidebar-card"
+                id="communityAchievementsCard"
+                style="display: none"
+              >
                 <div class="community-achievements-header">
-                  <h2 class="community-sidebar-title"><i class="ri-award-line"></i> Community achievements</h2>
-                  <button type="button" class="btn btn-ghost btn-sm" id="communityAchievementsToggle">Show less</button>
+                  <h2 class="community-sidebar-title">
+                    <i class="ri-award-line"></i> Community achievements
+                  </h2>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm"
+                    id="communityAchievementsToggle"
+                  >
+                    Show less
+                  </button>
                 </div>
-                <ul class="community-achievements-list" id="communityAchievementsList"></ul>
+                <ul
+                  class="community-achievements-list"
+                  id="communityAchievementsList"
+                ></ul>
               </div>
               <div class="card community-sidebar-card">
-                <h2 class="community-sidebar-title"><i class="ri-star-line"></i> Recent Posts</h2>
-                <a href="#" class="community-sidebar-clear" id="communityRecentClear">Clear</a>
+                <h2 class="community-sidebar-title">
+                  <i class="ri-star-line"></i> Recent Posts
+                </h2>
+                <a
+                  href="#"
+                  class="community-sidebar-clear"
+                  id="communityRecentClear"
+                  >Clear</a
+                >
                 <ul id="communityRecentList" class="community-recent-list"></ul>
               </div>
               <div class="card community-sidebar-card">
                 <h2 class="community-sidebar-title">Your community stats</h2>
                 <div class="community-stats" id="communityStats">
-                  <div class="row"><span>Reputation</span><strong id="communityStatRep">0</strong></div>
-                  <div class="row"><span>Posts</span><strong id="communityStatPosts">0</strong></div>
-                  <div class="row"><span>Comments</span><strong id="communityStatComments">0</strong></div>
-                  <div class="row"><span>Badges</span><strong id="communityStatBadges">—</strong></div>
+                  <div class="row">
+                    <span>Reputation</span
+                    ><strong id="communityStatRep">0</strong>
+                  </div>
+                  <div class="row">
+                    <span>Posts</span><strong id="communityStatPosts">0</strong>
+                  </div>
+                  <div class="row">
+                    <span>Comments</span
+                    ><strong id="communityStatComments">0</strong>
+                  </div>
+                  <div class="row">
+                    <span>Badges</span
+                    ><strong id="communityStatBadges">—</strong>
+                  </div>
                 </div>
               </div>
             </aside>
           </section>
         </div>
         <!-- Community: Symbol picker modal -->
-        <div class="modal community-admin-modal" id="communitySymbolModal" style="display: none" aria-hidden="true">
+        <div
+          class="modal community-admin-modal"
+          id="communitySymbolModal"
+          style="display: none"
+          aria-hidden="true"
+        >
           <div class="modal-content">
             <div class="modal-header">
               <h2>Edit community symbol</h2>
-              <button type="button" class="modal-close" id="communitySymbolModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+              <button
+                type="button"
+                class="modal-close"
+                id="communitySymbolModalClose"
+                aria-label="Close"
+              >
+                <i class="ri-close-line"></i>
+              </button>
             </div>
-            <p class="community-create-wizard-subtitle">Pick a short symbol (emoji or 1–3 chars) that appears next to your community.</p>
+            <p class="community-create-wizard-subtitle">
+              Pick a short symbol (emoji or 1–3 chars) that appears next to your
+              community.
+            </p>
             <div class="community-symbol-row">
-              <div class="community-symbol-current" id="communitySymbolCurrent">✦</div>
-              <input id="communitySymbolInput" class="community-input" type="text" maxlength="6" placeholder="e.g. 🌿" />
+              <div class="community-symbol-current" id="communitySymbolCurrent">
+                ✦
+              </div>
+              <input
+                id="communitySymbolInput"
+                class="community-input"
+                type="text"
+                maxlength="6"
+                placeholder="e.g. 🌿"
+              />
             </div>
             <div class="community-create-modal-actions">
-              <button type="button" class="btn btn-ghost" id="communitySymbolCancel">Cancel</button>
-              <button type="button" class="btn btn-primary" id="communitySymbolSave"><i class="ri-save-line"></i> Save</button>
+              <button
+                type="button"
+                class="btn btn-ghost"
+                id="communitySymbolCancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                id="communitySymbolSave"
+              >
+                <i class="ri-save-line"></i> Save
+              </button>
             </div>
           </div>
         </div>
         <!-- Community: Manage moderators modal -->
-        <div class="modal community-admin-modal" id="communityModsModal" style="display: none" aria-hidden="true">
+        <div
+          class="modal community-admin-modal"
+          id="communityModsModal"
+          style="display: none"
+          aria-hidden="true"
+        >
           <div class="modal-content">
             <div class="modal-header">
               <h2>Manage moderators</h2>
-              <button type="button" class="modal-close" id="communityModsModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
+              <button
+                type="button"
+                class="modal-close"
+                id="communityModsModalClose"
+                aria-label="Close"
+              >
+                <i class="ri-close-line"></i>
+              </button>
             </div>
-            <p class="community-create-wizard-subtitle">Search users and add/remove moderators for this community.</p>
+            <p class="community-create-wizard-subtitle">
+              Search users and add/remove moderators for this community.
+            </p>
             <label class="community-field">
               <span class="label">Search users</span>
-              <input id="communityModsSearch" class="community-input" type="text" placeholder="Type a username or email…" />
+              <input
+                id="communityModsSearch"
+                class="community-input"
+                type="text"
+                placeholder="Type a username or email…"
+              />
             </label>
             <ul class="community-mods-results" id="communityModsResults"></ul>
             <div class="community-mods-picked-title">Selected moderators</div>
             <ul class="community-mods-picked" id="communityModsPicked"></ul>
             <div class="community-create-modal-actions">
-              <button type="button" class="btn btn-ghost" id="communityModsCancel">Cancel</button>
-              <button type="button" class="btn btn-primary" id="communityModsSave"><i class="ri-save-line"></i> Save</button>
+              <button
+                type="button"
+                class="btn btn-ghost"
+                id="communityModsCancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                id="communityModsSave"
+              >
+                <i class="ri-save-line"></i> Save
+              </button>
             </div>
           </div>
         </div>
@@ -2212,7 +3850,11 @@
             <div class="plant-detail-sensor-body" id="plantDetailSensor"></div>
           </section>
         </div>
-        <div class="about-view about-view--eco-story" id="aboutView" style="display: none">
+        <div
+          class="about-view about-view--eco-story"
+          id="aboutView"
+          style="display: none"
+        >
           <header class="about-nav">
             <a
               href="#"
@@ -2253,7 +3895,11 @@
                 class="about-scrolly-sticky about-scrolly-sticky--eco"
                 id="aboutScrollySticky"
               >
-                <div class="about-scrolly-stage" id="aboutScrollyStage" aria-hidden="true">
+                <div
+                  class="about-scrolly-stage"
+                  id="aboutScrollyStage"
+                  aria-hidden="true"
+                >
                   <div class="about-scrolly-atmosphere"></div>
                   <div class="about-scrolly-fallback-bg"></div>
                   <canvas id="aboutSeqCanvas" aria-hidden="true"></canvas>
@@ -2265,7 +3911,8 @@
                   <h1 class="about-hero-title about-dew-display-title">DEW</h1>
                   <p class="about-hero-tagline">Digital Eco Warden</p>
                   <p class="about-hero-sub about-dew-hero-sub">
-                    From a quiet plant to a connected ecosystem—scroll to follow the story.
+                    From a quiet plant to a connected ecosystem—scroll to follow
+                    the story.
                   </p>
                   <button
                     type="button"
@@ -2278,26 +3925,38 @@
                 <div class="about-story-phases" aria-live="polite">
                   <div class="about-story-phase" data-story-phase="0">
                     <span class="about-story-kicker">Phase 1</span>
-                    <p class="about-story-line">Idle plant — life in the soil.</p>
+                    <p class="about-story-line">
+                      Idle plant — life in the soil.
+                    </p>
                   </div>
                   <div class="about-story-phase" data-story-phase="1">
                     <span class="about-story-kicker">Phase 2</span>
-                    <p class="about-story-line">Sensors wake — moisture, light, temperature.</p>
+                    <p class="about-story-line">
+                      Sensors wake — moisture, light, temperature.
+                    </p>
                   </div>
                   <div class="about-story-phase" data-story-phase="2">
                     <span class="about-story-kicker">Phase 3</span>
-                    <p class="about-story-line">Data flows to your cloud dashboard.</p>
+                    <p class="about-story-line">
+                      Data flows to your cloud dashboard.
+                    </p>
                   </div>
                   <div class="about-story-phase" data-story-phase="3">
                     <span class="about-story-kicker">Phase 4</span>
-                    <p class="about-story-line">Desk bot stirs — face on OLED, voice of the garden.</p>
+                    <p class="about-story-line">
+                      Desk bot stirs — face on OLED, voice of the garden.
+                    </p>
                   </div>
                   <div class="about-story-phase" data-story-phase="4">
                     <span class="about-story-kicker">Phase 5</span>
-                    <p class="about-story-line">One ecosystem — plant, bot, and app together.</p>
+                    <p class="about-story-line">
+                      One ecosystem — plant, bot, and app together.
+                    </p>
                   </div>
                 </div>
-                <p class="about-scrolly-hint" aria-hidden="true">Scroll to explore</p>
+                <p class="about-scrolly-hint" aria-hidden="true">
+                  Scroll to explore
+                </p>
                 <div
                   class="about-scrolly-progress"
                   id="aboutScrollyProgress"
@@ -2313,9 +3972,12 @@
             </div>
           </section>
           <section class="about-dew-philosophy about-reveal">
-            <p class="about-dew-philosophy-quote">Plants were always talking. Technology just learned the language.</p>
+            <p class="about-dew-philosophy-quote">
+              Plants were always talking. Technology just learned the language.
+            </p>
             <p class="about-dew-philosophy-sub">
-              DEW connects soil, sensors, and people—calmly, clearly, without noise.
+              DEW connects soil, sensors, and people—calmly, clearly, without
+              noise.
             </p>
           </section>
           <section class="about-stats about-reveal">
@@ -2334,7 +3996,9 @@
               </div>
             </div>
           </section>
-          <section class="about-block about-block--dark about-split about-reveal">
+          <section
+            class="about-block about-block--dark about-split about-reveal"
+          >
             <div class="about-split-visual" aria-hidden="true"></div>
             <div class="about-split-content">
               <div class="about-block-inner">
@@ -2349,7 +4013,9 @@
               </div>
             </div>
           </section>
-          <section class="about-block about-split about-split--why about-reveal">
+          <section
+            class="about-block about-split about-split--why about-reveal"
+          >
             <div class="about-split-visual" aria-hidden="true"></div>
             <div class="about-split-content">
               <div class="about-block-inner">
@@ -2386,8 +4052,8 @@
               <h2 class="about-block-title">The System</h2>
               <p class="about-block-text about-block-lead">
                 Plant Bot senses the soil. The web app makes sense of the data.
-                Desk Bot gives your space a face and a voice—three parts, one DEW
-                ecosystem.
+                Desk Bot gives your space a face and a voice—three parts, one
+                DEW ecosystem.
               </p>
               <div class="about-spec-grid about-spec-grid--3">
                 <article class="about-spec-card about-reveal">
@@ -2396,7 +4062,12 @@
                     aria-hidden="true"
                     data-component="plant-bot"
                   >
-                    <img loading="lazy" decoding="async" src="/images/about%20us/hardware.jpg" alt="" />
+                    <img
+                      loading="lazy"
+                      decoding="async"
+                      src="/images/about%20us/hardware.jpg"
+                      alt=""
+                    />
                   </div>
                   <div class="about-spec-card-body">
                     <span class="about-spec-card-label">In the pot</span>
@@ -2413,14 +4084,19 @@
                     aria-hidden="true"
                     data-component="dashboard"
                   >
-                    <img loading="lazy" decoding="async" src="/images/about%20us/dashboard.jpg" alt="" />
+                    <img
+                      loading="lazy"
+                      decoding="async"
+                      src="/images/about%20us/dashboard.jpg"
+                      alt=""
+                    />
                   </div>
                   <div class="about-spec-card-body">
                     <span class="about-spec-card-label">In the browser</span>
                     <h3 class="about-spec-card-title">Web dashboard</h3>
                     <p class="about-spec-card-text">
-                      Live charts, history, alerts, and plant context in one calm
-                      control surface.
+                      Live charts, history, alerts, and plant context in one
+                      calm control surface.
                     </p>
                   </div>
                 </article>
@@ -2430,7 +4106,12 @@
                     aria-hidden="true"
                     data-component="desk-bot"
                   >
-                    <img loading="lazy" decoding="async" src="/images/anime%20icons/real-time%20iot%20sync.png" alt="" />
+                    <img
+                      loading="lazy"
+                      decoding="async"
+                      src="/images/anime%20icons/real-time%20iot%20sync.png"
+                      alt=""
+                    />
                   </div>
                   <div class="about-spec-card-body">
                     <span class="about-spec-card-label">On your desk</span>
@@ -2459,7 +4140,12 @@
                     aria-hidden="true"
                     data-roadmap="community"
                   >
-                    <img loading="lazy" decoding="async" src="/images/about%20us/dew%20community.jpg" alt="" />
+                    <img
+                      loading="lazy"
+                      decoding="async"
+                      src="/images/about%20us/dew%20community.jpg"
+                      alt=""
+                    />
                   </div>
                   <div class="about-roadmap-card-body">
                     <span class="about-roadmap-card-label">Coming soon</span>
@@ -2521,7 +4207,12 @@
                     aria-hidden="true"
                     data-roadmap="mobile"
                   >
-                    <img loading="lazy" decoding="async" src="/images/about%20us/mobile%20app.jpg" alt="" />
+                    <img
+                      loading="lazy"
+                      decoding="async"
+                      src="/images/about%20us/mobile%20app.jpg"
+                      alt=""
+                    />
                   </div>
                   <div class="about-roadmap-card-body">
                     <span class="about-roadmap-card-label">Coming soon</span>
@@ -2547,7 +4238,12 @@
                     aria-hidden="true"
                     data-placeholder="components"
                   >
-                    <img loading="lazy" decoding="async" src="/images/about%20us/components.jpg" alt="" />
+                    <img
+                      loading="lazy"
+                      decoding="async"
+                      src="/images/about%20us/components.jpg"
+                      alt=""
+                    />
                   </div>
                   <div class="about-facility-body">
                     <span class="about-facility-label">Hardware & data</span>
@@ -2605,7 +4301,9 @@
           </section>
           <section class="about-dew-story-cta about-reveal">
             <div class="about-dew-story-cta-inner">
-              <h2 class="about-dew-story-cta-title">Bring your plants to life</h2>
+              <h2 class="about-dew-story-cta-title">
+                Bring your plants to life
+              </h2>
               <p class="about-dew-story-cta-sub">
                 Plant Bot, Desk Bot, and the DEW dashboard—one loop from soil to
                 signal.
@@ -2751,20 +4449,45 @@
           >
             <i class="ri-close-line"></i>
           </button>
-          <div class="community-post-media-lightbox-backdrop" id="communityPostMediaLightboxBackdrop"></div>
+          <div
+            class="community-post-media-lightbox-backdrop"
+            id="communityPostMediaLightboxBackdrop"
+          ></div>
           <div class="community-post-media-lightbox-content">
-            <button type="button" class="community-post-media-lightbox-nav" id="communityPostMediaPrevBtn" aria-label="Previous media">
+            <button
+              type="button"
+              class="community-post-media-lightbox-nav"
+              id="communityPostMediaPrevBtn"
+              aria-label="Previous media"
+            >
               <i class="ri-arrow-left-s-line"></i>
             </button>
             <div class="community-post-media-lightbox-frame">
-              <img id="communityPostMediaLightboxImg" src="" alt="Selected media" style="display: none" />
-              <video id="communityPostMediaLightboxVideo" controls style="display: none"></video>
+              <img
+                id="communityPostMediaLightboxImg"
+                src=""
+                alt="Selected media"
+                style="display: none"
+              />
+              <video
+                id="communityPostMediaLightboxVideo"
+                controls
+                style="display: none"
+              ></video>
             </div>
-            <button type="button" class="community-post-media-lightbox-nav" id="communityPostMediaNextBtn" aria-label="Next media">
+            <button
+              type="button"
+              class="community-post-media-lightbox-nav"
+              id="communityPostMediaNextBtn"
+              aria-label="Next media"
+            >
               <i class="ri-arrow-right-s-line"></i>
             </button>
           </div>
-          <div class="community-post-media-lightbox-thumbs" id="communityPostMediaLightboxThumbs"></div>
+          <div
+            class="community-post-media-lightbox-thumbs"
+            id="communityPostMediaLightboxThumbs"
+          ></div>
         </div>
 
         <div
@@ -2784,7 +4507,10 @@
             <i class="ri-close-line"></i>
           </button>
 
-          <div class="community-post-media-picker-backdrop" id="communityPostMediaPickerBackdrop"></div>
+          <div
+            class="community-post-media-picker-backdrop"
+            id="communityPostMediaPickerBackdrop"
+          ></div>
 
           <div class="community-post-media-picker-content">
             <div class="community-post-media-picker-main">
@@ -2797,9 +4523,21 @@
                 <i class="ri-arrow-left-s-line"></i>
               </button>
 
-              <div class="community-post-media-picker-frame" id="communityPostMediaPickerMainFrame">
-                <img id="communityPostMediaPickerMainImg" src="" alt="" style="display: none" />
-                <video id="communityPostMediaPickerMainVideo" controls style="display: none"></video>
+              <div
+                class="community-post-media-picker-frame"
+                id="communityPostMediaPickerMainFrame"
+              >
+                <img
+                  id="communityPostMediaPickerMainImg"
+                  src=""
+                  alt=""
+                  style="display: none"
+                />
+                <video
+                  id="communityPostMediaPickerMainVideo"
+                  controls
+                  style="display: none"
+                ></video>
               </div>
 
               <button
@@ -2812,10 +4550,17 @@
               </button>
             </div>
 
-            <div class="community-post-media-picker-thumbs" id="communityPostMediaPickerThumbs"></div>
+            <div
+              class="community-post-media-picker-thumbs"
+              id="communityPostMediaPickerThumbs"
+            ></div>
 
             <div class="community-post-media-picker-actions">
-              <button type="button" class="btn btn-ghost btn-sm" id="communityPostMediaPickerRemove">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                id="communityPostMediaPickerRemove"
+              >
                 <i class="ri-delete-bin-line"></i> Remove
               </button>
             </div>
@@ -2833,7 +4578,11 @@
       aria-label="Post details"
       style="display: none"
     >
-      <div class="community-post-detail-backdrop" id="communityPostDetailBackdrop" aria-hidden="true"></div>
+      <div
+        class="community-post-detail-backdrop"
+        id="communityPostDetailBackdrop"
+        aria-hidden="true"
+      ></div>
       <div class="community-post-detail-panel" role="document">
         <button
           type="button"
@@ -2846,23 +4595,62 @@
 
         <div class="community-post-detail-header">
           <div class="community-post-detail-header-left">
-            <div class="community-post-detail-title" id="communityPostDetailTitle">Post title</div>
-            <div class="community-post-detail-meta" id="communityPostDetailMeta">u/author • time</div>
+            <div
+              class="community-post-detail-title"
+              id="communityPostDetailTitle"
+            >
+              Post title
+            </div>
+            <div
+              class="community-post-detail-meta"
+              id="communityPostDetailMeta"
+            >
+              u/author • time
+            </div>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm" id="communityPostDetailDeleteBtn" style="display:none">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            id="communityPostDetailDeleteBtn"
+            style="display: none"
+          >
             <i class="ri-delete-bin-line"></i> Delete
           </button>
         </div>
 
-        <div class="community-post-detail-media" id="communityPostDetailMedia"></div>
+        <div
+          class="community-post-detail-media"
+          id="communityPostDetailMedia"
+        ></div>
 
         <div class="community-post-detail-votes">
-          <div class="community-post-detail-votes-pill" role="group" aria-label="Post score">
-            <button type="button" class="community-vote-btn" id="communityPostDetailVoteUpBtn" data-vote="up" aria-label="Upvote">
+          <div
+            class="community-post-detail-votes-pill"
+            role="group"
+            aria-label="Post score"
+          >
+            <button
+              type="button"
+              class="community-vote-btn"
+              id="communityPostDetailVoteUpBtn"
+              data-vote="up"
+              aria-label="Upvote"
+            >
               <i class="ri-arrow-up-s-line"></i>
             </button>
-            <div class="community-post-detail-score" id="communityPostDetailScore">0</div>
-            <button type="button" class="community-vote-btn" id="communityPostDetailVoteDownBtn" data-vote="down" aria-label="Downvote">
+            <div
+              class="community-post-detail-score"
+              id="communityPostDetailScore"
+            >
+              0
+            </div>
+            <button
+              type="button"
+              class="community-vote-btn"
+              id="communityPostDetailVoteDownBtn"
+              data-vote="down"
+              aria-label="Downvote"
+            >
               <i class="ri-arrow-down-s-line"></i>
             </button>
           </div>
@@ -2871,34 +4659,155 @@
         <div class="community-post-detail-comments">
           <div class="community-comments-section-head">
             <h3 class="community-comments-title">Comments</h3>
-            <span class="community-comments-count-pill" id="communityPostCommentsCountPill" hidden></span>
+            <span
+              class="community-comments-count-pill"
+              id="communityPostCommentsCountPill"
+              hidden
+            ></span>
           </div>
           <div class="community-comments-toolbar">
-            <label class="community-comments-sort-label" for="communityCommentsSort">Sort by</label>
-            <select id="communityCommentsSort" class="community-comments-sort-select" aria-label="Sort comments">
-              <option value="best" selected>Best</option>
-              <option value="new">New</option>
-              <option value="top">Top</option>
-            </select>
+            <div class="community-comments-toolbar-sort">
+              <label
+                class="community-comments-sort-label"
+                for="communityCommentsSort"
+                >Sort by</label
+              >
+              <select
+                id="communityCommentsSort"
+                class="community-comments-sort-select"
+                aria-label="Sort comments"
+              >
+                <option value="best" selected>Best</option>
+                <option value="new">New</option>
+                <option value="top">Top</option>
+              </select>
+            </div>
+            <div class="community-comments-search-wrap">
+              <i class="ri-search-line" aria-hidden="true"></i>
+              <input
+                type="search"
+                id="communityCommentsSearch"
+                class="community-comments-search-input"
+                placeholder="Search Comments"
+                autocomplete="off"
+                aria-label="Search comments"
+              />
+            </div>
           </div>
-          <p class="community-comments-hint">Be respectful. Replies nest under each comment.</p>
-          <div class="community-comment-composer">
-            <div class="community-comment-composer-avatar" id="communityCommentComposerAvatar" aria-hidden="true">?</div>
+          <p class="community-comments-hint">
+            Be respectful. Replies nest under each comment.
+          </p>
+          <div class="community-comment-composer" id="communityCommentComposer">
+            <div
+              class="community-comment-composer-avatar"
+              id="communityCommentComposerAvatar"
+              aria-hidden="true"
+            >
+              ?
+            </div>
             <form id="communityCommentForm" class="community-comment-form">
-              <textarea id="communityCommentBody" class="community-input" placeholder="What are your thoughts?" rows="3"></textarea>
+              <div
+                id="communityCommentFormatRow"
+                class="community-comment-format-row"
+                hidden
+              >
+                <div class="community-comment-format-tools" role="toolbar" aria-label="Formatting">
+                  <button
+                    type="button"
+                    class="community-comment-fmt-btn"
+                    id="communityCommentFmtBold"
+                    title="Bold"
+                    aria-label="Bold"
+                  >
+                    <i class="ri-bold" aria-hidden="true"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="community-comment-fmt-btn"
+                    id="communityCommentFmtItalic"
+                    title="Italic"
+                    aria-label="Italic"
+                  >
+                    <i class="ri-italic" aria-hidden="true"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="community-comment-fmt-btn"
+                    id="communityCommentFmtLink"
+                    title="Insert link"
+                    aria-label="Insert link"
+                  >
+                    <i class="ri-links-line" aria-hidden="true"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="community-comment-fmt-btn"
+                    id="communityCommentAttachBtn"
+                    title="Add image or GIF"
+                    aria-label="Add image or GIF"
+                  >
+                    <i class="ri-image-add-line" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <span class="community-comment-format-hint">Markdown-style: **bold**, *italic*, [label](url), ![](image-url)</span>
+              </div>
+              <textarea
+                id="communityCommentBody"
+                class="community-input"
+                placeholder="Join the conversation"
+                rows="3"
+              ></textarea>
               <input type="hidden" id="communityCommentParentId" value="" />
-              <div class="community-comment-form-actions">
-                <button type="submit" class="btn btn-primary btn-sm" id="communityCommentSubmitBtn">
+              <input
+                type="file"
+                id="communityCommentMediaInput"
+                accept="image/*,.gif"
+                hidden
+              />
+              <div class="community-comment-form-footer">
+                <button
+                  type="button"
+                  class="community-comment-more-btn"
+                  id="communityCommentToggleFormat"
+                  title="Show formatting options"
+                  aria-expanded="false"
+                  aria-controls="communityCommentFormatRow"
+                >
+                  <span class="community-comment-more-aa" aria-hidden="true">Aa</span>
+                  <span class="visually-hidden">Formatting</span>
+                </button>
+                <div class="community-comment-form-footer-spacer"></div>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm community-comment-cancel-btn"
+                  id="communityCommentCancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-sm"
+                  id="communityCommentSubmitBtn"
+                >
                   <i class="ri-chat-smile-3-line"></i> Comment
                 </button>
               </div>
             </form>
           </div>
-          <div class="community-post-comments-empty" id="communityPostCommentsEmpty" style="display:none">
+          <div
+            class="community-post-comments-empty"
+            id="communityPostCommentsEmpty"
+            style="display: none"
+          >
             <p class="community-post-comments-empty-title">No comments yet</p>
-            <p class="community-post-comments-empty-sub">Start the thread—your comment will show here for everyone.</p>
+            <p class="community-post-comments-empty-sub">
+              Start the thread—your comment will show here for everyone.
+            </p>
           </div>
-          <ul class="community-post-comments-list" id="communityPostCommentsList"></ul>
+          <ul
+            class="community-post-comments-list"
+            id="communityPostCommentsList"
+          ></ul>
         </div>
       </div>
     </div>
@@ -2907,7 +4816,7 @@
     <script type="module" src="/demo-mode-bootstrap.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/app-shell.js"></script>
-    <script type="module" src="/profile.js?v=comments-ui-8"></script>
+    <script type="module" src="/profile.js?v=comments-ui-9"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

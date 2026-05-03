@@ -5841,6 +5841,55 @@ app.post('/api/upload/community-post-media', uploadLarge.single('file'), async (
   }
 });
 
+/** Attach images/GIFs to comments (same buckets as posts; Storage locked to service role). */
+app.post('/api/upload/comment-media', uploadLarge.single('file'), async (req, res) => {
+  try {
+    const uid = await requireFirebaseUser(req);
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase not configured' });
+    const postId = String(req.body.postId || '').trim();
+    const slug = String(req.body.communitySlug || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '');
+    if (!postId || !slug) return res.status(400).json({ error: 'postId and communitySlug required' });
+    if (!(await canPostToCommunity(slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+    const { data: post, error: pErr } = await supabaseAdmin.from('posts').select('id,community_id').eq('id', postId).single();
+    if (pErr || !post) return res.status(404).json({ error: 'Post not found' });
+    const { data: comm, error: cErr } = await supabaseAdmin.from('communities').select('slug').eq('id', post.community_id).single();
+    if (cErr || !comm || String(comm.slug || '').toLowerCase() !== slug) return res.status(400).json({ error: 'Community mismatch' });
+    const file = req.file;
+    if (!file || !file.buffer) return res.status(400).json({ error: 'file required' });
+    const orig = String(req.body.originalName || file.originalname || 'media');
+    const safeBase = orig.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-\.]/g, '').slice(0, 120) || 'media';
+    let ext = String(req.body.ext || path.extname(safeBase).slice(1) || 'bin')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '') || 'bin';
+    if (ext === 'jpeg') ext = 'jpg';
+    const baseNoExt = safeBase.replace(/\.[^.]+$/, '');
+    const uq = String(uid).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 12) || 'user';
+    const storagePath = `${slug}/comments/${postId}/${Date.now()}_${uq}_${baseNoExt}.${ext}`;
+    const buckets = ['community-posts', 'community-assets'];
+    let lastErr = null;
+    for (const bucket of buckets) {
+      const { error: upErr } = await supabaseAdmin.storage.from(bucket).upload(storagePath, file.buffer, {
+        contentType: file.mimetype || 'application/octet-stream',
+        upsert: false,
+        cacheControl: '3600',
+      });
+      if (!upErr) {
+        const { data: urlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(storagePath);
+        return res.json({ ok: true, url: urlData?.publicUrl || null });
+      }
+      lastErr = upErr;
+    }
+    return res.status(500).json({ error: lastErr?.message || 'Upload failed for all buckets' });
+  } catch (e) {
+    const msg = e?.message || String(e);
+    if (/bearer|token|Unauthorized/i.test(msg)) return res.status(401).json({ error: 'Unauthorized' });
+    res.status(500).json({ error: msg });
+  }
+});
+
 // --- API: Update community (banner, logo, description) – admin/creator only ---
 app.patch('/api/communities/:slug', upload.fields([{ name: 'banner', maxCount: 1 }, { name: 'logo', maxCount: 1 }]), async (req, res) => {
   const slug = (req.params.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');

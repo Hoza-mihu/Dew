@@ -11,6 +11,7 @@
 -- Also run after deploying server routes:
 --   POST /api/upload/avatar
 --   POST /api/upload/community-post-media
+--   POST /api/upload/comment-media
 -- so the browser no longer uploads directly to Storage.
 --
 -- STORAGE: Restrictive policies block anon/authenticated INSERT/UPDATE/DELETE
@@ -102,6 +103,7 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- 3) Storage: block client writes to sensitive buckets (service role bypasses)
 -- ---------------------------------------------------------------------------
+-- Shortcut: to apply only this section, run storage_sensitive_buckets_lockdown.sql
 -- Drop old permissive policies if you named them in Dashboard (adjust names):
 -- drop policy if exists "Allow public uploads" on storage.objects;
 
