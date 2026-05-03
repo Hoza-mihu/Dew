@@ -4519,10 +4519,10 @@ async function handleCommunityPostSubmit(e) {
       if (!file) continue;
 
       const kind = item?.kind || (String(file?.type || "").startsWith("video/") ? "video" : String(file?.type || "").startsWith("audio/") ? "audio" : "image");
-      const mime = String(file?.type || "");
-      if (kind === "video" && !mime.startsWith("video/")) continue;
-      if (kind === "audio" && !mime.startsWith("audio/")) continue;
-      if (kind === "image" && !mime.startsWith("image/")) continue;
+      const fileMime = String(file?.type || "");
+      if (kind === "video" && !fileMime.startsWith("video/")) continue;
+      if (kind === "audio" && !fileMime.startsWith("audio/")) continue;
+      if (kind === "image" && !fileMime.startsWith("image/")) continue;
 
       const baseName = String(file.name || "media");
       const safeBase = baseName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-\.]/g, "");
