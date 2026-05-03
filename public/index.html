@@ -2357,6 +2357,16 @@
             </div>
             <ul class="profile-favourites-list" id="profileFavouritesList"></ul>
           </section>
+          <section class="profile-card" id="profileSavedPostsSection">
+            <div class="profile-card-header">
+              <h2><i class="ri-bookmark-3-line"></i> Saved posts</h2>
+              <span class="profile-favourites-hint">From DEW Community</span>
+            </div>
+            <p class="profile-favourites-intro">
+              Posts you bookmark with <strong>Save</strong> in the ··· menu.
+            </p>
+            <div class="profile-saved-posts-list" id="profileSavedPostsList"></div>
+          </section>
         </div>
         <div class="alerts-view" id="alertsView" style="display: none">
           <section class="top-bar">
@@ -4616,14 +4626,25 @@
               u/author • time
             </div>
           </div>
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            id="communityPostDetailDeleteBtn"
-            style="display: none"
-          >
-            <i class="ri-delete-bin-line"></i> Delete
-          </button>
+          <div class="community-post-detail-header-actions">
+            <button
+              type="button"
+              class="community-post-detail-overflow-btn"
+              id="communityPostDetailOverflowBtn"
+              aria-label="Post options"
+              aria-haspopup="menu"
+            >
+              <i class="ri-more-fill" aria-hidden="true"></i>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              id="communityPostDetailDeleteBtn"
+              style="display: none"
+            >
+              <i class="ri-delete-bin-line"></i> Delete
+            </button>
+          </div>
         </div>
 
         <div class="community-post-detail-body" id="communityPostDetailBody">
@@ -4705,15 +4726,6 @@
             class="community-post-detail-actions-spacer"
             aria-hidden="true"
           ></span>
-          <button
-            type="button"
-            class="community-post-detail-bar-btn community-post-detail-bar-btn--report"
-            id="communityPostDetailReportBtn"
-            aria-label="Report post"
-          >
-            <i class="ri-flag-line" aria-hidden="true"></i>
-            <span>Report</span>
-          </button>
         </div>
 
         <div
@@ -4876,11 +4888,69 @@
       </div>
     </div>
 
+    <div
+      id="communityPostOverflowBackdrop"
+      class="community-post-overflow-backdrop"
+      style="display: none"
+      aria-hidden="true"
+    ></div>
+    <div
+      id="communityPostOverflowMenu"
+      class="community-post-overflow-menu"
+      style="display: none"
+      role="menu"
+      aria-label="Post options"
+    >
+      <button type="button" class="community-post-overflow-item" data-overflow-action="follow" role="menuitem">
+        <i class="ri-notification-3-line" aria-hidden="true"></i>
+        <span data-overflow-follow-label>Follow post</span>
+      </button>
+      <button type="button" class="community-post-overflow-item" data-overflow-action="save" role="menuitem">
+        <i class="ri-bookmark-line" aria-hidden="true"></i>
+        <span data-overflow-save-label>Save</span>
+      </button>
+      <button type="button" class="community-post-overflow-item" data-overflow-action="hide" role="menuitem">
+        <i class="ri-eye-off-line" aria-hidden="true"></i>
+        <span>Hide</span>
+      </button>
+      <button type="button" class="community-post-overflow-item" data-overflow-action="report" role="menuitem">
+        <i class="ri-flag-line" aria-hidden="true"></i>
+        <span>Report</span>
+      </button>
+    </div>
+
+    <div
+      id="communityReportPostModal"
+      class="community-report-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="communityReportPostTitle"
+      style="display: none"
+    >
+      <div class="community-report-modal-backdrop" id="communityReportPostBackdrop"></div>
+      <div class="community-report-modal-panel">
+        <h3 id="communityReportPostTitle" class="community-report-modal-title">Report post</h3>
+        <p class="community-report-modal-hint">Tell moderators what is wrong. Your report is confidential.</p>
+        <label class="community-report-label" for="communityReportPostReason">Reason</label>
+        <select id="communityReportPostReason" class="community-report-select">
+          <option value="spam">Spam</option>
+          <option value="abuse">Abuse or harassment</option>
+          <option value="rules">Rule violation</option>
+        </select>
+        <label class="community-report-label" for="communityReportPostDetails">Details (optional)</label>
+        <textarea id="communityReportPostDetails" class="community-report-textarea" rows="3" maxlength="2000" placeholder="Optional context"></textarea>
+        <div class="community-report-modal-actions">
+          <button type="button" class="btn btn-ghost" id="communityReportPostCancel">Cancel</button>
+          <button type="button" class="btn btn-primary" id="communityReportPostSubmit">Submit report</button>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
     <script type="module" src="/demo-mode-bootstrap.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/app-shell.js"></script>
-    <script type="module" src="/profile.js?v=comments-ui-11"></script>
+    <script type="module" src="/profile.js?v=comments-ui-13"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

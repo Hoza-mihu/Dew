@@ -612,6 +612,7 @@ function showView(view) {
   }
   if (v === "alerts") loadAlertsView();
   if (v === "analytics") loadAnalyticsView();
+  if (v === "profile") loadProfileSavedPosts();
   if (v === "plants") loadPlantsCatalog();
   if (v === "myplants") loadMyPlantsUsed();
   if (v === "about") {
@@ -2122,6 +2123,11 @@ let communityPostDetailOpenPostId = null;
 let communityPostDetailCommunitySlug = null;
 /** Post author's Firebase UID when modal is open (OP badge on comments). */
 let communityPostDetailAuthorFirebaseUid = null;
+/** Follow/save toggles for the open post (··· menu). */
+let communityDetailPostInteractions = { following: false, saved: false };
+let communityOverflowContextPostId = null;
+let communityOverflowSourceCard = null;
+let communityReportTargetPostId = null;
 /** Cached flat comment list for search + client-side sort without refetch. */
 let __dewCommentsCache = { postId: null, raw: [] };
 /** Set by bindCommunityPostMediaLightbox — opens viewer above post detail modal. */
@@ -3569,8 +3575,11 @@ async function loadCommunityView() {
         const mv = Number(p.my_vote ?? 0);
         const upActive = mv === 1 ? " community-vote-btn--active-up" : "";
         const downActive = mv === -1 ? " community-vote-btn--active-down" : "";
+        const intr = p.my_interactions || {};
+        const isFollowing = !!intr.following;
+        const isSaved = !!intr.saved;
 
-        return `<article class="community-post" data-post-id="${escapeHtml(p.id)}" data-media-urls="${escapeHtml(
+        return `<article class="community-post" data-post-id="${escapeHtml(p.id)}" data-following="${isFollowing ? "1" : "0"}" data-saved="${isSaved ? "1" : "0"}" data-media-urls="${escapeHtml(
           JSON.stringify(mediaUrls)
         )}" data-media-types="${escapeHtml(JSON.stringify(mediaTypes))}">
           <div class="community-vote">
@@ -3580,7 +3589,7 @@ async function loadCommunityView() {
           </div>
           <div class="community-post-main">
             <div class="community-post-header">
-              <div>
+              <div class="community-post-header-main">
                 <div class="community-post-title">${escapeHtml(p.title || "")}</div>
                 <div class="community-post-meta">
                   <button type="button" class="community-link-btn" data-open-community="${escapeHtml(commSlug)}">r/${escapeHtml(commName)}</button>
@@ -3589,6 +3598,9 @@ async function loadCommunityView() {
                   <button type="button" class="community-post-community" data-open-community="${escapeHtml(commSlug)}">${escapeHtml(commName)}</button>
                 </div>
               </div>
+              <button type="button" class="community-post-overflow-btn" data-post-overflow aria-label="Post options" title="More options">
+                <i class="ri-more-fill" aria-hidden="true"></i>
+              </button>
             </div>
             ${(() => {
               const safeMediaUrls = (mediaUrls || []).filter((u) => !!u);
@@ -3659,7 +3671,6 @@ async function loadCommunityView() {
                 <button type="button" data-action="share"><i class="ri-share-line"></i> Share</button>
               </div>
               <div class="community-post-actions">
-                <button type="button" data-action="report"><i class="ri-flag-line"></i> Report</button>
                 <button
                   type="button"
                   data-action="delete"
@@ -3679,6 +3690,12 @@ async function loadCommunityView() {
       const postId = card.dataset.postId;
       card.querySelectorAll("[data-vote]").forEach((btn) => {
         btn.addEventListener("click", () => { const dir = btn.dataset.vote === "up" ? 1 : -1; voteOnPost(postId, dir, card); });
+      });
+      card.querySelector("[data-post-overflow]")?.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const following = card.dataset.following === "1";
+        const saved = card.dataset.saved === "1";
+        openCommunityPostOverflow(ev.currentTarget, postId, { following, saved, card });
       });
       card.querySelectorAll("[data-open-community]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -3909,7 +3926,20 @@ function bindCommunityPostDetailModal() {
 
   const awardBtn = document.getElementById("communityPostDetailAwardBtn");
   const shareBtn = document.getElementById("communityPostDetailShareBtn");
-  const reportBtn = document.getElementById("communityPostDetailReportBtn");
+  const overflowDetail = document.getElementById("communityPostDetailOverflowBtn");
+  if (overflowDetail && !overflowDetail.__dewDetailOverflowBound) {
+    overflowDetail.__dewDetailOverflowBound = true;
+    overflowDetail.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const pid = communityPostDetailOpenPostId;
+      if (!pid) return;
+      openCommunityPostOverflow(overflowDetail, pid, {
+        following: communityDetailPostInteractions.following,
+        saved: communityDetailPostInteractions.saved,
+        card: null,
+      });
+    });
+  }
   if (awardBtn && !awardBtn.__dewDetailBarBound) {
     awardBtn.__dewDetailBarBound = true;
     awardBtn.addEventListener("click", () => showToast("Awards are coming soon.", "info"));
@@ -3945,10 +3975,6 @@ function bindCommunityPostDetailModal() {
       }
     });
   }
-  if (reportBtn && !reportBtn.__dewDetailBarBound) {
-    reportBtn.__dewDetailBarBound = true;
-    reportBtn.addEventListener("click", () => showToast("Reporting will be available in a future update.", "info"));
-  }
 }
 
 function syncCommunityPostDetailCommentBadge(n) {
@@ -3981,6 +4007,226 @@ function closeCommunityPostDetailModal() {
   communityPostDetailOpenPostId = null;
   communityPostDetailCommunitySlug = null;
   communityPostDetailAuthorFirebaseUid = null;
+}
+
+function syncCommunityOverflowMenuLabels(following, saved) {
+  const fl = document.querySelector("[data-overflow-follow-label]");
+  const sl = document.querySelector("[data-overflow-save-label]");
+  if (fl) fl.textContent = following ? "Following post" : "Follow post";
+  if (sl) sl.textContent = saved ? "Unsave" : "Save";
+}
+
+function closeCommunityPostOverflow() {
+  const menu = document.getElementById("communityPostOverflowMenu");
+  const backdrop = document.getElementById("communityPostOverflowBackdrop");
+  if (menu) menu.style.display = "none";
+  if (backdrop) backdrop.style.display = "none";
+  communityOverflowContextPostId = null;
+  communityOverflowSourceCard = null;
+}
+
+function positionCommunityOverflowMenu(anchor) {
+  const menu = document.getElementById("communityPostOverflowMenu");
+  if (!menu || !anchor) return;
+  const r = anchor.getBoundingClientRect();
+  menu.style.display = "block";
+  const mw = menu.offsetWidth || 220;
+  const mh = menu.offsetHeight || 200;
+  let left = r.right - mw;
+  if (left < 8) left = 8;
+  if (left + mw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - mw - 8);
+  let top = r.bottom + 6;
+  if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function openCommunityPostOverflow(anchor, postId, opts = {}) {
+  if (!anchor || !postId) return;
+  if (!currentProfileUser?.uid) {
+    showToast("Please log in.", "error");
+    return;
+  }
+  bindCommunityPostOverflowOnce();
+  communityOverflowContextPostId = postId;
+  communityOverflowSourceCard = opts.card || null;
+  syncCommunityOverflowMenuLabels(!!opts.following, !!opts.saved);
+  const backdrop = document.getElementById("communityPostOverflowBackdrop");
+  if (backdrop) backdrop.style.display = "block";
+  positionCommunityOverflowMenu(anchor);
+}
+
+function bindCommunityPostOverflowOnce() {
+  if (bindCommunityPostOverflowOnce.__done) return;
+  bindCommunityPostOverflowOnce.__done = true;
+  const menu = document.getElementById("communityPostOverflowMenu");
+  const backdrop = document.getElementById("communityPostOverflowBackdrop");
+  backdrop?.addEventListener("click", () => closeCommunityPostOverflow());
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") closeCommunityPostOverflow();
+  });
+  menu?.addEventListener("click", async (ev) => {
+    const item = ev.target.closest("[data-overflow-action]");
+    if (!item) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const action = item.getAttribute("data-overflow-action");
+    const pid = communityOverflowContextPostId;
+    if (!pid) return;
+    if (action === "report") {
+      closeCommunityPostOverflow();
+      openCommunityReportModal(pid);
+      return;
+    }
+    try {
+      const auth = await authReady;
+      const token = await auth.currentUser?.getIdToken?.();
+      if (!token) throw new Error("Not signed in");
+      if (action === "follow") {
+        const res = await fetch(`/api/posts/${encodeURIComponent(pid)}/follow`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.error || "Failed");
+        const f = !!j.following;
+        if (communityOverflowSourceCard) communityOverflowSourceCard.dataset.following = f ? "1" : "0";
+        if (communityPostDetailOpenPostId === pid) communityDetailPostInteractions.following = f;
+        showToast(f ? "You’ll get updates when there are new comments on this post." : "Unfollowed this post.", "success");
+      } else if (action === "save") {
+        const res = await fetch(`/api/posts/${encodeURIComponent(pid)}/save`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.error || "Failed");
+        const s = !!j.saved;
+        if (communityOverflowSourceCard) communityOverflowSourceCard.dataset.saved = s ? "1" : "0";
+        if (communityPostDetailOpenPostId === pid) communityDetailPostInteractions.saved = s;
+        showToast(s ? "Saved — find it under Profile." : "Removed from saved posts.", "success");
+      } else if (action === "hide") {
+        const res = await fetch(`/api/posts/${encodeURIComponent(pid)}/hide`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.error || "Failed");
+        showToast("Hidden from your feed. Others can still see it.", "success");
+        if (communityPostDetailOpenPostId === pid) closeCommunityPostDetailModal();
+        loadCommunityView();
+      }
+    } catch (e) {
+      showToast(e?.message || "Something went wrong.", "error");
+    }
+    closeCommunityPostOverflow();
+  });
+}
+
+function openCommunityReportModal(postId) {
+  communityReportTargetPostId = postId;
+  bindCommunityReportModalOnce();
+  const modal = document.getElementById("communityReportPostModal");
+  const reason = document.getElementById("communityReportPostReason");
+  const details = document.getElementById("communityReportPostDetails");
+  if (reason) reason.value = "spam";
+  if (details) details.value = "";
+  if (modal) modal.style.display = "block";
+}
+
+function closeCommunityReportModal() {
+  communityReportTargetPostId = null;
+  const modal = document.getElementById("communityReportPostModal");
+  if (modal) modal.style.display = "none";
+}
+
+function bindCommunityReportModalOnce() {
+  if (bindCommunityReportModalOnce.__done) return;
+  bindCommunityReportModalOnce.__done = true;
+  document.getElementById("communityReportPostBackdrop")?.addEventListener("click", () => closeCommunityReportModal());
+  document.getElementById("communityReportPostCancel")?.addEventListener("click", () => closeCommunityReportModal());
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    const modal = document.getElementById("communityReportPostModal");
+    if (modal && modal.style.display !== "none") closeCommunityReportModal();
+  });
+  document.getElementById("communityReportPostSubmit")?.addEventListener("click", async () => {
+    const pid = communityReportTargetPostId;
+    if (!pid) return;
+    const reasonEl = document.getElementById("communityReportPostReason");
+    const detailsEl = document.getElementById("communityReportPostDetails");
+    const reason = String(reasonEl?.value || "spam").trim().toLowerCase();
+    const details = String(detailsEl?.value || "").trim();
+    try {
+      const auth = await authReady;
+      const token = await auth.currentUser?.getIdToken?.();
+      if (!token) throw new Error("Not signed in");
+      const res = await fetch(`/api/posts/${encodeURIComponent(pid)}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason, details }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || "Report failed");
+      showToast("Thanks — moderators will review this report.", "success");
+      closeCommunityReportModal();
+    } catch (e) {
+      showToast(e?.message || "Could not submit report.", "error");
+    }
+  });
+}
+
+async function loadProfileSavedPosts() {
+  const listEl = document.getElementById("profileSavedPostsList");
+  if (!listEl) return;
+  if (!currentProfileUser?.uid) {
+    listEl.innerHTML = "<p class=\"profile-saved-empty\">Sign in to see saved community posts.</p>";
+    return;
+  }
+  try {
+    const auth = await authReady;
+    const token = await auth.currentUser?.getIdToken?.();
+    if (!token) {
+      listEl.innerHTML = "<p class=\"profile-saved-empty\">Sign in to see saved posts.</p>";
+      return;
+    }
+    const res = await fetch("/api/me/saved-posts", { headers: { Authorization: `Bearer ${token}` } });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || "Could not load saved posts");
+    const posts = Array.isArray(j.posts) ? j.posts : [];
+    if (!posts.length) {
+      listEl.innerHTML =
+        "<p class=\"profile-saved-empty\">No saved posts yet. Open a post’s ··· menu and choose <strong>Save</strong>.</p>";
+      return;
+    }
+    listEl.innerHTML = posts
+      .map((p) => {
+        const slug = String(p.community_slug || "").toLowerCase();
+        const title = escapeHtml(String(p.title || "Post").slice(0, 120));
+        return `<button type="button" class="profile-saved-row" data-open-saved-post="${escapeHtml(p.id)}" data-saved-slug="${escapeHtml(slug)}">
+            <span class="profile-saved-title">${title}</span>
+            <span class="profile-saved-meta">r/${escapeHtml(slug || "community")}</span>
+          </button>`;
+      })
+      .join("");
+    listEl.querySelectorAll("[data-open-saved-post]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-open-saved-post");
+        const slug = String(btn.getAttribute("data-saved-slug") || "").toLowerCase();
+        if (slug) {
+          communitySelectedSlug = slug;
+          communityCategoryFilter = slug;
+          const sel = document.getElementById("communityCategoryFilter");
+          if (sel && [...sel.options].some((o) => o.value === slug)) sel.value = slug;
+        }
+        showView("community");
+        setTimeout(() => {
+          if (id) openCommunityPostDetail(id);
+        }, 400);
+      });
+    });
+  } catch (e) {
+    listEl.innerHTML = `<p class="profile-saved-empty">${escapeHtml(e?.message || "Error")}</p>`;
+  }
 }
 
 function computeCanComment(commObj) {
@@ -4263,6 +4509,11 @@ async function openCommunityPostDetail(postId) {
   const slugKey = String(comm.slug || "").toLowerCase();
   communityPostDetailCommunitySlug = slugKey || null;
   communityPostDetailAuthorFirebaseUid = post.author_firebase_uid ? String(post.author_firebase_uid) : null;
+  const myInt = post.my_interactions || {};
+  communityDetailPostInteractions = {
+    following: !!myInt.following,
+    saved: !!myInt.saved,
+  };
 
   const commObj =
     (Array.isArray(communityList) ? communityList.find((c) => String(c.slug || "").toLowerCase() === slugKey) : null) ||

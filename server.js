@@ -424,6 +424,48 @@ function initDbAndMigrateFromJson() {
     );
     db.run('CREATE INDEX IF NOT EXISTS idx_comment_votes_comment_id ON comment_votes(comment_id)');
     db.run('CREATE INDEX IF NOT EXISTS idx_comment_votes_uid ON comment_votes(uid)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS post_follows (
+        post_id TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (post_id, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_post_follows_uid ON post_follows(uid)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS post_saves (
+        post_id TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (post_id, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_post_saves_uid ON post_saves(uid)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS hidden_posts (
+        post_id TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (post_id, uid)
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_hidden_posts_uid ON hidden_posts(uid)');
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS post_reports (
+        id TEXT PRIMARY KEY,
+        post_id TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        details TEXT,
+        created_at TEXT NOT NULL
+      )`
+    );
+    db.run('CREATE INDEX IF NOT EXISTS idx_post_reports_post_id ON post_reports(post_id, created_at DESC)');
   });
 
   // Migration: add status column to weather_alerts if it doesn't exist (existing DBs)
@@ -665,6 +707,33 @@ async function requireFirebaseUidOr401(req, res) {
     return null;
   }
   return String(uid).trim();
+}
+
+/** Per-user post flags stored in SQLite (follow / save / hide). */
+async function getUserPostInteractionState(postId, uid) {
+  if (!uid) return { following: false, saved: false, hidden: false };
+  const pid = String(postId || '').trim();
+  const u = String(uid || '').trim();
+  if (!pid || !u) return { following: false, saved: false, hidden: false };
+  try {
+    const [f, s, h] = await Promise.all([
+      dbGetAsync('SELECT 1 AS ok FROM post_follows WHERE post_id = ? AND uid = ? LIMIT 1', [pid, u]),
+      dbGetAsync('SELECT 1 AS ok FROM post_saves WHERE post_id = ? AND uid = ? LIMIT 1', [pid, u]),
+      dbGetAsync('SELECT 1 AS ok FROM hidden_posts WHERE post_id = ? AND uid = ? LIMIT 1', [pid, u]),
+    ]);
+    return {
+      following: !!(f && f.ok),
+      saved: !!(s && s.ok),
+      hidden: !!(h && h.ok),
+    };
+  } catch (_) {
+    return { following: false, saved: false, hidden: false };
+  }
+}
+
+function isAuthErrorMessage(msg) {
+  const m = String(msg || '').toLowerCase();
+  return m.includes('missing authorization') || m.includes('invalid token') || m.includes('firebase admin not configured');
 }
 
 async function findDeviceIdByDeviceToken(raw) {
@@ -2834,6 +2903,8 @@ app.get('/api/posts/:id', async (req, res) => {
       if (mine && mine.value != null) myVote = Number(mine.value);
     }
 
+    const myInteractions = uid ? await getUserPostInteractionState(postId, uid) : { following: false, saved: false, hidden: false };
+
     res.json({
       post: {
         ...post,
@@ -2841,6 +2912,7 @@ app.get('/api/posts/:id', async (req, res) => {
         score: Number(postVotesRow?.score ?? 0),
         comment_count: Number(commentCountRow?.n ?? 0),
         my_vote: myVote,
+        my_interactions: myInteractions,
       },
       community: {
         id: comm.id,
@@ -3171,6 +3243,181 @@ app.post('/api/posts/:id/vote', async (req, res) => {
   }
 });
 
+async function assertUserCanAccessPost(postId, uid) {
+  if (!supabaseAdmin) throw new Error('Supabase not configured');
+  const pid = String(postId || '').trim();
+  const { data: post, error: postErr } = await supabaseAdmin.from('posts').select('id,community_id').eq('id', pid).single();
+  if (postErr || !post) {
+    const err = new Error('Post not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  const { data: comm, error: commErr } = await supabaseAdmin.from('communities').select('slug').eq('id', post.community_id).single();
+  if (commErr || !comm) {
+    const err = new Error('Community not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!(await canViewCommunity(comm.slug, uid))) {
+    const err = new Error('Not allowed');
+    err.statusCode = 403;
+    throw err;
+  }
+  return { postId: pid, slug: comm.slug };
+}
+
+// Toggle: notify on new comments (stored for future notifications / digest).
+app.post('/api/posts/:id/follow', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  try {
+    const uid = await requireFirebaseUser(req);
+    await assertUserCanAccessPost(postId, uid);
+    const existing = await dbGetAsync('SELECT post_id FROM post_follows WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
+    if (existing) {
+      await dbRunAsync('DELETE FROM post_follows WHERE post_id = ? AND uid = ?', [postId, uid]);
+      return res.json({ ok: true, following: false });
+    }
+    await dbRunAsync('INSERT INTO post_follows (post_id, uid, created_at) VALUES (?, ?, ?)', [
+      postId,
+      uid,
+      new Date().toISOString(),
+    ]);
+    res.json({ ok: true, following: true });
+  } catch (e) {
+    if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
+    const code = Number(e.statusCode);
+    if (code === 403) return res.status(403).json({ error: e.message || 'Not allowed' });
+    if (code === 404) return res.status(404).json({ error: e.message || 'Not found' });
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
+app.post('/api/posts/:id/save', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  try {
+    const uid = await requireFirebaseUser(req);
+    await assertUserCanAccessPost(postId, uid);
+    const existing = await dbGetAsync('SELECT post_id FROM post_saves WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
+    if (existing) {
+      await dbRunAsync('DELETE FROM post_saves WHERE post_id = ? AND uid = ?', [postId, uid]);
+      return res.json({ ok: true, saved: false });
+    }
+    await dbRunAsync('INSERT INTO post_saves (post_id, uid, created_at) VALUES (?, ?, ?)', [
+      postId,
+      uid,
+      new Date().toISOString(),
+    ]);
+    res.json({ ok: true, saved: true });
+  } catch (e) {
+    if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
+    const code = Number(e.statusCode);
+    if (code === 403) return res.status(403).json({ error: e.message || 'Not allowed' });
+    if (code === 404) return res.status(404).json({ error: e.message || 'Not found' });
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
+// Hide from this user's feed only (not deleted for others).
+app.post('/api/posts/:id/hide', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  try {
+    const uid = await requireFirebaseUser(req);
+    await assertUserCanAccessPost(postId, uid);
+    await dbRunAsync('INSERT OR IGNORE INTO hidden_posts (post_id, uid, created_at) VALUES (?, ?, ?)', [
+      postId,
+      uid,
+      new Date().toISOString(),
+    ]);
+    res.json({ ok: true });
+  } catch (e) {
+    if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
+    const code = Number(e.statusCode);
+    if (code === 403) return res.status(403).json({ error: e.message || 'Not allowed' });
+    if (code === 404) return res.status(404).json({ error: e.message || 'Not found' });
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
+app.post('/api/posts/:id/report', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  const reason = String(req.body.reason || '')
+    .trim()
+    .toLowerCase();
+  const allowed = ['spam', 'abuse', 'rules'];
+  if (!allowed.includes(reason)) {
+    return res.status(400).json({ error: 'reason must be spam, abuse, or rules' });
+  }
+  const details = String(req.body.details || '').trim().slice(0, 2000);
+  try {
+    const uid = await requireFirebaseUser(req);
+    await assertUserCanAccessPost(postId, uid);
+    const id = crypto.randomUUID();
+    await dbRunAsync(
+      'INSERT INTO post_reports (id, post_id, uid, reason, details, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, postId, uid, reason, details || null, new Date().toISOString()]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
+    const code = Number(e.statusCode);
+    if (code === 403) return res.status(403).json({ error: e.message || 'Not allowed' });
+    if (code === 404) return res.status(404).json({ error: e.message || 'Not found' });
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
+app.get('/api/me/saved-posts', async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+  try {
+    const uid = await requireFirebaseUser(req);
+    const saves = await dbAllAsync(
+      'SELECT post_id, created_at FROM post_saves WHERE uid = ? ORDER BY created_at DESC LIMIT 80',
+      [uid]
+    );
+    const ids = (saves || []).map((r) => String(r.post_id)).filter(Boolean);
+    if (!ids.length) return res.json({ posts: [] });
+
+    const selectWithMedia =
+      'id,title,body,created_at,author_username,author_firebase_uid,community_id,image_url,media_urls,media_types,tags,score,comment_count';
+    const selectLegacy = 'id,title,body,created_at,author_username,community_id,image_url,media_urls,media_types,tags,score,comment_count';
+
+    let data = null;
+    let lastErr = null;
+    for (const sel of [selectWithMedia, selectLegacy]) {
+      const attempt = await supabaseAdmin.from('posts').select(sel).in('id', ids);
+      if (!attempt.error) {
+        data = attempt.data;
+        break;
+      }
+      lastErr = attempt.error;
+      const msg = String(attempt.error?.message || '').toLowerCase();
+      if (!msg.includes('column') && !msg.includes('schema')) break;
+    }
+    if (lastErr && !data) return res.status(500).json({ error: 'Failed to load posts' });
+
+    const byId = new Map((data || []).map((p) => [String(p.id), p]));
+    const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+
+    const visible = [];
+    for (const p of ordered) {
+      const cid = String(p.community_id || '');
+      if (!cid) continue;
+      const { data: crow } = await supabaseAdmin.from('communities').select('slug,status').eq('id', cid).single();
+      const slug = crow?.slug ? String(crow.slug) : '';
+      if (slug && (await canViewCommunity(slug, uid))) visible.push({ ...p, community_slug: slug });
+    }
+
+    res.json({ posts: visible });
+  } catch (e) {
+    if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
 app.post('/api/comments/:id/vote', async (req, res) => {
   const commentId = String(req.params.id || '').trim();
   const valueRaw = req.body.value ?? req.body.delta ?? null;
@@ -3227,6 +3474,10 @@ app.delete('/api/posts/:id', async (req, res) => {
     await dbRunAsync('DELETE FROM comment_votes WHERE comment_id IN (SELECT id FROM post_comments WHERE post_id = ?)', [postId]);
     await dbRunAsync('DELETE FROM post_comments WHERE post_id = ?', [postId]);
     await dbRunAsync('DELETE FROM post_votes WHERE post_id = ?', [postId]);
+    await dbRunAsync('DELETE FROM post_follows WHERE post_id = ?', [postId]);
+    await dbRunAsync('DELETE FROM post_saves WHERE post_id = ?', [postId]);
+    await dbRunAsync('DELETE FROM hidden_posts WHERE post_id = ?', [postId]);
+    await dbRunAsync('DELETE FROM post_reports WHERE post_id = ?', [postId]);
 
     res.json({ ok: true });
   } catch (e) {
@@ -3277,6 +3528,10 @@ app.delete('/api/communities/:slug/delete', async (req, res) => {
       await dbRunAsync(`DELETE FROM comment_votes WHERE comment_id IN (SELECT id FROM post_comments WHERE post_id IN (${placeholders}))`, postIds);
       await dbRunAsync(`DELETE FROM post_comments WHERE post_id IN (${placeholders})`, postIds);
       await dbRunAsync(`DELETE FROM post_votes WHERE post_id IN (${placeholders})`, postIds);
+      await dbRunAsync(`DELETE FROM post_follows WHERE post_id IN (${placeholders})`, postIds);
+      await dbRunAsync(`DELETE FROM post_saves WHERE post_id IN (${placeholders})`, postIds);
+      await dbRunAsync(`DELETE FROM hidden_posts WHERE post_id IN (${placeholders})`, postIds);
+      await dbRunAsync(`DELETE FROM post_reports WHERE post_id IN (${placeholders})`, postIds);
     }
 
     res.json({ ok: true });
@@ -3458,9 +3713,25 @@ app.get('/api/community-feed/posts', async (req, res) => {
       if (!msg.includes('column') && !msg.includes('schema')) break;
     }
 
-    const postIds = rows.map((r) => String(r.id || '').trim()).filter(Boolean);
+    const hiddenForUser = new Set();
+    const allRowIds = rows.map((r) => String(r.id || '').trim()).filter(Boolean);
+    if (uid && allRowIds.length) {
+      const phH = allRowIds.map(() => '?').join(',');
+      try {
+        const hRows = await dbAllAsync(
+          `SELECT post_id FROM hidden_posts WHERE uid = ? AND post_id IN (${phH})`,
+          [uid, ...allRowIds]
+        );
+        for (const row of hRows || []) hiddenForUser.add(String(row.post_id));
+      } catch (_) {}
+    }
+    const visibleRows = rows.filter((r) => !hiddenForUser.has(String(r.id || '')));
+
+    const postIds = visibleRows.map((r) => String(r.id || '').trim()).filter(Boolean);
     const scoresByPost = new Map();
     const myVoteByPost = new Map();
+    const followingByPost = new Map();
+    const savedByPost = new Map();
     let voteRowsLoaded = false;
     if (postIds.length) {
       const ph = postIds.map(() => '?').join(',');
@@ -3474,25 +3745,31 @@ app.get('/api/community-feed/posts', async (req, res) => {
           scoresByPost.set(String(row.post_id), Number(row.score ?? 0));
         }
         if (uid) {
-          const mineRows = await dbAllAsync(
-            `SELECT post_id, value FROM post_votes WHERE uid = ? AND post_id IN (${ph})`,
-            [uid, ...postIds]
-          );
+          const [mineRows, fRows, sRows] = await Promise.all([
+            dbAllAsync(`SELECT post_id, value FROM post_votes WHERE uid = ? AND post_id IN (${ph})`, [uid, ...postIds]),
+            dbAllAsync(`SELECT post_id FROM post_follows WHERE uid = ? AND post_id IN (${ph})`, [uid, ...postIds]),
+            dbAllAsync(`SELECT post_id FROM post_saves WHERE uid = ? AND post_id IN (${ph})`, [uid, ...postIds]),
+          ]);
           for (const row of mineRows || []) {
             myVoteByPost.set(String(row.post_id), Number(row.value));
           }
+          for (const row of fRows || []) followingByPost.set(String(row.post_id), true);
+          for (const row of sRows || []) savedByPost.set(String(row.post_id), true);
         }
       } catch (_) {
         voteRowsLoaded = false;
       }
     }
 
-    const enriched = rows.map((p) => {
+    const enriched = visibleRows.map((p) => {
       const id = String(p.id || '');
       const baseScore = Number(p.score ?? 0);
       const score = voteRowsLoaded ? (scoresByPost.has(id) ? scoresByPost.get(id) : 0) : baseScore;
       const my_vote = uid && voteRowsLoaded ? myVoteByPost.get(id) || 0 : 0;
-      return { ...p, score, my_vote };
+      const my_interactions = uid
+        ? { following: followingByPost.has(id), saved: savedByPost.has(id) }
+        : { following: false, saved: false };
+      return { ...p, score, my_vote, my_interactions };
     });
 
     res.json({ posts: enriched });

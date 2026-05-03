@@ -5206,6 +5206,47 @@ body.community-page .community-top-nav {
 }
 .profile-favourites-list .btn-remove-favourite:hover { background: rgba(255, 109, 125, 0.15); color: var(--danger); }
 .profile-favourites-list .empty-msg { color: var(--text-soft); font-size: 13px; padding: 12px 0; }
+
+.profile-saved-posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.profile-saved-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+.profile-saved-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(126, 242, 191, 0.15);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.profile-saved-row:hover {
+  border-color: rgba(126, 242, 191, 0.4);
+  background: rgba(126, 242, 191, 0.06);
+}
+.profile-saved-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.profile-saved-meta {
+  font-size: 12px;
+  color: var(--accent-strong);
+  font-weight: 600;
+}
 .profile-privacy-banner {
   display: none;
   margin: 0 0 18px;
@@ -7019,8 +7060,33 @@ body.reduce-motion .card:hover {
 .community-post-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 10px;
+}
+.community-post-header-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.community-post-overflow-btn {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.community-post-overflow-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(126, 242, 191, 0.35);
 }
 .community-post-title {
   font-size: 14px;
@@ -7315,6 +7381,158 @@ body.reduce-motion .card:hover {
   font-size: 13px;
   color: var(--text-soft);
   line-height: 1.45;
+}
+
+.community-post-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.community-post-detail-overflow-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.community-post-detail-overflow-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(126, 242, 191, 0.35);
+}
+
+.community-post-overflow-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10055;
+  background: transparent;
+}
+
+.community-post-overflow-menu {
+  position: fixed;
+  z-index: 10056;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(28, 28, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+.community-post-overflow-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.community-post-overflow-item i {
+  font-size: 18px;
+  opacity: 0.85;
+  width: 1.25rem;
+  text-align: center;
+}
+
+.community-post-overflow-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.community-report-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.community-report-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+}
+
+.community-report-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  padding: 22px 22px 18px;
+  border-radius: 16px;
+  background: rgba(22, 22, 23, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+.community-report-modal-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.community-report-modal-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.community-report-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.community-report-select,
+.community-report-textarea {
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.community-report-textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.community-report-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .community-post-detail-body {
