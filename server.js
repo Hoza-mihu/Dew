@@ -3266,6 +3266,170 @@ async function assertUserCanAccessPost(postId, uid) {
   return { postId: pid, slug: comm.slug };
 }
 
+/** Chunked Supabase fetch — avoids long `.in()` URLs and tries slimmer column sets if the schema differs. */
+async function supabaseFetchPostsByIdsOrdered(ids) {
+  const uniqueOrdered = [];
+  const seen = new Set();
+  for (const raw of ids || []) {
+    const id = String(raw || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    uniqueOrdered.push(id);
+  }
+  if (!uniqueOrdered.length) return [];
+  if (!supabaseAdmin) return [];
+
+  const selectVariants = [
+    'id,title,body,created_at,author_username,author_firebase_uid,community_id,image_url,media_urls,media_types,tags,score,comment_count',
+    'id,title,body,created_at,author_username,community_id,image_url,media_urls,media_types,tags,score,comment_count',
+    'id,title,body,created_at,author_username,community_id,image_url,tags,score,comment_count',
+    'id,title,created_at,author_username,community_id,score,comment_count',
+    'id,title,community_id,created_at',
+  ];
+  const chunkSize = 25;
+  const byId = new Map();
+
+  for (let i = 0; i < uniqueOrdered.length; i += chunkSize) {
+    const chunk = uniqueOrdered.slice(i, i + chunkSize);
+    let rows = null;
+    let lastErrMsg = '';
+    for (const sel of selectVariants) {
+      const attempt = await supabaseAdmin.from('posts').select(sel).in('id', chunk);
+      if (!attempt.error && Array.isArray(attempt.data)) {
+        rows = attempt.data;
+        break;
+      }
+      lastErrMsg = String(attempt.error?.message || attempt.error || '');
+    }
+    if (!rows) {
+      throw new Error(lastErrMsg || 'Could not load posts from database');
+    }
+    for (const row of rows) {
+      byId.set(String(row.id), row);
+    }
+  }
+
+  return uniqueOrdered.map((id) => byId.get(id)).filter(Boolean);
+}
+
+async function mergeSavedPostIdList(uid) {
+  const u = String(uid || '').trim();
+  if (!u) return [];
+  let fromSql = [];
+  try {
+    fromSql = await dbAllAsync(
+      'SELECT post_id, created_at FROM post_saves WHERE uid = ? ORDER BY created_at DESC LIMIT 100',
+      [u]
+    );
+  } catch (_) {
+    fromSql = [];
+  }
+  fromSql = fromSql || [];
+  let fromPg = [];
+  if (supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from('user_saved_posts')
+      .select('post_id, created_at')
+      .eq('uid', u)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (!error && Array.isArray(data)) fromPg = data;
+  }
+  const map = new Map();
+  for (const r of fromSql) {
+    const id = String(r.post_id || '').trim();
+    if (!id) continue;
+    map.set(id, String(r.created_at || ''));
+  }
+  for (const r of fromPg) {
+    const id = String(r.post_id || '').trim();
+    if (!id) continue;
+    const t = String(r.created_at || '');
+    const prev = map.get(id);
+    if (!prev || t > prev) map.set(id, t);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => String(b[1]).localeCompare(String(a[1])))
+    .slice(0, 80)
+    .map(([id]) => id);
+}
+
+async function mergeHiddenPostIdList(uid) {
+  const u = String(uid || '').trim();
+  if (!u) return [];
+  let fromSql = [];
+  try {
+    fromSql = await dbAllAsync(
+      'SELECT post_id, created_at FROM hidden_posts WHERE uid = ? ORDER BY created_at DESC LIMIT 100',
+      [u]
+    );
+  } catch (_) {
+    fromSql = [];
+  }
+  fromSql = fromSql || [];
+  let fromPg = [];
+  if (supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from('user_hidden_posts')
+      .select('post_id, created_at')
+      .eq('uid', u)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (!error && Array.isArray(data)) fromPg = data;
+  }
+  const map = new Map();
+  for (const r of fromSql) {
+    const id = String(r.post_id || '').trim();
+    if (!id) continue;
+    map.set(id, String(r.created_at || ''));
+  }
+  for (const r of fromPg) {
+    const id = String(r.post_id || '').trim();
+    if (!id) continue;
+    const t = String(r.created_at || '');
+    const prev = map.get(id);
+    if (!prev || t > prev) map.set(id, t);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => String(b[1]).localeCompare(String(a[1])))
+    .slice(0, 80)
+    .map(([id]) => id);
+}
+
+async function mirrorUserSavedPost(uid, postId, saved) {
+  if (!supabaseAdmin) return;
+  const u = String(uid || '').trim();
+  const p = String(postId || '').trim();
+  if (!u || !p) return;
+  try {
+    if (saved) {
+      await supabaseAdmin.from('user_saved_posts').upsert(
+        { uid: u, post_id: p, created_at: new Date().toISOString() },
+        { onConflict: 'uid,post_id' }
+      );
+    } else {
+      await supabaseAdmin.from('user_saved_posts').delete().eq('uid', u).eq('post_id', p);
+    }
+  } catch (_) {}
+}
+
+async function mirrorUserHiddenPost(uid, postId, hidden) {
+  if (!supabaseAdmin) return;
+  const u = String(uid || '').trim();
+  const p = String(postId || '').trim();
+  if (!u || !p) return;
+  try {
+    if (hidden) {
+      await supabaseAdmin.from('user_hidden_posts').upsert(
+        { uid: u, post_id: p, created_at: new Date().toISOString() },
+        { onConflict: 'uid,post_id' }
+      );
+    } else {
+      await supabaseAdmin.from('user_hidden_posts').delete().eq('uid', u).eq('post_id', p);
+    }
+  } catch (_) {}
+}
+
 // Toggle: notify on new comments (stored for future notifications / digest).
 app.post('/api/posts/:id/follow', async (req, res) => {
   const postId = String(req.params.id || '').trim();
@@ -3302,6 +3466,7 @@ app.post('/api/posts/:id/save', async (req, res) => {
     const existing = await dbGetAsync('SELECT post_id FROM post_saves WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
     if (existing) {
       await dbRunAsync('DELETE FROM post_saves WHERE post_id = ? AND uid = ?', [postId, uid]);
+      await mirrorUserSavedPost(uid, postId, false);
       return res.json({ ok: true, saved: false });
     }
     await dbRunAsync('INSERT INTO post_saves (post_id, uid, created_at) VALUES (?, ?, ?)', [
@@ -3309,6 +3474,7 @@ app.post('/api/posts/:id/save', async (req, res) => {
       uid,
       new Date().toISOString(),
     ]);
+    await mirrorUserSavedPost(uid, postId, true);
     res.json({ ok: true, saved: true });
   } catch (e) {
     if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
@@ -3331,6 +3497,7 @@ app.post('/api/posts/:id/hide', async (req, res) => {
       uid,
       new Date().toISOString(),
     ]);
+    await mirrorUserHiddenPost(uid, postId, true);
     res.json({ ok: true });
   } catch (e) {
     if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
@@ -3348,6 +3515,7 @@ app.delete('/api/posts/:id/hide', async (req, res) => {
     const uid = await requireFirebaseUser(req);
     await assertUserCanAccessPost(postId, uid);
     await dbRunAsync('DELETE FROM hidden_posts WHERE post_id = ? AND uid = ?', [postId, uid]);
+    await mirrorUserHiddenPost(uid, postId, false);
     res.json({ ok: true });
   } catch (e) {
     if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
@@ -3391,33 +3559,15 @@ app.get('/api/me/saved-posts', async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
   try {
     const uid = await requireFirebaseUser(req);
-    const saves = await dbAllAsync(
-      'SELECT post_id, created_at FROM post_saves WHERE uid = ? ORDER BY created_at DESC LIMIT 80',
-      [uid]
-    );
-    const ids = (saves || []).map((r) => String(r.post_id)).filter(Boolean);
+    const ids = await mergeSavedPostIdList(uid);
     if (!ids.length) return res.json({ posts: [] });
 
-    const selectWithMedia =
-      'id,title,body,created_at,author_username,author_firebase_uid,community_id,image_url,media_urls,media_types,tags,score,comment_count';
-    const selectLegacy = 'id,title,body,created_at,author_username,community_id,image_url,media_urls,media_types,tags,score,comment_count';
-
-    let data = null;
-    let lastErr = null;
-    for (const sel of [selectWithMedia, selectLegacy]) {
-      const attempt = await supabaseAdmin.from('posts').select(sel).in('id', ids);
-      if (!attempt.error) {
-        data = attempt.data;
-        break;
-      }
-      lastErr = attempt.error;
-      const msg = String(attempt.error?.message || '').toLowerCase();
-      if (!msg.includes('column') && !msg.includes('schema')) break;
+    let ordered;
+    try {
+      ordered = await supabaseFetchPostsByIdsOrdered(ids);
+    } catch (e) {
+      return res.status(500).json({ error: e.message || 'Failed to load posts' });
     }
-    if (lastErr && !data) return res.status(500).json({ error: 'Failed to load posts' });
-
-    const byId = new Map((data || []).map((p) => [String(p.id), p]));
-    const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
 
     const visible = [];
     for (const p of ordered) {
@@ -3439,33 +3589,15 @@ app.get('/api/me/hidden-posts', async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
   try {
     const uid = await requireFirebaseUser(req);
-    const hidden = await dbAllAsync(
-      'SELECT post_id, created_at FROM hidden_posts WHERE uid = ? ORDER BY created_at DESC LIMIT 80',
-      [uid]
-    );
-    const ids = (hidden || []).map((r) => String(r.post_id)).filter(Boolean);
+    const ids = await mergeHiddenPostIdList(uid);
     if (!ids.length) return res.json({ posts: [] });
 
-    const selectWithMedia =
-      'id,title,body,created_at,author_username,author_firebase_uid,community_id,image_url,media_urls,media_types,tags,score,comment_count';
-    const selectLegacy = 'id,title,body,created_at,author_username,community_id,image_url,media_urls,media_types,tags,score,comment_count';
-
-    let data = null;
-    let lastErr = null;
-    for (const sel of [selectWithMedia, selectLegacy]) {
-      const attempt = await supabaseAdmin.from('posts').select(sel).in('id', ids);
-      if (!attempt.error) {
-        data = attempt.data;
-        break;
-      }
-      lastErr = attempt.error;
-      const msg = String(attempt.error?.message || '').toLowerCase();
-      if (!msg.includes('column') && !msg.includes('schema')) break;
+    let ordered;
+    try {
+      ordered = await supabaseFetchPostsByIdsOrdered(ids);
+    } catch (e) {
+      return res.status(500).json({ error: e.message || 'Failed to load posts' });
     }
-    if (lastErr && !data) return res.status(500).json({ error: 'Failed to load posts' });
-
-    const byId = new Map((data || []).map((p) => [String(p.id), p]));
-    const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
 
     const visible = [];
     for (const p of ordered) {
@@ -3543,6 +3675,10 @@ app.delete('/api/posts/:id', async (req, res) => {
     await dbRunAsync('DELETE FROM post_saves WHERE post_id = ?', [postId]);
     await dbRunAsync('DELETE FROM hidden_posts WHERE post_id = ?', [postId]);
     await dbRunAsync('DELETE FROM post_reports WHERE post_id = ?', [postId]);
+    try {
+      await supabaseAdmin.from('user_saved_posts').delete().eq('post_id', postId);
+      await supabaseAdmin.from('user_hidden_posts').delete().eq('post_id', postId);
+    } catch (_) {}
 
     res.json({ ok: true });
   } catch (e) {
@@ -3597,6 +3733,10 @@ app.delete('/api/communities/:slug/delete', async (req, res) => {
       await dbRunAsync(`DELETE FROM post_saves WHERE post_id IN (${placeholders})`, postIds);
       await dbRunAsync(`DELETE FROM hidden_posts WHERE post_id IN (${placeholders})`, postIds);
       await dbRunAsync(`DELETE FROM post_reports WHERE post_id IN (${placeholders})`, postIds);
+      try {
+        await supabaseAdmin.from('user_saved_posts').delete().in('post_id', postIds);
+        await supabaseAdmin.from('user_hidden_posts').delete().in('post_id', postIds);
+      } catch (_) {}
     }
 
     res.json({ ok: true });
