@@ -8131,14 +8131,8 @@ body.reduce-motion .card:hover {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.95);
+  position: relative;
+  overflow: hidden;
   background: linear-gradient(145deg, rgba(126, 242, 191, 0.35), rgba(68, 214, 255, 0.18));
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
@@ -8351,7 +8345,18 @@ body.reduce-motion .card:hover {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  display: inline-flex;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(126, 242, 191, 0.35), rgba(68, 214, 255, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.community-comment-avatar-initials {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
@@ -8359,14 +8364,30 @@ body.reduce-motion .card:hover {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.95);
-  background: linear-gradient(145deg, rgba(126, 242, 191, 0.35), rgba(68, 214, 255, 0.18));
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.community-comment-avatar-img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.community-comment-composer-avatar .community-comment-avatar-initials {
+  font-size: 13px;
 }
 
 .community-comment--reply .community-comment-avatar {
   width: 36px;
   height: 36px;
+}
+
+.community-comment--reply .community-comment-avatar-initials {
   font-size: 11px;
 }
 
@@ -8617,6 +8638,8 @@ body.reduce-motion .card:hover {
   .community-comment-composer-avatar {
     width: 36px;
     height: 36px;
+  }
+  .community-comment-composer-avatar .community-comment-avatar-initials {
     font-size: 12px;
   }
   .community-comment-vote-col {

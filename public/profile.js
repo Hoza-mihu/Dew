@@ -4630,7 +4630,13 @@ function updateCommunityCommentComposerAvatar() {
   const el = document.getElementById("communityCommentComposerAvatar");
   if (!el) return;
   const name = currentProfileUser?.displayName || currentProfileUser?.email || "";
-  el.textContent = getCommentInitials(name || "Guest");
+  const initials = getCommentInitials(name || "Guest");
+  const photoURL = String(currentProfileUser?.photoURL || "").trim();
+  if (photoURL) {
+    el.innerHTML = `<span class="community-comment-avatar-initials">${escapeHtml(initials)}</span><img class="community-comment-avatar-img" src="${escapeHtmlAttr(photoURL)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'" />`;
+  } else {
+    el.innerHTML = `<span class="community-comment-avatar-initials">${escapeHtml(initials)}</span>`;
+  }
 }
 
 async function openCommunityPostDetail(postId) {
@@ -5127,6 +5133,10 @@ function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint
     const score = Number(c.score ?? 0);
     const myVote = Number(c.my_vote ?? 0);
     const initials = getCommentInitials(authorName);
+    const avatarUrl = String(c.author_avatar_url || "").trim();
+    const avatarHtml = avatarUrl
+      ? `<div class="community-comment-avatar" aria-hidden="true"><span class="community-comment-avatar-initials">${escapeHtml(initials)}</span><img class="community-comment-avatar-img" src="${escapeHtmlAttr(avatarUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'" /></div>`
+      : `<div class="community-comment-avatar" aria-hidden="true"><span class="community-comment-avatar-initials">${escapeHtml(initials)}</span></div>`;
 
     const isCommentAuthor = !!(uid && String(c.uid) === String(uid));
     const isCommunityCreator = !!(
@@ -5193,7 +5203,7 @@ function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint
           ${threadGutterHtml}
           <div class="community-comment-right">
             <div class="community-comment-row">
-              <div class="community-comment-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+              ${avatarHtml}
               <div class="community-comment-main">
                 <div class="community-comment-header">
                   <div class="community-comment-meta">

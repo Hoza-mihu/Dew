@@ -2970,15 +2970,19 @@ app.get('/api/posts/:id/comments', async (req, res) => {
         .is('deleted_at', null)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      comments = (rows || []).map((r) => ({
-        id: String(r.id),
-        parent_comment_id: r.parent_comment_id ? String(r.parent_comment_id) : null,
-        post_id: r.post_id,
-        uid: r.author_firebase_uid || null,
-        display_name: r.author_display_name || null,
-        body: r.body,
-        created_at: r.created_at,
-      }));
+      comments = (rows || []).map((r) => {
+        const uid = r.author_firebase_uid || null;
+        return {
+          id: String(r.id),
+          parent_comment_id: r.parent_comment_id ? String(r.parent_comment_id) : null,
+          post_id: r.post_id,
+          uid,
+          display_name: r.author_display_name || null,
+          author_avatar_url: publicAvatarUrlForFirebaseUid(uid),
+          body: r.body,
+          created_at: r.created_at,
+        };
+      });
       // Votes (best-effort; if table not present or RLS blocks, just return zeros)
       const ids = comments.map((c) => String(c.id)).filter(Boolean);
       if (ids.length) {
@@ -3019,7 +3023,10 @@ app.get('/api/posts/:id/comments', async (req, res) => {
          ORDER BY pc.created_at ASC`,
         [postId]
       );
-      comments = sqliteRows || [];
+      comments = (sqliteRows || []).map((row) => ({
+        ...row,
+        author_avatar_url: publicAvatarUrlForFirebaseUid(row.uid),
+      }));
       if (uid) {
         const voted = await dbAllAsync('SELECT comment_id, value FROM comment_votes WHERE uid = ?', [uid]);
         voted.forEach((v) => myVotesByComment.set(String(v.comment_id), Number(v.value)));
@@ -3033,6 +3040,7 @@ app.get('/api/posts/:id/comments', async (req, res) => {
         parent_comment_id: c.parent_comment_id ? String(c.parent_comment_id) : null,
         uid: c.uid || null,
         author_display_name: c.display_name || c.author_display_name || 'Unknown',
+        author_avatar_url: c.author_avatar_url || publicAvatarUrlForFirebaseUid(c.uid) || null,
         body: c.body,
         created_at: c.created_at,
         score: Number(c.score ?? 0),
@@ -3264,6 +3272,18 @@ async function assertUserCanAccessPost(postId, uid) {
     throw err;
   }
   return { postId: pid, slug: comm.slug };
+}
+
+/** Public Storage URL for a Firebase user's avatar (same path as POST /api/upload/avatar). */
+function publicAvatarUrlForFirebaseUid(firebaseUid) {
+  const u = String(firebaseUid || '').trim();
+  if (!u || !supabaseAdmin) return null;
+  try {
+    const { data } = supabaseAdmin.storage.from('avatars').getPublicUrl(`${u}/avatar.jpg`);
+    return data?.publicUrl || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 /** Chunked Supabase fetch — avoids long `.in()` URLs and tries slimmer column sets if the schema differs. */
