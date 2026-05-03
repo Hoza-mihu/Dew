@@ -612,7 +612,10 @@ function showView(view) {
   }
   if (v === "alerts") loadAlertsView();
   if (v === "analytics") loadAnalyticsView();
-  if (v === "profile") loadProfileSavedPosts();
+  if (v === "profile") {
+    loadProfileSavedPosts();
+    loadProfileHiddenPosts();
+  }
   if (v === "plants") loadPlantsCatalog();
   if (v === "myplants") loadMyPlantsUsed();
   if (v === "about") {
@@ -2123,10 +2126,11 @@ let communityPostDetailOpenPostId = null;
 let communityPostDetailCommunitySlug = null;
 /** Post author's Firebase UID when modal is open (OP badge on comments). */
 let communityPostDetailAuthorFirebaseUid = null;
-/** Follow/save toggles for the open post (··· menu). */
-let communityDetailPostInteractions = { following: false, saved: false };
+/** Follow/save/hide toggles for the open post (··· menu). */
+let communityDetailPostInteractions = { following: false, saved: false, hidden: false };
 let communityOverflowContextPostId = null;
 let communityOverflowSourceCard = null;
+let communityOverflowPostHidden = false;
 let communityReportTargetPostId = null;
 /** Cached flat comment list for search + client-side sort without refetch. */
 let __dewCommentsCache = { postId: null, raw: [] };
@@ -3695,7 +3699,7 @@ async function loadCommunityView() {
         ev.stopPropagation();
         const following = card.dataset.following === "1";
         const saved = card.dataset.saved === "1";
-        openCommunityPostOverflow(ev.currentTarget, postId, { following, saved, card });
+        openCommunityPostOverflow(ev.currentTarget, postId, { following, saved, hidden: false, card });
       });
       card.querySelectorAll("[data-open-community]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -3936,6 +3940,7 @@ function bindCommunityPostDetailModal() {
       openCommunityPostOverflow(overflowDetail, pid, {
         following: communityDetailPostInteractions.following,
         saved: communityDetailPostInteractions.saved,
+        hidden: communityDetailPostInteractions.hidden,
         card: null,
       });
     });
@@ -4009,11 +4014,18 @@ function closeCommunityPostDetailModal() {
   communityPostDetailAuthorFirebaseUid = null;
 }
 
-function syncCommunityOverflowMenuLabels(following, saved) {
+function syncCommunityOverflowMenuLabels(following, saved, hidden) {
   const fl = document.querySelector("[data-overflow-follow-label]");
   const sl = document.querySelector("[data-overflow-save-label]");
+  const hl = document.querySelector("[data-overflow-hide-label]");
+  const hi = document.querySelector("[data-overflow-hide-icon]");
   if (fl) fl.textContent = following ? "Following post" : "Follow post";
   if (sl) sl.textContent = saved ? "Unsave" : "Save";
+  if (hl) hl.textContent = hidden ? "Unhide" : "Hide";
+  if (hi) {
+    hi.className = hidden ? "ri-eye-line" : "ri-eye-off-line";
+    hi.setAttribute("aria-hidden", "true");
+  }
 }
 
 function closeCommunityPostOverflow() {
@@ -4023,6 +4035,7 @@ function closeCommunityPostOverflow() {
   if (backdrop) backdrop.style.display = "none";
   communityOverflowContextPostId = null;
   communityOverflowSourceCard = null;
+  communityOverflowPostHidden = false;
 }
 
 function positionCommunityOverflowMenu(anchor) {
@@ -4050,7 +4063,8 @@ function openCommunityPostOverflow(anchor, postId, opts = {}) {
   bindCommunityPostOverflowOnce();
   communityOverflowContextPostId = postId;
   communityOverflowSourceCard = opts.card || null;
-  syncCommunityOverflowMenuLabels(!!opts.following, !!opts.saved);
+  communityOverflowPostHidden = !!opts.hidden;
+  syncCommunityOverflowMenuLabels(!!opts.following, !!opts.saved, communityOverflowPostHidden);
   const backdrop = document.getElementById("communityPostOverflowBackdrop");
   if (backdrop) backdrop.style.display = "block";
   positionCommunityOverflowMenu(anchor);
@@ -4104,16 +4118,34 @@ function bindCommunityPostOverflowOnce() {
         if (communityOverflowSourceCard) communityOverflowSourceCard.dataset.saved = s ? "1" : "0";
         if (communityPostDetailOpenPostId === pid) communityDetailPostInteractions.saved = s;
         showToast(s ? "Saved — find it under Profile." : "Removed from saved posts.", "success");
-      } else if (action === "hide") {
-        const res = await fetch(`/api/posts/${encodeURIComponent(pid)}/hide`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j.error || "Failed");
-        showToast("Hidden from your feed. Others can still see it.", "success");
-        if (communityPostDetailOpenPostId === pid) closeCommunityPostDetailModal();
-        loadCommunityView();
+        refreshProfilePostListsIfVisible();
+      } else if (action === "hide-toggle") {
+        if (communityOverflowPostHidden) {
+          const res = await fetch(`/api/posts/${encodeURIComponent(pid)}/hide`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(j.error || "Failed");
+          communityOverflowPostHidden = false;
+          if (communityPostDetailOpenPostId === pid) communityDetailPostInteractions.hidden = false;
+          showToast("Post is visible in your feed again.", "success");
+          loadCommunityView();
+          refreshProfilePostListsIfVisible();
+        } else {
+          const res = await fetch(`/api/posts/${encodeURIComponent(pid)}/hide`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(j.error || "Failed");
+          communityOverflowPostHidden = true;
+          if (communityPostDetailOpenPostId === pid) communityDetailPostInteractions.hidden = true;
+          showToast("Hidden from your feed. Unhide anytime from Profile → Hidden posts.", "success");
+          if (communityPostDetailOpenPostId === pid) closeCommunityPostDetailModal();
+          loadCommunityView();
+          refreshProfilePostListsIfVisible();
+        }
       }
     } catch (e) {
       showToast(e?.message || "Something went wrong.", "error");
@@ -4175,6 +4207,15 @@ function bindCommunityReportModalOnce() {
   });
 }
 
+function refreshProfilePostListsIfVisible() {
+  try {
+    if (profileView && profileView.style.display === "block") {
+      loadProfileSavedPosts();
+      loadProfileHiddenPosts();
+    }
+  } catch (_) {}
+}
+
 async function loadProfileSavedPosts() {
   const listEl = document.getElementById("profileSavedPostsList");
   if (!listEl) return;
@@ -4202,16 +4243,125 @@ async function loadProfileSavedPosts() {
       .map((p) => {
         const slug = String(p.community_slug || "").toLowerCase();
         const title = escapeHtml(String(p.title || "Post").slice(0, 120));
-        return `<button type="button" class="profile-saved-row" data-open-saved-post="${escapeHtml(p.id)}" data-saved-slug="${escapeHtml(slug)}">
-            <span class="profile-saved-title">${title}</span>
-            <span class="profile-saved-meta">r/${escapeHtml(slug || "community")}</span>
-          </button>`;
+        const pid = escapeHtml(p.id);
+        return `<div class="profile-saved-row-wrap">
+            <button type="button" class="profile-saved-row" data-open-saved-post="${pid}" data-saved-slug="${escapeHtml(slug)}">
+              <span class="profile-saved-title">${title}</span>
+              <span class="profile-saved-meta">r/${escapeHtml(slug || "community")}</span>
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm profile-saved-unsave-btn" data-unsave-post-id="${pid}" title="Remove from saved">Unsave</button>
+          </div>`;
       })
       .join("");
+    listEl.querySelectorAll("[data-unsave-post-id]").forEach((btn) => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const id = btn.getAttribute("data-unsave-post-id");
+        if (!id) return;
+        try {
+          const auth2 = await authReady;
+          const token2 = await auth2.currentUser?.getIdToken?.();
+          if (!token2) throw new Error("Not signed in");
+          const res2 = await fetch(`/api/posts/${encodeURIComponent(id)}/save`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token2}` },
+          });
+          const j2 = await res2.json().catch(() => ({}));
+          if (!res2.ok) throw new Error(j2.error || "Failed");
+          showToast(j2.saved ? "Saved." : "Removed from saved posts.", "success");
+          await loadProfileSavedPosts();
+        } catch (e) {
+          showToast(e?.message || "Could not update.", "error");
+        }
+      });
+    });
     listEl.querySelectorAll("[data-open-saved-post]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-open-saved-post");
         const slug = String(btn.getAttribute("data-saved-slug") || "").toLowerCase();
+        if (slug) {
+          communitySelectedSlug = slug;
+          communityCategoryFilter = slug;
+          const sel = document.getElementById("communityCategoryFilter");
+          if (sel && [...sel.options].some((o) => o.value === slug)) sel.value = slug;
+        }
+        showView("community");
+        setTimeout(() => {
+          if (id) openCommunityPostDetail(id);
+        }, 400);
+      });
+    });
+  } catch (e) {
+    listEl.innerHTML = `<p class="profile-saved-empty">${escapeHtml(e?.message || "Error")}</p>`;
+  }
+}
+
+async function loadProfileHiddenPosts() {
+  const listEl = document.getElementById("profileHiddenPostsList");
+  if (!listEl) return;
+  if (!currentProfileUser?.uid) {
+    listEl.innerHTML = "<p class=\"profile-saved-empty\">Sign in to manage hidden posts.</p>";
+    return;
+  }
+  try {
+    const auth = await authReady;
+    const token = await auth.currentUser?.getIdToken?.();
+    if (!token) {
+      listEl.innerHTML = "<p class=\"profile-saved-empty\">Sign in to see hidden posts.</p>";
+      return;
+    }
+    const res = await fetch("/api/me/hidden-posts", { headers: { Authorization: `Bearer ${token}` } });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || "Could not load hidden posts");
+    const posts = Array.isArray(j.posts) ? j.posts : [];
+    if (!posts.length) {
+      listEl.innerHTML =
+        "<p class=\"profile-saved-empty\">No hidden posts. Use <strong>Hide</strong> in a post’s ··· menu to remove it from your feed.</p>";
+      return;
+    }
+    listEl.innerHTML = posts
+      .map((p) => {
+        const slug = String(p.community_slug || "").toLowerCase();
+        const title = escapeHtml(String(p.title || "Post").slice(0, 120));
+        const pid = escapeHtml(p.id);
+        return `<div class="profile-saved-row-wrap">
+            <button type="button" class="profile-saved-row" data-open-hidden-post="${pid}" data-hidden-slug="${escapeHtml(slug)}">
+              <span class="profile-saved-title">${title}</span>
+              <span class="profile-saved-meta">r/${escapeHtml(slug || "community")}</span>
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm profile-saved-unhide-btn" data-unhide-post-id="${pid}" title="Show in feed again">Unhide</button>
+          </div>`;
+      })
+      .join("");
+    listEl.querySelectorAll("[data-unhide-post-id]").forEach((btn) => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const id = btn.getAttribute("data-unhide-post-id");
+        if (!id) return;
+        try {
+          const auth2 = await authReady;
+          const token2 = await auth2.currentUser?.getIdToken?.();
+          if (!token2) throw new Error("Not signed in");
+          const res2 = await fetch(`/api/posts/${encodeURIComponent(id)}/hide`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token2}` },
+          });
+          const j2 = await res2.json().catch(() => ({}));
+          if (!res2.ok) throw new Error(j2.error || "Failed");
+          showToast("Post is visible in your feed again.", "success");
+          await loadProfileHiddenPosts();
+          if (communityView && communityView.style.display === "block") loadCommunityView();
+        } catch (e) {
+          showToast(e?.message || "Could not unhide.", "error");
+        }
+      });
+    });
+    listEl.querySelectorAll("[data-open-hidden-post]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-open-hidden-post");
+        const slug = String(btn.getAttribute("data-hidden-slug") || "").toLowerCase();
         if (slug) {
           communitySelectedSlug = slug;
           communityCategoryFilter = slug;
@@ -4513,6 +4663,7 @@ async function openCommunityPostDetail(postId) {
   communityDetailPostInteractions = {
     following: !!myInt.following,
     saved: !!myInt.saved,
+    hidden: !!myInt.hidden,
   };
 
   const commObj =

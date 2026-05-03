@@ -3341,6 +3341,23 @@ app.post('/api/posts/:id/hide', async (req, res) => {
   }
 });
 
+app.delete('/api/posts/:id/hide', async (req, res) => {
+  const postId = String(req.params.id || '').trim();
+  if (!postId) return res.status(400).json({ error: 'post id required' });
+  try {
+    const uid = await requireFirebaseUser(req);
+    await assertUserCanAccessPost(postId, uid);
+    await dbRunAsync('DELETE FROM hidden_posts WHERE post_id = ? AND uid = ?', [postId, uid]);
+    res.json({ ok: true });
+  } catch (e) {
+    if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
+    const code = Number(e.statusCode);
+    if (code === 403) return res.status(403).json({ error: e.message || 'Not allowed' });
+    if (code === 404) return res.status(404).json({ error: e.message || 'Not found' });
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
 app.post('/api/posts/:id/report', async (req, res) => {
   const postId = String(req.params.id || '').trim();
   if (!postId) return res.status(400).json({ error: 'post id required' });
@@ -3379,6 +3396,54 @@ app.get('/api/me/saved-posts', async (req, res) => {
       [uid]
     );
     const ids = (saves || []).map((r) => String(r.post_id)).filter(Boolean);
+    if (!ids.length) return res.json({ posts: [] });
+
+    const selectWithMedia =
+      'id,title,body,created_at,author_username,author_firebase_uid,community_id,image_url,media_urls,media_types,tags,score,comment_count';
+    const selectLegacy = 'id,title,body,created_at,author_username,community_id,image_url,media_urls,media_types,tags,score,comment_count';
+
+    let data = null;
+    let lastErr = null;
+    for (const sel of [selectWithMedia, selectLegacy]) {
+      const attempt = await supabaseAdmin.from('posts').select(sel).in('id', ids);
+      if (!attempt.error) {
+        data = attempt.data;
+        break;
+      }
+      lastErr = attempt.error;
+      const msg = String(attempt.error?.message || '').toLowerCase();
+      if (!msg.includes('column') && !msg.includes('schema')) break;
+    }
+    if (lastErr && !data) return res.status(500).json({ error: 'Failed to load posts' });
+
+    const byId = new Map((data || []).map((p) => [String(p.id), p]));
+    const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+
+    const visible = [];
+    for (const p of ordered) {
+      const cid = String(p.community_id || '');
+      if (!cid) continue;
+      const { data: crow } = await supabaseAdmin.from('communities').select('slug,status').eq('id', cid).single();
+      const slug = crow?.slug ? String(crow.slug) : '';
+      if (slug && (await canViewCommunity(slug, uid))) visible.push({ ...p, community_slug: slug });
+    }
+
+    res.json({ posts: visible });
+  } catch (e) {
+    if (isAuthErrorMessage(e.message)) return res.status(401).json({ error: 'Unauthorized' });
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
+app.get('/api/me/hidden-posts', async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+  try {
+    const uid = await requireFirebaseUser(req);
+    const hidden = await dbAllAsync(
+      'SELECT post_id, created_at FROM hidden_posts WHERE uid = ? ORDER BY created_at DESC LIMIT 80',
+      [uid]
+    );
+    const ids = (hidden || []).map((r) => String(r.post_id)).filter(Boolean);
     if (!ids.length) return res.json({ posts: [] });
 
     const selectWithMedia =

@@ -2367,6 +2367,16 @@
             </p>
             <div class="profile-saved-posts-list" id="profileSavedPostsList"></div>
           </section>
+          <section class="profile-card" id="profileHiddenPostsSection">
+            <div class="profile-card-header">
+              <h2><i class="ri-eye-off-line"></i> Hidden posts</h2>
+              <span class="profile-favourites-hint">Only you</span>
+            </div>
+            <p class="profile-favourites-intro">
+              Posts hidden from your feed. <strong>Unhide</strong> to see them in the community again.
+            </p>
+            <div class="profile-hidden-posts-list" id="profileHiddenPostsList"></div>
+          </section>
         </div>
         <div class="alerts-view" id="alertsView" style="display: none">
           <section class="top-bar">
@@ -4909,9 +4919,9 @@
         <i class="ri-bookmark-line" aria-hidden="true"></i>
         <span data-overflow-save-label>Save</span>
       </button>
-      <button type="button" class="community-post-overflow-item" data-overflow-action="hide" role="menuitem">
-        <i class="ri-eye-off-line" aria-hidden="true"></i>
-        <span>Hide</span>
+      <button type="button" class="community-post-overflow-item" data-overflow-action="hide-toggle" role="menuitem">
+        <i class="ri-eye-off-line" aria-hidden="true" data-overflow-hide-icon></i>
+        <span data-overflow-hide-label>Hide</span>
       </button>
       <button type="button" class="community-post-overflow-item" data-overflow-action="report" role="menuitem">
         <i class="ri-flag-line" aria-hidden="true"></i>
@@ -4950,7 +4960,7 @@
     <script type="module" src="/demo-mode-bootstrap.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/app-shell.js"></script>
-    <script type="module" src="/profile.js?v=comments-ui-13"></script>
+    <script type="module" src="/profile.js?v=comments-ui-14"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

@@ -5207,10 +5207,28 @@ body.community-page .community-top-nav {
 .profile-favourites-list .btn-remove-favourite:hover { background: rgba(255, 109, 125, 0.15); color: var(--danger); }
 .profile-favourites-list .empty-msg { color: var(--text-soft); font-size: 13px; padding: 12px 0; }
 
-.profile-saved-posts-list {
+.profile-saved-posts-list,
+.profile-hidden-posts-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.profile-saved-row-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.profile-saved-row-wrap .profile-saved-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.profile-saved-unsave-btn,
+.profile-saved-unhide-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
 }
 .profile-saved-empty {
   margin: 0;
