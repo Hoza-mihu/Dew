@@ -134,48 +134,9 @@ create trigger post_comments_update_count
   for each row execute function public.update_post_comment_count();
 
 -- =============================================================================
--- 4) Minimal RLS (optional; if you keep writes server-only you can skip this)
+-- 4) RLS: enable only — policies removed; run supabase/rls_and_storage_lockdown.sql
+--    in production so anon cannot read/write comments via PostgREST (API uses service role).
 -- =============================================================================
 alter table public.post_comments enable row level security;
 alter table public.comment_votes enable row level security;
-
--- Anyone can read comments (like Instagram/Reddit)
-drop policy if exists "read post_comments" on public.post_comments;
-create policy "read post_comments"
-on public.post_comments for select
-using (true);
-
--- Only authenticated users can insert their own comments
-drop policy if exists "insert own post_comments" on public.post_comments;
-create policy "insert own post_comments"
-on public.post_comments for insert
-with check (auth.uid() = author_id);
-
--- Delete: author can delete their own comment
-drop policy if exists "delete own post_comments" on public.post_comments;
-create policy "delete own post_comments"
-on public.post_comments for delete
-using (auth.uid() = author_id);
-
--- Votes: authenticated users can read and upsert their own vote
-drop policy if exists "read comment_votes" on public.comment_votes;
-create policy "read comment_votes"
-on public.comment_votes for select
-using (true);
-
-drop policy if exists "upsert own comment_votes" on public.comment_votes;
-create policy "upsert own comment_votes"
-on public.comment_votes for insert
-with check (auth.uid() = user_id);
-
-drop policy if exists "update own comment_votes" on public.comment_votes;
-create policy "update own comment_votes"
-on public.comment_votes for update
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
-
-drop policy if exists "delete own comment_votes" on public.comment_votes;
-create policy "delete own comment_votes"
-on public.comment_votes for delete
-using (auth.uid() = user_id);
 

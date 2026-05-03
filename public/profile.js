@@ -2023,6 +2023,8 @@ let communityMutedSlugs = new Set();
 let communityPostDetailOpenPostId = null;
 /** Lowercase slug for the post open in the detail modal (comment delete UI + membership). */
 let communityPostDetailCommunitySlug = null;
+/** Post author's Firebase UID when modal is open (OP badge on comments). */
+let communityPostDetailAuthorFirebaseUid = null;
 let createCommunityWizard = { step: 1, topic: "Indoor Plants", type: "public", mature: false };
 
 function openCommunityCreatePostModal() {
@@ -2580,11 +2582,15 @@ function renderCommunityPanels(allPosts) {
       { once: true }
     );
   }
-  if (quickCreateBtn) quickCreateBtn.onclick = () => {
-    const sel = document.getElementById("communityCategory");
-    if (sel && [...sel.options].some((o) => o.value === slug)) sel.value = slug;
-    openCommunityCreatePostModal();
-  };
+  const canInteract = computeCanComment(comm);
+  if (quickCreateBtn) {
+    quickCreateBtn.style.display = canInteract ? "" : "none";
+    quickCreateBtn.onclick = () => {
+      const sel = document.getElementById("communityCategory");
+      if (sel && [...sel.options].some((o) => o.value === slug)) sel.value = slug;
+      openCommunityCreatePostModal();
+    };
+  }
   const communityPosts = (allPosts || []).filter((p) => (p.category || "").toLowerCase() === slug);
   if (latestEl) {
     const latest = communityPosts.slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 4);
@@ -2738,7 +2744,15 @@ function renderCommunityPanels(allPosts) {
   (async () => {
     if (!highlightsWrap) return;
     try {
-      const res = await fetch(`/api/communities/${encodeURIComponent(slug)}/highlights`);
+      const h = {};
+      try {
+        if (currentProfileUser?.uid) {
+          const auth = await authReady;
+          const t = await auth.currentUser?.getIdToken?.();
+          if (t) h.Authorization = `Bearer ${t}`;
+        }
+      } catch (_) {}
+      const res = await fetch(`/api/communities/${encodeURIComponent(slug)}/highlights`, { headers: h });
       if (!res.ok) throw new Error("not ok");
       const data = await res.json();
       const top = Array.isArray(data?.top) ? data.top : [];
@@ -2973,6 +2987,18 @@ function openEditCommunityModal(slug, comm) {
   modal.dataset.bannerUrl = (comm?.banner_url || "").trim();
   modal.dataset.logoUrl = (comm?.logo_url || "").trim();
   modal.dataset.logoLabel = (comm?.slug || slug || "r").slice(0, 1).toLowerCase();
+  const st = String(comm?.status || "public").toLowerCase();
+  const pubEl = document.getElementById("editCommunityStatusPublic");
+  const privEl = document.getElementById("editCommunityStatusPrivate");
+  if (pubEl && privEl) {
+    if (st === "private" || st === "restricted") {
+      privEl.checked = true;
+      pubEl.checked = false;
+    } else {
+      pubEl.checked = true;
+      privEl.checked = false;
+    }
+  }
   const descEl = document.getElementById("editCommunityDescription");
   if (descEl) descEl.value = comm?.description || "";
   const bannerEl = document.getElementById("editCommunityBanner");
@@ -3023,6 +3049,35 @@ function _slugifyCommunityName(value) {
     .replace(/^-|-$/g, "");
 }
 
+/** Ensure sidebar list includes this slug (e.g. direct link to a private community). */
+async function ensureCommunityInList(slug) {
+  const key = String(slug || "").toLowerCase();
+  if (!key) return null;
+  let comm = communityList.find((c) => String(c.slug || "").toLowerCase() === key);
+  if (comm) return comm;
+  try {
+    const headers = {};
+    if (currentProfileUser?.uid) {
+      const auth = await authReady;
+      const t = await auth.currentUser?.getIdToken?.();
+      if (t) headers.Authorization = `Bearer ${t}`;
+    }
+    const res = await fetch(`/api/communities/${encodeURIComponent(key)}/summary`, { headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.community) return null;
+    const c = data.community;
+    comm = {
+      ...c,
+      members_count: c.members_count ?? c.member_count ?? 0,
+      moderators: Array.isArray(c.moderators) ? c.moderators : [],
+    };
+    communityList = [...communityList, comm];
+    return comm;
+  } catch {
+    return null;
+  }
+}
+
 async function handleEditCommunitySubmit(e) {
   e.preventDefault();
   const modal = document.getElementById("editCommunityModal");
@@ -3046,6 +3101,10 @@ async function handleEditCommunitySubmit(e) {
   const logoEl = document.getElementById("editCommunityLogo");
   const formData = new FormData();
   if (descEl) formData.append("description", descEl.value.trim());
+  const statusRadio = document.querySelector('input[name="editCommunityStatus"]:checked');
+  if (statusRadio && ["public", "private", "restricted"].includes(statusRadio.value)) {
+    formData.append("status", statusRadio.value);
+  }
   if (bannerEl?.files?.[0]) formData.append("banner", bannerEl.files[0]);
   if (logoEl?.files?.[0]) formData.append("logo", logoEl.files[0]);
   try {
@@ -3265,35 +3324,40 @@ async function loadCommunityView() {
     communitySelectedSlug = routeSlug;
     communityCategoryFilter = routeSlug;
   }
+  if (communitySelectedSlug) {
+    const ensured = await ensureCommunityInList(communitySelectedSlug);
+    if (!ensured) {
+      communitySelectedSlug = null;
+      communityCategoryFilter = "all";
+      if (typeof setCommunityRoute === "function") setCommunityRoute(null);
+      const catSel = document.getElementById("communityCategoryFilter");
+      if (catSel) catSel.value = "all";
+      showToast("Community not found or you don't have access.", "error");
+    }
+  }
   try {
-    const supabase = await getSupabaseClient();
     let posts = [];
-    const selectBase = "id,title,body,created_at,author_username,community_id,image_url,tags,score,comment_count";
-    const selectWithMedia = "id,title,body,created_at,author_username,community_id,image_url,media_urls,media_types,tags,score,comment_count";
     let postsData = [];
-    let postsError = null;
-    const trySelect = async (sel) => {
-      const { data, error } = await supabase.from("posts").select(sel).limit(100);
-      return { data, error };
-    };
-
-    const attemptWithMedia = await trySelect(selectWithMedia);
-    if (attemptWithMedia.error) {
-      const msg = String(attemptWithMedia.error?.message || "").toLowerCase();
-      if (msg.includes("media_urls") || msg.includes("media_types") || msg.includes("column")) {
-        const attemptBase = await trySelect(selectBase);
-        postsData = attemptBase.data || [];
-        postsError = attemptBase.error || null;
-      } else {
-        postsData = [];
-        postsError = attemptWithMedia.error;
+    const commFilter =
+      !communityCategoryFilter || communityCategoryFilter === "all" ? "all" : String(communityCategoryFilter).toLowerCase();
+    const headers = {};
+    try {
+      if (currentProfileUser?.uid) {
+        const auth = await authReady;
+        const token = await auth.currentUser?.getIdToken?.();
+        if (token) headers.Authorization = `Bearer ${token}`;
       }
+    } catch (_) {}
+    const feedRes = await fetch(`/api/community-feed/posts?community=${encodeURIComponent(commFilter)}`, { headers });
+    const feedJson = await feedRes.json().catch(() => ({}));
+    if (!feedRes.ok) {
+      showToast(feedJson.error || "Could not load posts.", "error");
+      postsData = [];
     } else {
-      postsData = attemptWithMedia.data || [];
-      postsError = null;
+      postsData = Array.isArray(feedJson.posts) ? feedJson.posts : [];
     }
 
-    if (!postsError && Array.isArray(postsData) && postsData.length > 0) {
+    if (Array.isArray(postsData) && postsData.length > 0) {
       posts = postsData.map((p) => {
         const mediaUrls = Array.isArray(p.media_urls) ? p.media_urls : p.image_url ? [p.image_url] : [];
         const mediaTypes = Array.isArray(p.media_types) ? p.media_types : [];
@@ -3356,7 +3420,23 @@ async function loadCommunityView() {
     renderCommunityRecentList();
     if (!posts.length) {
       feed.innerHTML = "";
-      if (empty) empty.style.display = "block";
+      if (empty) {
+        empty.style.display = "block";
+        const pEl = empty.querySelector("p");
+        const spanEl = empty.querySelector("span");
+        const commForEmpty =
+          communitySelectedSlug && Array.isArray(communityList)
+            ? communityList.find((c) => String(c.slug || "").toLowerCase() === String(communitySelectedSlug).toLowerCase())
+            : null;
+        const st = String(commForEmpty?.status || "public").toLowerCase();
+        if (st !== "public" && !computeCanComment(commForEmpty || {})) {
+          if (pEl) pEl.textContent = "This community is private.";
+          if (spanEl) spanEl.textContent = "Join to view posts, comment, and create new threads.";
+        } else {
+          if (pEl) pEl.textContent = "No posts yet.";
+          if (spanEl) spanEl.textContent = "Be the first to post or try another category.";
+        }
+      }
       return;
     }
     if (empty) empty.style.display = "none";
@@ -3649,7 +3729,7 @@ async function loadCommunityView() {
       } catch (_) {}
     })();
   } catch {
-    if (feed) feed.innerHTML = "<p class=\"plants-list-empty\">Unable to load community posts. Check Supabase config and tables (posts).</p>";
+    if (feed) feed.innerHTML = "<p class=\"plants-list-empty\">Unable to load community posts.</p>";
     if (empty) empty.style.display = "block";
   }
 }
@@ -3696,6 +3776,14 @@ function bindCommunityPostDetailModal() {
 
   closeBtn?.addEventListener("click", close);
   backdrop?.addEventListener("click", close);
+
+  const sortEl = document.getElementById("communityCommentsSort");
+  if (sortEl && !sortEl.__dewSortBound) {
+    sortEl.__dewSortBound = true;
+    sortEl.addEventListener("change", () => {
+      if (communityPostDetailOpenPostId) renderCommunityPostComments(communityPostDetailOpenPostId);
+    });
+  }
 }
 
 function closeCommunityPostDetailModal() {
@@ -3706,12 +3794,19 @@ function closeCommunityPostDetailModal() {
   } catch (_) {}
   communityPostDetailOpenPostId = null;
   communityPostDetailCommunitySlug = null;
+  communityPostDetailAuthorFirebaseUid = null;
 }
 
 function computeCanComment(commObj) {
-  // Comments are open to everyone (like Instagram/Reddit).
-  // We still require login at submit-time (see submit handler).
-  return true;
+  const status = String(commObj?.status || "public").toLowerCase();
+  if (status === "public") return true;
+  const uid = currentProfileUser?.uid;
+  if (!uid) return false;
+  if (commObj?.creator_firebase_uid && String(commObj.creator_firebase_uid) === String(uid)) return true;
+  if (commObj?.joined) return true;
+  const mods = Array.isArray(commObj?.moderators) ? commObj.moderators : [];
+  if (mods.some((m) => String(m?.uid || m || "").trim() === String(uid))) return true;
+  return false;
 }
 
 function safeToDate(iso) {
@@ -3734,6 +3829,49 @@ function getCommentInitials(displayName) {
     return (a + b).toUpperCase().slice(0, 2);
   }
   return s.slice(0, 2).toUpperCase();
+}
+
+/** Relative time for comment meta (Reddit-style). */
+function formatCommentTime(iso) {
+  if (!iso) return "";
+  try {
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return safeToDate(iso);
+    const sec = Math.floor((Date.now() - t) / 1000);
+    if (sec < 45) return "just now";
+    if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)} hr ago`;
+    if (sec < 604800) return `${Math.floor(sec / 86400)} days ago`;
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch (_) {
+    return safeToDate(iso);
+  }
+}
+
+function compareCommentsForSort(a, b, mode) {
+  const sa = Number(a.score ?? 0);
+  const sb = Number(b.score ?? 0);
+  const ta = new Date(a.created_at || 0).getTime();
+  const tb = new Date(b.created_at || 0).getTime();
+  let cmp = 0;
+  if (mode === "new") {
+    cmp = tb - ta;
+  } else if (mode === "top") {
+    if (sb !== sa) cmp = sb - sa;
+    else cmp = tb - ta;
+  } else {
+    if (sb !== sa) cmp = sb - sa;
+    else cmp = tb - ta;
+  }
+  if (cmp !== 0) return cmp;
+  return String(a.id).localeCompare(String(b.id));
+}
+
+function updateCommunityCommentComposerAvatar() {
+  const el = document.getElementById("communityCommentComposerAvatar");
+  if (!el) return;
+  const name = currentProfileUser?.displayName || currentProfileUser?.email || "";
+  el.textContent = getCommentInitials(name || "Guest");
 }
 
 async function openCommunityPostDetail(postId) {
@@ -3761,6 +3899,7 @@ async function openCommunityPostDetail(postId) {
   const comm = data.community || {};
   const slugKey = String(comm.slug || "").toLowerCase();
   communityPostDetailCommunitySlug = slugKey || null;
+  communityPostDetailAuthorFirebaseUid = post.author_firebase_uid ? String(post.author_firebase_uid) : null;
 
   const commObj =
     (Array.isArray(communityList) ? communityList.find((c) => String(c.slug || "").toLowerCase() === slugKey) : null) ||
@@ -3769,6 +3908,10 @@ async function openCommunityPostDetail(postId) {
   commObj.status = comm.status || commObj.status;
   commObj.creator_firebase_uid = comm.creator_firebase_uid || commObj.creator_firebase_uid;
   if (slugKey && !commObj.joined && communityJoinedSlugs.has(slugKey)) {
+    commObj.joined = true;
+  }
+  // Post detail loaded successfully ⇒ server allowed access; treat as joined for private/restricted UX.
+  if (slugKey && currentProfileUser?.uid && String(commObj.status || comm.status || "").toLowerCase() !== "public") {
     commObj.joined = true;
   }
 
@@ -3784,6 +3927,8 @@ async function openCommunityPostDetail(postId) {
   try {
     document.body.style.overflow = "hidden";
   } catch (_) {}
+
+  updateCommunityCommentComposerAvatar();
 
   // Header
   const titleEl = document.getElementById("communityPostDetailTitle");
@@ -3929,6 +4074,26 @@ async function openCommunityPostDetail(postId) {
   if (listEl && !listEl.__dewDelegated) {
     listEl.__dewDelegated = true;
     listEl.addEventListener("click", async (ev) => {
+      const collapseBtn = ev.target.closest(".community-comment-collapse-btn");
+      if (collapseBtn) {
+        ev.preventDefault();
+        const li = collapseBtn.closest("li.community-comment");
+        const nested = li?.querySelector(
+          ":scope > .community-comment-shell > .community-comment-right > ul.community-post-comments-list--nested"
+        );
+        if (!nested) return;
+        const collapsed = nested.classList.toggle("community-post-comments-list--subtree-collapsed");
+        collapseBtn.classList.toggle("community-comment-collapse-btn--collapsed", collapsed);
+        collapseBtn.setAttribute("aria-expanded", String(!collapsed));
+        const icon = collapseBtn.querySelector("i");
+        if (icon) icon.className = collapsed ? "ri-add-line" : "ri-subtract-line";
+        const n = Number(collapseBtn.getAttribute("data-collapse-count") || "0") || 0;
+        const label = collapsed ? `Expand ${n} repl${n === 1 ? "y" : "ies"}` : `Collapse ${n} repl${n === 1 ? "y" : "ies"}`;
+        collapseBtn.setAttribute("aria-label", label);
+        collapseBtn.title = collapsed ? label : "Collapse replies";
+        return;
+      }
+
       const replyBtn = ev.target.closest(".community-comment-reply-btn");
       if (replyBtn) {
         ev.preventDefault();
@@ -4115,7 +4280,20 @@ async function renderCommunityPostComments(postId) {
     }
   });
 
+  const sortEl = document.getElementById("communityCommentsSort");
+  const sortMode = String(sortEl?.value || "best").toLowerCase();
+  roots.sort((a, b) => compareCommentsForSort(a, b, sortMode));
+  childrenByParent.forEach((arr) => arr.sort((a, b) => compareCommentsForSort(a, b, sortMode)));
+
+  const countCommentDescendants = (commentId) => {
+    const ch = childrenByParent.get(String(commentId)) || [];
+    let n = ch.length;
+    for (const c of ch) n += countCommentDescendants(c.id);
+    return n;
+  };
+
   const uid = currentProfileUser?.uid || null;
+  const postAuthorUid = communityPostDetailAuthorFirebaseUid;
   const ctxSlug = String(communityPostDetailCommunitySlug || data.community_slug || "").toLowerCase();
   const commForPost =
     ctxSlug && Array.isArray(communityList) ? communityList.find((cm) => String(cm.slug || "").toLowerCase() === ctxSlug) : null;
@@ -4124,7 +4302,7 @@ async function renderCommunityPostComments(postId) {
   const renderNode = (c, depth) => {
     const commentId = String(c.id);
     const authorName = c.author_display_name || "Unknown";
-    const created = safeToDate(c.created_at);
+    const created = formatCommentTime(c.created_at);
     const score = Number(c.score ?? 0);
     const myVote = Number(c.my_vote ?? 0);
     const initials = getCommentInitials(authorName);
@@ -4147,44 +4325,69 @@ async function renderCommunityPostComments(postId) {
       ? `<button type="button" class="community-comment-delete-btn" data-delete-comment-id="${escapeHtml(commentId)}"><i class="ri-delete-bin-line" aria-hidden="true"></i> Delete</button>`
       : "";
     const youBadge = isCommentAuthor ? `<span class="community-comment-you">You</span>` : "";
+    const isOp = !!postAuthorUid && !!c.uid && String(c.uid) === String(postAuthorUid);
+    const opBadge = isOp ? `<span class="community-comment-op" title="Original poster">OP</span>` : "";
 
     const voteUpActive = myVote === 1;
     const voteDownActive = myVote === -1;
     const liClass = "community-comment" + (depth > 0 ? " community-comment--reply" : "");
 
     const children = childrenByParent.get(commentId) || [];
+    const childDepth = depth + 1;
+    const nestClass =
+      "community-post-comments-list community-post-comments-list--nested" +
+      (childDepth >= 5 ? " community-post-comments-list--nested-flat" : "");
+    const subtreeTotal = children.length ? countCommentDescendants(commentId) : 0;
+    const collapseCtl =
+      children.length > 0
+        ? `<button type="button" class="community-comment-collapse-btn" data-comment-collapse="${escapeHtml(
+            commentId
+          )}" data-collapse-count="${subtreeTotal}" aria-expanded="true" aria-controls="comment-subtree-${escapeHtml(
+            commentId
+          )}" title="Collapse replies" aria-label="Collapse ${subtreeTotal} repl${subtreeTotal === 1 ? "y" : "ies"}"><i class="ri-subtract-line" aria-hidden="true"></i></button>`
+        : "";
+    const voteColClass = "community-comment-vote-col" + (collapseCtl ? " community-comment-vote-col--threaded" : "");
+
     const childHtml = children.length
-      ? `<ul class="community-post-comments-list community-post-comments-list--nested" role="group" aria-label="Replies">${children.map((ch) => renderNode(ch, depth + 1)).join("")}</ul>`
+      ? `<ul id="comment-subtree-${escapeHtml(commentId)}" class="${nestClass}" role="group" aria-label="Replies">${children.map((ch) => renderNode(ch, childDepth)).join("")}</ul>`
       : "";
 
     return `
-      <li class="${liClass}" data-comment-depth="${depth}">
-        <div class="community-comment-row">
-          <div class="community-comment-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
-          <div class="community-comment-main">
-            <div class="community-comment-header">
-              <div class="community-comment-meta">
-                <span class="community-comment-author">${escapeHtml(authorName)}</span>
-                ${youBadge}
-                <span class="community-comment-dot" aria-hidden="true">·</span>
-                <time class="community-comment-time" datetime="${escapeHtml(String(c.created_at || ""))}">${escapeHtml(created)}</time>
+      <li class="${liClass}" data-comment-depth="${depth}" data-comment-id="${escapeHtml(commentId)}">
+        <div class="community-comment-shell">
+          <div class="${voteColClass}" aria-label="Comment score">
+            ${collapseCtl}
+            <button type="button" class="community-comment-vote-btn community-comment-vote-btn--col" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Upvote" ${voteUpActive ? 'style="border-color: rgba(126,242,191,0.55)"' : ''}>
+              <i class="ri-arrow-up-s-line"></i>
+            </button>
+            <div class="community-comment-score community-comment-score--col">${score}</div>
+            <button type="button" class="community-comment-vote-btn community-comment-vote-btn--col" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Downvote" ${voteDownActive ? 'style="border-color: rgba(255,120,120,0.55)"' : ''}>
+              <i class="ri-arrow-down-s-line"></i>
+            </button>
+          </div>
+          <div class="community-comment-right">
+            <div class="community-comment-row">
+              <div class="community-comment-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+              <div class="community-comment-main">
+                <div class="community-comment-header">
+                  <div class="community-comment-meta">
+                    <span class="community-comment-author">${escapeHtml(authorName)}</span>
+                    ${youBadge}
+                    ${opBadge}
+                    <span class="community-comment-dot" aria-hidden="true">·</span>
+                    <time class="community-comment-time" datetime="${escapeHtml(String(c.created_at || ""))}" title="${escapeHtml(safeToDate(c.created_at))}">${escapeHtml(created)}</time>
+                  </div>
+                  <div class="community-comment-header-actions">${deleteBtn}</div>
+                </div>
+                <div class="community-comment-body">${escapeBody(c.body)}</div>
+                <div class="community-comment-actions">
+                  ${replyBtn}
+                </div>
               </div>
-              <div class="community-comment-header-actions">${deleteBtn}</div>
             </div>
-            <div class="community-comment-body">${escapeBody(c.body)}</div>
-            <div class="community-comment-actions">
-              <button type="button" class="community-comment-vote-btn" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Upvote" ${voteUpActive ? 'style="border-color: rgba(126,242,191,0.55)"' : ''}>
-                <i class="ri-arrow-up-s-line"></i>
-              </button>
-              <div class="community-comment-score">${score}</div>
-              <button type="button" class="community-comment-vote-btn" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Downvote" ${voteDownActive ? 'style="border-color: rgba(255,120,120,0.55)"' : ''}>
-                <i class="ri-arrow-down-s-line"></i>
-              </button>
-              ${replyBtn}
-            </div>
+            ${childHtml}
           </div>
         </div>
-        ${childHtml}
       </li>
     `;
   };
@@ -4285,7 +4488,6 @@ async function handleCommunityPostSubmit(e) {
   }
 
   try {
-    const supabase = await getSupabaseClient();
     const mediaUrls = [];
     const mediaTypes = []; // "image" | "video" | "audio"
     let imageUrl = null;
@@ -4325,37 +4527,44 @@ async function handleCommunityPostSubmit(e) {
       const baseName = String(file.name || "media");
       const safeBase = baseName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-\.]/g, "");
       const ext = kind === "image" ? "webp" : (safeBase.split(".").pop() || "bin");
-      const path = `${category}/posts/${Date.now()}_${idx}_${safeBase}.${ext}`;
 
       let payload = file;
       if (kind === "image") payload = await compressImageToWebp(file);
 
-      const bucketCandidates = ["community-posts", "community-assets"];
-      let uploadedUrl = null;
-      let lastUploadErr = null;
+      const authUp = await authReady;
+      const tokenUp = await authUp.currentUser?.getIdToken?.();
+      if (!tokenUp) throw new Error("Sign in to upload media.");
+      const fd = new FormData();
+      const blob = payload instanceof Blob ? payload : file;
+      const mime =
+        kind === "image"
+          ? "image/webp"
+          : String(file?.type || "").trim() || "application/octet-stream";
+      const uploadName =
+        kind === "image"
+          ? `upload.webp`
+          : kind === "video"
+          ? safeBase.match(/\.(mp4|webm|ogg|mov|m4v)$/i)
+            ? safeBase
+            : `${safeBase}.mp4`
+          : safeBase.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i)
+          ? safeBase
+          : `${safeBase}.mp3`;
+      const fileForUpload = blob instanceof File ? blob : new File([blob], uploadName, { type: mime });
+      fd.append("file", fileForUpload);
+      fd.append("communitySlug", String(category).toLowerCase());
+      fd.append("index", String(idx));
+      fd.append("originalName", safeBase);
+      fd.append("ext", ext);
+      const upRes = await fetch("/api/upload/community-post-media", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tokenUp}` },
+        body: fd,
+      });
+      const upJson = await upRes.json().catch(() => ({}));
+      if (!upRes.ok || !upJson.url) throw new Error(upJson.error || "Storage upload failed.");
 
-      for (const bucket of bucketCandidates) {
-        try {
-          // We generate unique paths with Date.now(), so upsert isn't required.
-          // Avoiding upsert reduces the need for UPDATE permissions in Storage policies.
-          const { error: uploadError } = await supabase.storage.from(bucket).upload(path, payload, { upsert: false });
-          if (uploadError) {
-            lastUploadErr = uploadError;
-            continue;
-          }
-          const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-          uploadedUrl = data?.publicUrl || null;
-          if (uploadedUrl) break;
-        } catch (err) {
-          lastUploadErr = err;
-        }
-      }
-
-      if (!uploadedUrl) {
-        // Surface last error message to toast handler.
-        throw lastUploadErr || new Error("Storage upload failed for all buckets.");
-      }
-
+      const uploadedUrl = upJson.url;
       mediaUrls.push(uploadedUrl);
       mediaTypes.push(kind);
       if (!imageUrl && kind === "image") imageUrl = uploadedUrl;
@@ -4364,42 +4573,36 @@ async function handleCommunityPostSubmit(e) {
     // Backward compatibility: keep `image_url` set to the first image (or first media item).
     if (!imageUrl) imageUrl = mediaUrls[0] || null;
     const comm = communityList.find((c) => (c.slug || "").toLowerCase() === category.toLowerCase());
-    const communityId = comm?.id;
-    if (!communityId) {
+    if (!comm?.id) {
       showToast("Community not found. Pick a community from the list.", "error");
       return;
     }
+    if (!computeCanComment(comm)) {
+      showToast("Join this community to post and comment.", "error");
+      return;
+    }
     const author = currentProfileUser?.displayName || "Warden";
-    const commonPayload = {
-      community_id: communityId,
-      title,
-      body: finalBody || null,
-      author_username: author,
-      author_firebase_uid: currentProfileUser?.uid || null,
-      image_url: imageUrl,
-      tags: tags.length ? tags : [],
-    };
-
-    // If your DB schema supports it, store all media.
-    try {
-      const { error } = await supabase.from("posts").insert({
-        ...commonPayload,
+    const auth = await authReady;
+    const token = await auth.currentUser?.getIdToken?.();
+    if (!token) {
+      showToast("Please log in to post.", "error");
+      return;
+    }
+    const postRes = await fetch(`/api/communities/${encodeURIComponent(String(category).toLowerCase())}/posts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        title,
+        body: finalBody || null,
+        author_username: author,
+        image_url: imageUrl,
         media_urls: mediaUrls,
         media_types: mediaTypes,
-      });
-      if (error) throw error;
-    } catch (err) {
-      // Fallback for older schema: store only `image_url`.
-      console.error("Media insert failed; falling back to image_url only.", err);
-      // This is important for debugging: otherwise the post succeeds but only
-      // a single image is displayed in the community gallery.
-      showToast(
-        "Saved post, but media gallery couldn't be saved (media_urls/media_types insert failed). Re-run `supabase/community_schema.sql` so the posts table supports media arrays.",
-        "error"
-      );
-      const { error } = await supabase.from("posts").insert(commonPayload);
-      if (error) throw error;
-    }
+        tags: tags.length ? tags : [],
+      }),
+    });
+    const postData = await postRes.json().catch(() => ({}));
+    if (!postRes.ok) throw new Error(postData.error || "Could not create post.");
     // Record weekly contributor for this community (DB-backed).
     try {
       const auth = await authReady;
@@ -5628,19 +5831,21 @@ function initProfileForm(user) {
       btn.innerHTML = '<i class="ri-loader-4-line" style="animation:spin 0.8s linear infinite"></i>';
     }
     try {
-      const supabase = await getSupabaseClient();
-
       const resizedBlob = await resizeImage(file, 400);
-      const path = `${user.uid}/avatar.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(path, resizedBlob, { contentType: "image/jpeg", upsert: true });
-      if (uploadError) throw new Error(uploadError.message);
-
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-      const photoURL = urlData.publicUrl;
-
       const auth = await authReady;
+      const token = await auth.currentUser?.getIdToken?.();
+      if (!token) throw new Error("Not signed in");
+      const fd = new FormData();
+      fd.append("file", resizedBlob, "avatar.jpg");
+      const upRes = await fetch("/api/upload/avatar", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const upJson = await upRes.json().catch(() => ({}));
+      if (!upRes.ok || !upJson.url) throw new Error(upJson.error || "Upload failed");
+      const photoURL = upJson.url;
+
       await updateProfile(user, { photoURL });
       user.photoURL = photoURL;
       renderProfile(user);

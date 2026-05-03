@@ -45,6 +45,7 @@ try {
 }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const uploadLarge = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1092,6 +1093,47 @@ async function canViewCommunity(slug, uid) {
   if (await isUserJoinedToCommunitySQLite(slug, uid)) return true;
   if (await isModeratorToCommunitySQLite(slug, uid)) return true;
   return false;
+}
+
+/** Logged-in users may post to public communities; private/restricted require membership (same as can view). */
+async function canPostToCommunity(slug, uid) {
+  const u = String(uid || '').trim();
+  if (!u) return false;
+  const comm = await getCommunityBySlug(slug);
+  const st = String(comm.status || 'public').toLowerCase();
+  if (st === 'public') return true;
+  return canViewCommunity(slug, u);
+}
+
+/** Community IDs whose posts the user is allowed to read (public + private/restricted they can access). */
+async function getViewableCommunityIdsForUser(uid) {
+  if (!supabaseAdmin) return [];
+  const { data: publicRows, error } = await supabaseAdmin.from('communities').select('id').eq('status', 'public');
+  if (error) throw error;
+  const ids = new Set((publicRows || []).map((r) => r.id).filter(Boolean));
+  const u = String(uid || '').trim();
+  if (u) {
+    const { data: ownedPriv } = await supabaseAdmin
+      .from('communities')
+      .select('id')
+      .eq('creator_firebase_uid', u)
+      .in('status', ['private', 'restricted']);
+    (ownedPriv || []).forEach((r) => r.id && ids.add(r.id));
+
+    const memRows = await dbAllAsync('SELECT DISTINCT community_slug FROM community_members WHERE uid = ?', [u]);
+    const memSlugs = [...new Set((memRows || []).map((r) => String(r.community_slug || '').toLowerCase()).filter(Boolean))];
+    if (memSlugs.length) {
+      const { data: memComms } = await supabaseAdmin.from('communities').select('id').in('slug', memSlugs);
+      (memComms || []).forEach((r) => r.id && ids.add(r.id));
+    }
+    const modRows = await dbAllAsync('SELECT DISTINCT community_slug FROM community_moderators WHERE uid = ?', [u]);
+    const modSlugs = [...new Set((modRows || []).map((r) => String(r.community_slug || '').toLowerCase()).filter(Boolean))];
+    if (modSlugs.length) {
+      const { data: modComms } = await supabaseAdmin.from('communities').select('id').in('slug', modSlugs);
+      (modComms || []).forEach((r) => r.id && ids.add(r.id));
+    }
+  }
+  return [...ids];
 }
 
 async function canDeleteCommunity(slug, uid) {
@@ -2547,6 +2589,11 @@ app.post('/api/communities/:slug/visit', async (req, res) => {
   } catch (e) {
     return res.status(401).json({ error: e.message || 'Unauthorized' });
   }
+  try {
+    if (!(await canViewCommunity(slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+  } catch (_) {
+    return res.status(404).json({ error: 'Community not found' });
+  }
   const week = getWeekStartIso();
   const now = new Date().toISOString();
   db.run(
@@ -2567,6 +2614,11 @@ app.post('/api/communities/:slug/contribute', async (req, res) => {
     uid = await requireFirebaseUser(req);
   } catch (e) {
     return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  try {
+    if (!(await canPostToCommunity(slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+  } catch (_) {
+    return res.status(404).json({ error: 'Community not found' });
   }
   const week = getWeekStartIso();
   const now = new Date().toISOString();
@@ -2722,8 +2774,14 @@ app.get('/api/posts/:id', async (req, res) => {
       }
     }
 
-    const selectWithMedia = 'id,community_id,title,body,created_at,author_username,image_url,media_urls,media_types,score,comment_count';
-    const selectBase = 'id,community_id,title,body,created_at,author_username,image_url,score,comment_count';
+    const selectFullMedia =
+      'id,community_id,title,body,created_at,author_username,author_firebase_uid,image_url,media_urls,media_types,score,comment_count';
+    const selectLegacyMedia =
+      'id,community_id,title,body,created_at,author_username,image_url,media_urls,media_types,score,comment_count';
+    const selectFullBase =
+      'id,community_id,title,body,created_at,author_username,author_firebase_uid,image_url,score,comment_count';
+    const selectLegacyBase =
+      'id,community_id,title,body,created_at,author_username,image_url,score,comment_count';
     const trySelect = async (sel) => {
       const { data, error } = await supabaseAdmin.from('posts').select(sel).eq('id', postId).single();
       return { data, error };
@@ -2731,20 +2789,14 @@ app.get('/api/posts/:id', async (req, res) => {
 
     let post = null;
     let postErr = null;
-    const attemptWithMedia = await trySelect(selectWithMedia);
-    if (attemptWithMedia.error) {
-      const msg = String(attemptWithMedia.error?.message || '').toLowerCase();
-      if (msg.includes('media_urls') || msg.includes('media_types') || msg.includes('column')) {
-        const attemptBase = await trySelect(selectBase);
-        post = attemptBase.data || null;
-        postErr = attemptBase.error || null;
-      } else {
-        post = null;
-        postErr = attemptWithMedia.error;
+    for (const sel of [selectFullMedia, selectLegacyMedia, selectFullBase, selectLegacyBase]) {
+      const attempt = await trySelect(sel);
+      if (!attempt.error && attempt.data) {
+        post = attempt.data;
+        postErr = null;
+        break;
       }
-    } else {
-      post = attemptWithMedia.data || null;
-      postErr = null;
+      postErr = attempt.error;
     }
     if (postErr || !post) return res.status(404).json({ error: 'Post not found' });
 
@@ -3225,6 +3277,8 @@ app.get('/api/communities/:slug/highlights', async (req, res) => {
   const slug = String(req.params.slug || '').trim().toLowerCase();
   if (!slug) return res.status(400).json({ error: 'slug required' });
   if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+  const uidHi = await optionalFirebaseUid(req);
+  if (!(await canViewCommunity(slug, uidHi))) return res.status(403).json({ error: 'Not allowed' });
   const { data: comm, error: commErr } = await supabaseAdmin
     .from('communities')
     .select('id, slug')
@@ -3265,18 +3319,184 @@ app.get('/api/communities/:slug/highlights', async (req, res) => {
   res.json({ top, recent });
 });
 
+/** Minimal community card for routing / join UI (includes private communities by slug). */
+app.get('/api/communities/:slug/summary', async (req, res) => {
+  const slug = String(req.params.slug || '').trim().toLowerCase();
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+  try {
+    const uid = await optionalFirebaseUid(req);
+    const { data: row, error } = await supabaseAdmin
+      .from('communities')
+      .select(
+        'id,name,slug,description,status,member_count,post_count,category,banner_url,logo_url,creator_firebase_uid,created_at'
+      )
+      .eq('slug', slug)
+      .single();
+    if (error || !row) return res.status(404).json({ error: 'Community not found' });
+    const joined =
+      !!uid &&
+      ((row.creator_firebase_uid && String(row.creator_firebase_uid) === String(uid)) ||
+        (await isUserJoinedToCommunitySQLite(slug, uid)) ||
+        (await isModeratorToCommunitySQLite(slug, uid)));
+    const modRows = await dbAllAsync('SELECT uid FROM community_moderators WHERE community_slug = ?', [slug]);
+    const modUids = [...new Set((modRows || []).map((r) => String(r.uid || '').trim()).filter(Boolean))];
+    const userNameByUid = new Map();
+    if (modUids.length) {
+      const ph = modUids.map(() => '?').join(',');
+      const urows = await dbAllAsync(`SELECT uid, display_name FROM users WHERE uid IN (${ph})`, modUids);
+      (urows || []).forEach((r) => userNameByUid.set(String(r.uid), r.display_name || null));
+    }
+    const moderators = modUids.map((u) => ({ uid: u, displayName: userNameByUid.get(u) || null }));
+    let logo_symbol = null;
+    await new Promise((resolve) => {
+      db.get('SELECT logo_symbol FROM community_meta WHERE community_slug = ?', [slug], (e, r) => {
+        if (r && r.logo_symbol) logo_symbol = String(r.logo_symbol);
+        resolve();
+      });
+    });
+    const week = getWeekStartIso();
+    let weekly_visitors = 0;
+    let weekly_contributors = 0;
+    await new Promise((resolve) => {
+      db.get(
+        'SELECT COUNT(*) AS n FROM community_weekly_visitors WHERE week_start = ? AND community_slug = ?',
+        [week, slug],
+        (e, r) => {
+          weekly_visitors = r && r.n != null ? Number(r.n) : 0;
+          resolve();
+        }
+      );
+    });
+    await new Promise((resolve) => {
+      db.get(
+        'SELECT COUNT(*) AS n FROM community_weekly_contributors WHERE week_start = ? AND community_slug = ?',
+        [week, slug],
+        (e, r) => {
+          weekly_contributors = r && r.n != null ? Number(r.n) : 0;
+          resolve();
+        }
+      );
+    });
+    res.json({
+      community: {
+        ...row,
+        slug: String(row.slug || '').toLowerCase(),
+        joined,
+        moderators,
+        logo_symbol,
+        members_count: row.member_count ?? 0,
+        weekly_visitors,
+        weekly_contributors,
+        notify_level: 'all',
+        can_view_feed: await canViewCommunity(slug, uid),
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load community' });
+  }
+});
+
+/**
+ * Server-filtered community posts (respects private/restricted visibility).
+ * Query: community = slug | all
+ */
+app.get('/api/community-feed/posts', async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+  try {
+    const uid = await optionalFirebaseUid(req);
+    const commParam = String(req.query.community || 'all').trim().toLowerCase();
+    let communityIds = [];
+    if (commParam && commParam !== 'all') {
+      if (!(await canViewCommunity(commParam, uid))) return res.status(403).json({ error: 'Not allowed' });
+      const { data: crow, error: cErr } = await supabaseAdmin.from('communities').select('id').eq('slug', commParam).single();
+      if (cErr || !crow) return res.status(404).json({ error: 'Community not found' });
+      communityIds = [crow.id];
+    } else {
+      communityIds = await getViewableCommunityIdsForUser(uid);
+    }
+    if (!communityIds.length) return res.json({ posts: [] });
+
+    const selectWithMedia =
+      'id,title,body,created_at,author_username,author_firebase_uid,community_id,image_url,media_urls,media_types,tags,score,comment_count';
+    const selectLegacyMedia =
+      'id,title,body,created_at,author_username,community_id,image_url,media_urls,media_types,tags,score,comment_count';
+    const selectBase =
+      'id,title,body,created_at,author_username,author_firebase_uid,community_id,image_url,tags,score,comment_count';
+    const selectLegacyBase = 'id,title,body,created_at,author_username,community_id,image_url,tags,score,comment_count';
+
+    const trySelect = async (sel) => {
+      const { data, error } = await supabaseAdmin
+        .from('posts')
+        .select(sel)
+        .in('community_id', communityIds)
+        .order('created_at', { ascending: false })
+        .limit(150);
+      return { data, error };
+    };
+
+    let rows = [];
+    for (const sel of [selectWithMedia, selectLegacyMedia, selectBase, selectLegacyBase]) {
+      const attempt = await trySelect(sel);
+      if (!attempt.error) {
+        rows = Array.isArray(attempt.data) ? attempt.data : [];
+        break;
+      }
+      const msg = String(attempt.error?.message || '').toLowerCase();
+      if (!msg.includes('column') && !msg.includes('schema')) break;
+    }
+    res.json({ posts: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load posts' });
+  }
+});
+
 app.get('/api/communities', async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
   const uid = String(req.query.uid || '').trim() || null;
-  const { data: communities, error } = await supabaseAdmin
+  const selectCols = 'id,name,slug,description,member_count,post_count,category,banner_url,logo_url,status,creator_firebase_uid';
+
+  const { data: publicComm, error: pubErr } = await supabaseAdmin
     .from('communities')
-    .select('id,name,slug,description,member_count,post_count,category,banner_url,logo_url,status,creator_firebase_uid')
+    .select(selectCols)
     .eq('status', 'public')
     .order('post_count', { ascending: false })
     .limit(200);
-  if (error) return res.status(500).json({ error: 'Failed to load communities' });
+  if (pubErr) return res.status(500).json({ error: 'Failed to load communities' });
 
-  const list = Array.isArray(communities) ? communities : [];
+  const bySlug = new Map();
+  for (const c of publicComm || []) {
+    bySlug.set(String(c.slug || '').toLowerCase(), c);
+  }
+
+  if (uid) {
+    const { data: ownedPriv } = await supabaseAdmin
+      .from('communities')
+      .select(selectCols)
+      .eq('creator_firebase_uid', uid)
+      .in('status', ['private', 'restricted']);
+    for (const c of ownedPriv || []) {
+      bySlug.set(String(c.slug || '').toLowerCase(), c);
+    }
+
+    const memRows = await dbAllAsync('SELECT DISTINCT community_slug FROM community_members WHERE uid = ?', [uid]);
+    const memSlugs = [...new Set((memRows || []).map((r) => String(r.community_slug || '').toLowerCase()).filter(Boolean))];
+    const missingMem = memSlugs.filter((s) => !bySlug.has(s));
+    if (missingMem.length) {
+      const { data: extra } = await supabaseAdmin.from('communities').select(selectCols).in('slug', missingMem);
+      for (const c of extra || []) bySlug.set(String(c.slug || '').toLowerCase(), c);
+    }
+
+    const modRows = await dbAllAsync('SELECT DISTINCT community_slug FROM community_moderators WHERE uid = ?', [uid]);
+    const modSlugs = [...new Set((modRows || []).map((r) => String(r.community_slug || '').toLowerCase()).filter(Boolean))];
+    const missingMod = modSlugs.filter((s) => !bySlug.has(s));
+    if (missingMod.length) {
+      const { data: extra } = await supabaseAdmin.from('communities').select(selectCols).in('slug', missingMod);
+      for (const c of extra || []) bySlug.set(String(c.slug || '').toLowerCase(), c);
+    }
+  }
+
+  const list = [...bySlug.values()].sort((a, b) => (b.post_count ?? 0) - (a.post_count ?? 0));
   const slugs = list.map((c) => String(c.slug || '').toLowerCase()).filter(Boolean);
   if (!slugs.length) return res.json([]);
 
@@ -5354,7 +5574,8 @@ app.get('/api/config/firebase', (req, res) => {
   res.json(config);
 });
 
-// --- API: Supabase config (for profile photo storage; anon key is safe for client) ---
+// --- API: Supabase anon key (embedded in client). After rls_and_storage_lockdown.sql,
+// use only for legacy paths (e.g. create-community fallback); uploads use /api/upload/*.
 app.get('/api/config/supabase', (req, res) => {
   const url = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
@@ -5467,6 +5688,159 @@ app.post('/api/communities', upload.fields([{ name: 'banner', maxCount: 1 }, { n
   res.status(201).json({ id: inserted?.id, slug });
 });
 
+// --- API: Create post (enforces private/restricted membership) ---
+app.post('/api/communities/:slug/posts', async (req, res) => {
+  const slug = String(req.params.slug || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
+  if (!slug) return res.status(400).json({ error: 'Invalid slug' });
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+  let claims;
+  try {
+    claims = await requireFirebaseUserClaims(req);
+  } catch (e) {
+    return res.status(401).json({ error: e.message || 'Unauthorized' });
+  }
+  const uid = claims.uid;
+  try {
+    if (!(await canPostToCommunity(slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+    const { data: comm, error: cErr } = await supabaseAdmin.from('communities').select('id').eq('slug', slug).single();
+    if (cErr || !comm) return res.status(404).json({ error: 'Community not found' });
+
+    const title = String(req.body.title || '').trim();
+    if (!title) return res.status(400).json({ error: 'title required' });
+    const body = req.body.body == null || req.body.body === '' ? null : String(req.body.body).trim() || null;
+    const authorUsername = String(
+      req.body.author_username || claims.displayName || claims.name || claims.username || 'Warden'
+    ).trim();
+    let tags = req.body.tags;
+    if (typeof tags === 'string') {
+      try {
+        tags = JSON.parse(tags);
+      } catch (_) {
+        tags = tags.split(',').map((t) => t.trim()).filter(Boolean);
+      }
+    }
+    if (!Array.isArray(tags)) tags = [];
+    let media_urls = req.body.media_urls;
+    let media_types = req.body.media_types;
+    if (typeof media_urls === 'string') {
+      try {
+        media_urls = JSON.parse(media_urls);
+      } catch (_) {
+        media_urls = [];
+      }
+    }
+    if (typeof media_types === 'string') {
+      try {
+        media_types = JSON.parse(media_types);
+      } catch (_) {
+        media_types = [];
+      }
+    }
+    if (!Array.isArray(media_urls)) media_urls = [];
+    if (!Array.isArray(media_types)) media_types = [];
+    const image_url = req.body.image_url ? String(req.body.image_url).trim() || null : media_urls[0] || null;
+
+    const basePayload = {
+      community_id: comm.id,
+      title,
+      body,
+      author_username: authorUsername,
+      author_firebase_uid: uid,
+      image_url,
+      tags,
+      score: 0,
+      comment_count: 0,
+    };
+
+    let inserted = null;
+    if (media_urls.length) {
+      const r = await supabaseAdmin
+        .from('posts')
+        .insert({ ...basePayload, media_urls, media_types })
+        .select('id')
+        .single();
+      if (!r.error && r.data) inserted = r.data;
+    }
+    if (!inserted) {
+      const r2 = await supabaseAdmin.from('posts').insert(basePayload).select('id').single();
+      if (r2.error || !r2.data) return res.status(500).json({ error: r2.error?.message || 'Insert failed' });
+      inserted = r2.data;
+    }
+    res.json({ ok: true, id: String(inserted.id) });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to create post' });
+  }
+});
+
+// --- API: Media uploads (service role; Storage lockdown blocks anon writes) ---
+app.post('/api/upload/avatar', upload.single('file'), async (req, res) => {
+  try {
+    const uid = await requireFirebaseUser(req);
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase not configured' });
+    const file = req.file;
+    if (!file || !file.buffer) return res.status(400).json({ error: 'file required' });
+    const path = `${String(uid).trim()}/avatar.jpg`;
+    const { error: upErr } = await supabaseAdmin.storage.from('avatars').upload(path, file.buffer, {
+      contentType: file.mimetype || 'image/jpeg',
+      upsert: true,
+      cacheControl: '3600',
+    });
+    if (upErr) return res.status(500).json({ error: upErr.message || 'Upload failed' });
+    const { data: urlData } = supabaseAdmin.storage.from('avatars').getPublicUrl(path);
+    res.json({ ok: true, url: urlData?.publicUrl || null });
+  } catch (e) {
+    const msg = e?.message || String(e);
+    if (/bearer|token|Unauthorized/i.test(msg)) return res.status(401).json({ error: 'Unauthorized' });
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.post('/api/upload/community-post-media', uploadLarge.single('file'), async (req, res) => {
+  try {
+    const uid = await requireFirebaseUser(req);
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase not configured' });
+    const slug = String(req.body.communitySlug || req.body.slug || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '');
+    if (!slug) return res.status(400).json({ error: 'communitySlug required' });
+    if (!(await canPostToCommunity(slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+    const file = req.file;
+    if (!file || !file.buffer) return res.status(400).json({ error: 'file required' });
+    const idx = String(req.body.index || '0').replace(/[^0-9]/g, '') || '0';
+    const orig = String(req.body.originalName || file.originalname || 'media');
+    const safeBase = orig.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-\.]/g, '').slice(0, 120) || 'media';
+    let ext = String(req.body.ext || path.extname(safeBase).slice(1) || 'bin')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '') || 'bin';
+    if (ext === 'jpeg') ext = 'jpg';
+    const baseNoExt = safeBase.replace(/\.[^.]+$/, '');
+    const storagePath = `${slug}/posts/${Date.now()}_${idx}_${baseNoExt}.${ext}`;
+    const buckets = ['community-posts', 'community-assets'];
+    let lastErr = null;
+    for (const bucket of buckets) {
+      const { error: upErr } = await supabaseAdmin.storage.from(bucket).upload(storagePath, file.buffer, {
+        contentType: file.mimetype || 'application/octet-stream',
+        upsert: false,
+        cacheControl: '3600',
+      });
+      if (!upErr) {
+        const { data: urlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(storagePath);
+        return res.json({ ok: true, url: urlData?.publicUrl || null });
+      }
+      lastErr = upErr;
+    }
+    return res.status(500).json({ error: lastErr?.message || 'Upload failed for all buckets' });
+  } catch (e) {
+    const msg = e?.message || String(e);
+    if (/bearer|token|Unauthorized/i.test(msg)) return res.status(401).json({ error: 'Unauthorized' });
+    res.status(500).json({ error: msg });
+  }
+});
+
 // --- API: Update community (banner, logo, description) – admin/creator only ---
 app.patch('/api/communities/:slug', upload.fields([{ name: 'banner', maxCount: 1 }, { name: 'logo', maxCount: 1 }]), async (req, res) => {
   const slug = (req.params.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -5497,11 +5871,13 @@ app.patch('/api/communities/:slug', upload.fields([{ name: 'banner', maxCount: 1
   // Backward compatibility: legacy communities may have null creator_firebase_uid.
   // In that case, allow this authenticated user to claim creator ownership.
   if (communityCreatorUid && communityCreatorUid !== uid) {
-    return res.status(403).json({ error: 'Only the community creator can update banner, logo, and description' });
+    return res.status(403).json({ error: 'Only the community creator can update this community' });
   }
   const updates = {};
   if (!communityCreatorUid) updates.creator_firebase_uid = uid;
   if (typeof req.body.description === 'string') updates.description = req.body.description.trim() || null;
+  const rawStatus = typeof req.body.status === 'string' ? req.body.status.trim().toLowerCase() : '';
+  if (['public', 'private', 'restricted'].includes(rawStatus)) updates.status = rawStatus;
   const bannerFile = req.files && req.files.banner && req.files.banner[0];
   const logoFile = req.files && req.files.logo && req.files.logo[0];
   const ext = (name) => (name && path.extname(name).slice(1)) || 'jpg';

@@ -21,7 +21,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css"
     />
-    <link rel="stylesheet" href="/styles.css?v=comments-ui-2" />
+    <link rel="stylesheet" href="/styles.css?v=comments-ui-7" />
   </head>
   <body>
     <div class="petal-layer" id="petalLayer"></div>
@@ -612,8 +612,19 @@
                 <h2>Edit community</h2>
                 <button type="button" class="modal-close" id="editCommunityModalClose" aria-label="Close"><i class="ri-close-line"></i></button>
               </div>
-              <p class="community-create-wizard-subtitle">Only the community creator can change the banner, logo, and description.</p>
+              <p class="community-create-wizard-subtitle">Only the community creator can change visibility (public or private), banner, logo, and description. Private communities are only visible to members.</p>
               <form id="editCommunityForm" class="community-create-form">
+                <fieldset class="community-field community-edit-visibility" style="border: none; padding: 0; margin: 0 0 16px">
+                  <legend class="label" style="margin-bottom: 8px">Visibility</legend>
+                  <label class="community-edit-visibility-option" style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; cursor: pointer">
+                    <input type="radio" name="editCommunityStatus" id="editCommunityStatusPublic" value="public" />
+                    <span><strong>Public</strong> — anyone can view posts; signed-in users can post.</span>
+                  </label>
+                  <label class="community-edit-visibility-option" style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer">
+                    <input type="radio" name="editCommunityStatus" id="editCommunityStatusPrivate" value="private" />
+                    <span><strong>Private</strong> — only members can view the feed, comment, and post (invite people or share the link so they can join).</span>
+                  </label>
+                </fieldset>
                 <div class="community-edit-media-grid">
                   <div class="community-edit-banner-block">
                     <div class="community-edit-media-label">Banner</div>
@@ -2846,28 +2857,43 @@
         <div class="community-post-detail-media" id="communityPostDetailMedia"></div>
 
         <div class="community-post-detail-votes">
-          <button type="button" class="community-vote-btn" id="communityPostDetailVoteUpBtn" data-vote="up" aria-label="Upvote">
-            <i class="ri-arrow-up-s-line"></i>
-          </button>
-          <div class="community-post-detail-score" id="communityPostDetailScore">0</div>
-          <button type="button" class="community-vote-btn" id="communityPostDetailVoteDownBtn" data-vote="down" aria-label="Downvote">
-            <i class="ri-arrow-down-s-line"></i>
-          </button>
+          <div class="community-post-detail-votes-pill" role="group" aria-label="Post score">
+            <button type="button" class="community-vote-btn" id="communityPostDetailVoteUpBtn" data-vote="up" aria-label="Upvote">
+              <i class="ri-arrow-up-s-line"></i>
+            </button>
+            <div class="community-post-detail-score" id="communityPostDetailScore">0</div>
+            <button type="button" class="community-vote-btn" id="communityPostDetailVoteDownBtn" data-vote="down" aria-label="Downvote">
+              <i class="ri-arrow-down-s-line"></i>
+            </button>
+          </div>
         </div>
 
         <div class="community-post-detail-comments">
           <div class="community-comments-section-head">
-            <h3 class="community-comments-title">Discussion</h3>
+            <h3 class="community-comments-title">Comments</h3>
             <span class="community-comments-count-pill" id="communityPostCommentsCountPill" hidden></span>
           </div>
-          <p class="community-comments-hint">Be kind. Replies thread under each comment.</p>
-          <form id="communityCommentForm" class="community-comment-form">
-            <textarea id="communityCommentBody" class="community-input" placeholder="Join the conversation…" rows="3"></textarea>
-            <input type="hidden" id="communityCommentParentId" value="" />
-            <button type="submit" class="btn btn-primary btn-sm" id="communityCommentSubmitBtn">
-              <i class="ri-send-plane-2-line"></i> Comment
-            </button>
-          </form>
+          <div class="community-comments-toolbar">
+            <label class="community-comments-sort-label" for="communityCommentsSort">Sort by</label>
+            <select id="communityCommentsSort" class="community-comments-sort-select" aria-label="Sort comments">
+              <option value="best" selected>Best</option>
+              <option value="new">New</option>
+              <option value="top">Top</option>
+            </select>
+          </div>
+          <p class="community-comments-hint">Be respectful. Replies nest under each comment.</p>
+          <div class="community-comment-composer">
+            <div class="community-comment-composer-avatar" id="communityCommentComposerAvatar" aria-hidden="true">?</div>
+            <form id="communityCommentForm" class="community-comment-form">
+              <textarea id="communityCommentBody" class="community-input" placeholder="What are your thoughts?" rows="3"></textarea>
+              <input type="hidden" id="communityCommentParentId" value="" />
+              <div class="community-comment-form-actions">
+                <button type="submit" class="btn btn-primary btn-sm" id="communityCommentSubmitBtn">
+                  <i class="ri-chat-smile-3-line"></i> Comment
+                </button>
+              </div>
+            </form>
+          </div>
           <div class="community-post-comments-empty" id="communityPostCommentsEmpty" style="display:none">
             <p class="community-post-comments-empty-title">No comments yet</p>
             <p class="community-post-comments-empty-sub">Start the thread—your comment will show here for everyone.</p>
@@ -2881,7 +2907,7 @@
     <script type="module" src="/demo-mode-bootstrap.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/app-shell.js"></script>
-    <script type="module" src="/profile.js?v=comments-ui-2"></script>
+    <script type="module" src="/profile.js?v=comments-ui-7"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
