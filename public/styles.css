@@ -7030,45 +7030,99 @@ body.reduce-motion .card:hover {
   margin-bottom: 6px;
   color: var(--accent-strong);
 }
+/* Reddit-like post voting (orange up / periwinkle down) */
 .community-post {
   border-radius: 18px;
   border: 1px solid rgba(126, 242, 191, 0.12);
   background: rgba(0, 0, 0, 0.3);
   padding: 12px 14px 10px;
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-.community-vote {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--text-soft);
-  align-self: start;
-  padding-top: 2px;
-}
-.community-vote .community-vote-emoji {
-  font-size: 1.2rem;
-}
-
-.community-vote button {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  border: 1px solid rgba(126, 242, 191, 0.2);
-  background: rgba(0, 0, 0, 0.3);
-  color: var(--accent-strong);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 14px;
+  display: block;
 }
 .community-vote-score {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.82);
+  min-width: 1.85rem;
+  text-align: center;
+  line-height: 1;
+}
+.community-post-votes-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: #2a3236;
+  border: none;
+  flex-shrink: 0;
+}
+.community-post-votes-pill .community-vote-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+}
+.community-post-votes-pill .community-vote-btn i {
+  font-size: 20px;
+  line-height: 1;
+}
+.community-post-votes-pill .community-vote-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+}
+.community-post-votes-pill .community-vote-btn--active-up {
+  color: #ff4500;
+  background: rgba(255, 69, 0, 0.14);
+}
+.community-post-votes-pill .community-vote-btn--active-up:hover {
+  color: #ff6a33;
+  background: rgba(255, 69, 0, 0.2);
+}
+.community-post-votes-pill .community-vote-btn--active-down {
+  color: #7193ff;
+  background: rgba(113, 147, 255, 0.14);
+}
+.community-post-votes-pill .community-vote-btn--active-down:hover {
+  color: #8fa7ff;
+  background: rgba(113, 147, 255, 0.2);
+}
+.community-post-votes-pill:has(.community-vote-btn--active-up) .community-vote-score {
+  color: #ff4500;
+}
+.community-post-votes-pill:has(.community-vote-btn--active-down) .community-vote-score {
+  color: #7193ff;
+}
+.community-post-actions--bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.community-post-actions.community-post-actions--bar > button {
+  border: none;
+  background: #2a3236;
+  color: rgba(255, 255, 255, 0.62);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 8px 12px;
+  border-radius: 999px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.community-post-actions.community-post-actions--bar > button i {
+  font-size: 18px;
+  opacity: 0.9;
+}
+.community-post-actions.community-post-actions--bar > button:hover {
+  background: #343d42;
+  color: rgba(255, 255, 255, 0.95);
 }
 .community-post-main {
   display: flex;
@@ -7612,11 +7666,11 @@ body.reduce-motion .card:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: #2a3236;
+  color: rgba(255, 255, 255, 0.62);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
@@ -7627,12 +7681,12 @@ body.reduce-motion .card:hover {
 
 .community-post-detail-bar-btn i {
   font-size: 18px;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .community-post-detail-bar-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.92);
+  background: #343d42;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .community-post-detail-bar-btn--report {
@@ -7645,11 +7699,11 @@ body.reduce-motion .card:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: #2a3236;
+  color: rgba(255, 255, 255, 0.62);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
@@ -7659,12 +7713,12 @@ body.reduce-motion .card:hover {
 }
 
 .community-post-detail-comments-trigger:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.92);
+  background: #343d42;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .community-post-detail-comments-trigger[aria-expanded="true"] {
-  background: rgba(126, 242, 191, 0.1);
+  background: rgba(126, 242, 191, 0.14);
   color: rgba(255, 255, 255, 0.95);
 }
 
@@ -7712,11 +7766,11 @@ body.reduce-motion .card:hover {
 .community-post-detail-votes-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
+  gap: 0;
+  padding: 4px 8px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #2a3236;
+  border: none;
 }
 
 .community-post-detail-votes-pill .community-vote-btn {
@@ -7724,10 +7778,38 @@ body.reduce-motion .card:hover {
   height: 36px;
   border: none;
   background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+}
+
+.community-post-detail-votes-pill .community-vote-btn i {
+  font-size: 22px;
+  line-height: 1;
 }
 
 .community-post-detail-votes-pill .community-vote-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.community-post-detail-votes-pill .community-vote-btn--active-up {
+  color: #ff4500;
+  background: rgba(255, 69, 0, 0.14);
+}
+
+.community-post-detail-votes-pill .community-vote-btn--active-up:hover {
+  color: #ff6a33;
+  background: rgba(255, 69, 0, 0.2);
+}
+
+.community-post-detail-votes-pill .community-vote-btn--active-down {
+  color: #7193ff;
+  background: rgba(113, 147, 255, 0.14);
+}
+
+.community-post-detail-votes-pill .community-vote-btn--active-down:hover {
+  color: #8fa7ff;
+  background: rgba(113, 147, 255, 0.2);
 }
 
 .community-post-detail-votes-pill .community-post-detail-score {
@@ -7735,15 +7817,26 @@ body.reduce-motion .card:hover {
   text-align: center;
   font-size: 15px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.85);
 }
 
+.community-post-detail-votes-pill:has(.community-vote-btn--active-up) .community-post-detail-score {
+  color: #ff4500;
+}
+
+.community-post-detail-votes-pill:has(.community-vote-btn--active-down) .community-post-detail-score {
+  color: #7193ff;
+}
+
+/* Fallback for vote controls outside pills (e.g. legacy markup) */
 .community-vote-btn {
   width: 34px;
   height: 34px;
   border-radius: 999px;
-  border: 1px solid rgba(126, 242, 191, 0.18);
-  background: rgba(0, 0, 0, 0.30);
-  color: rgba(126, 242, 191, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -7756,14 +7849,14 @@ body.reduce-motion .card:hover {
   display: inline-block;
 }
 
-.community-vote-btn--active-up {
-  background: rgba(126, 242, 191, 0.18);
-  border-color: rgba(126, 242, 191, 0.55);
+.community-comment-vote-inline .community-vote-btn--active-up {
+  color: #ff4500;
+  background: rgba(255, 69, 0, 0.12);
 }
 
-.community-vote-btn--active-down {
-  background: rgba(255, 120, 120, 0.12);
-  border-color: rgba(255, 120, 120, 0.55);
+.community-comment-vote-inline .community-vote-btn--active-down {
+  color: #7193ff;
+  background: rgba(113, 147, 255, 0.14);
 }
 
 .community-post-detail-actions-bar .community-post-detail-votes-pill .community-vote-btn {

@@ -3586,11 +3586,6 @@ async function loadCommunityView() {
         return `<article class="community-post" data-post-id="${escapeHtml(p.id)}" data-following="${isFollowing ? "1" : "0"}" data-saved="${isSaved ? "1" : "0"}" data-media-urls="${escapeHtml(
           JSON.stringify(mediaUrls)
         )}" data-media-types="${escapeHtml(JSON.stringify(mediaTypes))}">
-          <div class="community-vote">
-            <button type="button" class="community-vote-btn${upActive}" data-vote="up" aria-label="Helpful — this adds value" title="Helpful"><span class="community-vote-emoji" aria-hidden="true">👍</span></button>
-            <div class="community-vote-score">${p.score ?? 0}</div>
-            <button type="button" class="community-vote-btn${downActive}" data-vote="down" aria-label="Not helpful — off-topic or low quality" title="Not helpful"><span class="community-vote-emoji" aria-hidden="true">👎</span></button>
-          </div>
           <div class="community-post-main">
             <div class="community-post-header">
               <div class="community-post-header-main">
@@ -3669,7 +3664,12 @@ async function loadCommunityView() {
             <div class="community-post-body">${escapeHtml(p.body || "")}</div>
             ${tags.length ? `<div class="community-post-tags">${tags.map((t) => `<span class="community-post-tag">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
             <div class="community-post-footer">
-              <div class="community-post-actions">
+              <div class="community-post-actions community-post-actions--bar">
+                <div class="community-post-votes-pill" role="group" aria-label="Post score">
+                  <button type="button" class="community-vote-btn${upActive}" data-vote="up" aria-label="Upvote" title="Upvote"><i class="ri-arrow-up-line" aria-hidden="true"></i></button>
+                  <div class="community-vote-score">${p.score ?? 0}</div>
+                  <button type="button" class="community-vote-btn${downActive}" data-vote="down" aria-label="Downvote" title="Downvote"><i class="ri-arrow-down-line" aria-hidden="true"></i></button>
+                </div>
                 <button type="button" data-action="comments"><i class="ri-chat-1-line"></i> ${p.comment_count ?? 0} comments</button>
                 <button type="button" data-action="award"><i class="ri-medal-line"></i> Award</button>
                 <button type="button" data-action="share"><i class="ri-share-line"></i> Share</button>
@@ -5039,14 +5039,8 @@ function updatePostDetailVoteButtons(myVote) {
   const up = document.getElementById("communityPostDetailVoteUpBtn");
   const down = document.getElementById("communityPostDetailVoteDownBtn");
   const mv = Number(myVote) || 0;
-  if (up) {
-    up.classList.toggle("community-vote-btn--active-up", mv === 1);
-    up.style.borderColor = mv === 1 ? "rgba(126,242,191,0.55)" : "";
-  }
-  if (down) {
-    down.classList.toggle("community-vote-btn--active-down", mv === -1);
-    down.style.borderColor = mv === -1 ? "rgba(255,120,120,0.55)" : "";
-  }
+  if (up) up.classList.toggle("community-vote-btn--active-up", mv === 1);
+  if (down) down.classList.toggle("community-vote-btn--active-down", mv === -1);
 }
 
 async function voteOnPostDetail(postId, delta) {
@@ -5492,16 +5486,11 @@ async function voteOnPost(postId, delta, card) {
     const scoreEl = card.querySelector(".community-vote-score");
     if (scoreEl) scoreEl.textContent = String(Number(data.score ?? 0));
     const mv = Number(data.my_vote) || 0;
-    const upBtn = card.querySelector('.community-vote [data-vote="up"]');
-    const downBtn = card.querySelector('.community-vote [data-vote="down"]');
-    if (upBtn) {
-      upBtn.classList.toggle("community-vote-btn--active-up", mv === 1);
-      upBtn.style.borderColor = mv === 1 ? "rgba(126,242,191,0.55)" : "";
-    }
-    if (downBtn) {
-      downBtn.classList.toggle("community-vote-btn--active-down", mv === -1);
-      downBtn.style.borderColor = mv === -1 ? "rgba(255,120,120,0.55)" : "";
-    }
+    const pill = card.querySelector(".community-post-votes-pill");
+    const upBtn = pill?.querySelector('[data-vote="up"]');
+    const downBtn = pill?.querySelector('[data-vote="down"]');
+    if (upBtn) upBtn.classList.toggle("community-vote-btn--active-up", mv === 1);
+    if (downBtn) downBtn.classList.toggle("community-vote-btn--active-down", mv === -1);
   } catch (e) {
     showToast(e?.message || "Could not vote.", "error");
   }
