@@ -4618,45 +4618,67 @@
           </button>
         </div>
 
-        <div
-          class="community-post-detail-media"
-          id="communityPostDetailMedia"
-        ></div>
-
-        <div class="community-post-detail-votes">
+        <div class="community-post-detail-body" id="communityPostDetailBody">
           <div
-            class="community-post-detail-votes-pill"
-            role="group"
-            aria-label="Post score"
-          >
-            <button
-              type="button"
-              class="community-vote-btn"
-              id="communityPostDetailVoteUpBtn"
-              data-vote="up"
-              aria-label="Upvote"
-            >
-              <i class="ri-arrow-up-s-line"></i>
-            </button>
+            class="community-post-detail-media"
+            id="communityPostDetailMedia"
+          ></div>
+
+          <div class="community-post-detail-votes">
             <div
-              class="community-post-detail-score"
-              id="communityPostDetailScore"
+              class="community-post-detail-votes-pill"
+              role="group"
+              aria-label="Post score"
             >
-              0
+              <button
+                type="button"
+                class="community-vote-btn"
+                id="communityPostDetailVoteUpBtn"
+                data-vote="up"
+                aria-label="Upvote"
+              >
+                <i class="ri-arrow-up-s-line"></i>
+              </button>
+              <div
+                class="community-post-detail-score"
+                id="communityPostDetailScore"
+              >
+                0
+              </div>
+              <button
+                type="button"
+                class="community-vote-btn"
+                id="communityPostDetailVoteDownBtn"
+                data-vote="down"
+                aria-label="Downvote"
+              >
+                <i class="ri-arrow-down-s-line"></i>
+              </button>
             </div>
-            <button
-              type="button"
-              class="community-vote-btn"
-              id="communityPostDetailVoteDownBtn"
-              data-vote="down"
-              aria-label="Downvote"
-            >
-              <i class="ri-arrow-down-s-line"></i>
-            </button>
           </div>
         </div>
 
-        <div class="community-post-detail-comments">
+        <div class="community-post-detail-actions-bar">
+          <button
+            type="button"
+            class="community-post-detail-comments-trigger"
+            id="communityPostDetailToggleCommentsBtn"
+            aria-expanded="false"
+            aria-controls="communityPostDetailCommentsRegion"
+          >
+            <i class="ri-chat-3-line" aria-hidden="true"></i>
+            <span class="community-post-detail-comments-trigger-label">Comments</span>
+            <span
+              class="community-post-detail-comments-badge"
+              id="communityPostDetailCommentsBadge"
+              >0</span>
+          </button>
+        </div>
+
+        <div
+          class="community-post-detail-comments-region"
+          id="communityPostDetailCommentsRegion"
+        >
           <div class="community-comments-section-head">
             <h3 class="community-comments-title">Comments</h3>
             <span
@@ -4695,7 +4717,7 @@
             </div>
           </div>
           <p class="community-comments-hint">
-            Be respectful. Replies nest under each comment.
+            Be respectful. Click reply to respond to a comment.
           </p>
           <div class="community-comment-composer" id="communityCommentComposer">
             <div
@@ -4816,7 +4838,7 @@
     <script type="module" src="/demo-mode-bootstrap.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/app-shell.js"></script>
-    <script type="module" src="/profile.js?v=comments-ui-9"></script>
+    <script type="module" src="/profile.js?v=comments-ui-10"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

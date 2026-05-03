@@ -303,19 +303,36 @@ function bindCommunityPostMediaLightbox() {
   const lightboxClose = document.getElementById("communityPostMediaLightboxClose");
   const lightboxBackdrop = document.getElementById("communityPostMediaLightboxBackdrop");
   const thumbsWrap = document.getElementById("communityPostMediaLightboxThumbs");
-  const prevBtn = document.getElementById("communityPostMediaLightboxPrevBtn");
-  const nextBtn = document.getElementById("communityPostMediaLightboxNextBtn");
+  const prevBtn = document.getElementById("communityPostMediaPrevBtn");
+  const nextBtn = document.getElementById("communityPostMediaNextBtn");
+  const lightboxFrame = lightbox?.querySelector(".community-post-media-lightbox-frame");
 
   if (!lightbox || !lightboxImg || !lightboxVideo) return;
 
   let mediaUrls = [];
   let mediaTypes = [];
   let activeIndex = 0;
+  let imgScale = 1;
+  let imgTx = 0;
+  let imgTy = 0;
+  let imgDrag = null;
 
   function inferKind(url, explicitType) {
     if (explicitType) return explicitType === "video" ? "video" : "image";
     const u = String(url || "").toLowerCase();
     return u.match(/\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/) ? "video" : "image";
+  }
+
+  function resetImgZoomPan() {
+    imgScale = 1;
+    imgTx = 0;
+    imgTy = 0;
+    imgDrag = null;
+    lightboxImg.style.transform = "translate(0px, 0px) scale(1)";
+  }
+
+  function applyImgViewTransform() {
+    lightboxImg.style.transform = `translate(${imgTx}px, ${imgTy}px) scale(${imgScale})`;
   }
 
   function setMainByIndex(index) {
@@ -325,8 +342,10 @@ function bindCommunityPostMediaLightbox() {
     const type = inferKind(url, mediaTypes[activeIndex]);
     const isVideo = type === "video";
 
+    resetImgZoomPan();
     lightboxImg.style.display = isVideo ? "none" : "block";
     lightboxVideo.style.display = isVideo ? "block" : "none";
+    if (lightboxFrame) lightboxFrame.style.cursor = isVideo ? "default" : "grab";
 
     if (isVideo) {
       lightboxVideo.src = url;
@@ -386,20 +405,21 @@ function bindCommunityPostMediaLightbox() {
     if (!lightbox) return;
     lightbox.style.display = "none";
     document.body.style.overflow = "";
-    // Reset media to stop playback.
+    if (__communityPostDetail?.modal && __communityPostDetail.modal.style.display !== "none") {
+      try {
+        document.body.style.overflow = "hidden";
+      } catch (_) {}
+    }
     try { lightboxVideo.pause(); } catch (_) {}
     lightboxVideo.src = "";
     lightboxImg.src = "";
+    resetImgZoomPan();
   }
 
   function onPostClick(e) {
-    // Full-screen media lightbox is disabled for the Reddit-style post page,
-    // because it conflicts with the post details modal interaction.
     return;
     const card = e.target.closest(".community-post");
     if (!card) return;
-    // The post card now includes an in-place media gallery. Don't open the full lightbox
-    // when clicking media elements inside the gallery.
     if (e.target.closest(".community-post-media-gallery")) return;
     if (e.target.closest(".community-post-media-thumb-btn")) return;
     if (e.target.closest("video") || e.target.closest("audio")) return;
@@ -418,19 +438,61 @@ function bindCommunityPostMediaLightbox() {
     openWithData(urls, types, 0);
   }
 
-  // One-time close bindings.
   lightboxClose?.addEventListener("click", close);
   lightboxBackdrop?.addEventListener("click", close);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && lightbox.style.display !== "none") close();
   });
 
-  // Nav buttons.
-  prevBtn?.addEventListener("click", () => setMainByIndex(activeIndex - 1));
-  nextBtn?.addEventListener("click", () => setMainByIndex(activeIndex + 1));
+  prevBtn?.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    setMainByIndex(activeIndex - 1);
+  });
+  nextBtn?.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    setMainByIndex(activeIndex + 1);
+  });
 
-  // Event delegation from the community feed.
+  lightboxFrame?.addEventListener(
+    "wheel",
+    (e) => {
+      if (lightboxImg.style.display === "none") return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.12 : 0.12;
+      imgScale = Math.min(5, Math.max(0.35, imgScale + delta));
+      applyImgViewTransform();
+    },
+    { passive: false }
+  );
+
+  lightboxFrame?.addEventListener("dblclick", (e) => {
+    if (lightboxImg.style.display === "none") return;
+    e.preventDefault();
+    resetImgZoomPan();
+  });
+
+  lightboxFrame?.addEventListener("pointerdown", (e) => {
+    if (lightboxImg.style.display === "none") return;
+    if (e.button !== 0) return;
+    imgDrag = { sx: e.clientX - imgTx, sy: e.clientY - imgTy };
+    try { lightboxFrame.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  lightboxFrame?.addEventListener("pointermove", (e) => {
+    if (!imgDrag || lightboxImg.style.display === "none") return;
+    imgTx = e.clientX - imgDrag.sx;
+    imgTy = e.clientY - imgDrag.sy;
+    applyImgViewTransform();
+  });
+  lightboxFrame?.addEventListener("pointerup", () => {
+    imgDrag = null;
+  });
+  lightboxFrame?.addEventListener("pointercancel", () => {
+    imgDrag = null;
+  });
+
   document.getElementById("communityFeed")?.addEventListener("click", onPostClick);
+
+  openCommunityPostMediaLightboxFn = openWithData;
 }
 
 let botsPagesModulePromise = null;
@@ -2027,6 +2089,8 @@ let communityPostDetailCommunitySlug = null;
 let communityPostDetailAuthorFirebaseUid = null;
 /** Cached flat comment list for search + client-side sort without refetch. */
 let __dewCommentsCache = { postId: null, raw: [] };
+/** Set by bindCommunityPostMediaLightbox — opens viewer above post detail modal. */
+let openCommunityPostMediaLightboxFn = null;
 let createCommunityWizard = { step: 1, topic: "Indoor Plants", type: "public", mature: false };
 
 function openCommunityCreatePostModal() {
@@ -3788,6 +3852,40 @@ function bindCommunityPostDetailModal() {
   }
 
   bindCommunityCommentComposerExtras();
+
+  const detailPanel = document.querySelector(".community-post-detail-panel");
+  const toggleCommentsBtn = document.getElementById("communityPostDetailToggleCommentsBtn");
+  if (toggleCommentsBtn && !toggleCommentsBtn.__dewToggleBound) {
+    toggleCommentsBtn.__dewToggleBound = true;
+    toggleCommentsBtn.addEventListener("click", () => {
+      if (!detailPanel) return;
+      const open = !detailPanel.classList.contains("community-post-detail-panel--comments-open");
+      detailPanel.classList.toggle("community-post-detail-panel--comments-open", open);
+      toggleCommentsBtn.setAttribute("aria-expanded", String(open));
+      if (open && communityPostDetailOpenPostId) {
+        const skip = __dewCommentsCache.postId === communityPostDetailOpenPostId;
+        void renderCommunityPostComments(communityPostDetailOpenPostId, { skipFetch: skip });
+      }
+    });
+  }
+}
+
+function syncCommunityPostDetailCommentBadge(n) {
+  const badge = document.getElementById("communityPostDetailCommentsBadge");
+  if (badge) badge.textContent = String(Math.max(0, Number(n) || 0));
+}
+
+function ensureCommunityPostDetailCommentsExpanded() {
+  const detailPanel = document.querySelector(".community-post-detail-panel");
+  const toggleCommentsBtn = document.getElementById("communityPostDetailToggleCommentsBtn");
+  if (!detailPanel) return;
+  if (detailPanel.classList.contains("community-post-detail-panel--comments-open")) return;
+  detailPanel.classList.add("community-post-detail-panel--comments-open");
+  if (toggleCommentsBtn) toggleCommentsBtn.setAttribute("aria-expanded", "true");
+  if (communityPostDetailOpenPostId) {
+    const skip = __dewCommentsCache.postId === communityPostDetailOpenPostId;
+    void renderCommunityPostComments(communityPostDetailOpenPostId, { skipFetch: skip });
+  }
 }
 
 function closeCommunityPostDetailModal() {
@@ -3796,6 +3894,9 @@ function closeCommunityPostDetailModal() {
   try {
     document.body.style.overflow = "";
   } catch (_) {}
+  document.querySelector(".community-post-detail-panel")?.classList.remove("community-post-detail-panel--comments-open");
+  const tcb = document.getElementById("communityPostDetailToggleCommentsBtn");
+  if (tcb) tcb.setAttribute("aria-expanded", "false");
   communityPostDetailOpenPostId = null;
   communityPostDetailCommunitySlug = null;
   communityPostDetailAuthorFirebaseUid = null;
@@ -4103,6 +4204,11 @@ async function openCommunityPostDetail(postId) {
   commObj.isModerator = isModerator;
   const canComment = computeCanComment(commObj);
 
+  document.querySelector(".community-post-detail-panel")?.classList.remove("community-post-detail-panel--comments-open");
+  const toggleCommentsReset = document.getElementById("communityPostDetailToggleCommentsBtn");
+  if (toggleCommentsReset) toggleCommentsReset.setAttribute("aria-expanded", "false");
+  syncCommunityPostDetailCommentBadge(post.comment_count ?? 0);
+
   // Show modal
   __communityPostDetail.modal.style.display = "block";
   try {
@@ -4161,8 +4267,10 @@ async function openCommunityPostDetail(postId) {
     const slidesHtml = safeUrls
       .map((url, idx) => {
         const kind = inferKind(safeTypes[idx], url);
-        if (kind === "video") return `<div class="community-post-media-slide" data-slide-index="${idx}"><video src="${escapeHtml(url)}" controls preload="metadata" playsinline></video></div>`;
-        if (kind === "audio") return `<div class="community-post-media-slide community-post-media-slide--audio" data-slide-index="${idx}"><audio src="${escapeHtml(url)}" controls preload="metadata"></audio></div>`;
+        if (kind === "video")
+          return `<div class="community-post-media-slide" data-slide-index="${idx}"><video src="${escapeHtml(url)}" controls preload="metadata" playsinline title="Double-click for full-screen viewer"></video></div>`;
+        if (kind === "audio")
+          return `<div class="community-post-media-slide community-post-media-slide--audio" data-slide-index="${idx}"><audio src="${escapeHtml(url)}" controls preload="metadata" title="Double-click for full-screen viewer"></audio></div>`;
         return `<div class="community-post-media-slide" data-slide-index="${idx}"><img src="${escapeHtml(url)}" alt="Post media ${idx + 1}" loading="lazy" /></div>`;
       })
       .join("");
@@ -4208,6 +4316,33 @@ async function openCommunityPostDetail(postId) {
       });
       scroller.addEventListener("scroll", () => window.requestAnimationFrame(updateActive));
       updateActive();
+    }
+
+    mediaHost.dataset.dewDetailMediaUrls = JSON.stringify(safeUrls);
+    mediaHost.dataset.dewDetailMediaTypes = JSON.stringify(safeTypes);
+    if (!mediaHost.__dewPostDetailMediaClick) {
+      mediaHost.__dewPostDetailMediaClick = true;
+      mediaHost.addEventListener("click", (e) => {
+        if (!openCommunityPostMediaLightboxFn) return;
+        if (e.target.closest(".community-post-media-thumb-btn")) return;
+        const slide = e.target.closest(".community-post-media-slide");
+        if (!slide) return;
+        const vid = slide.querySelector("video");
+        const aud = slide.querySelector("audio");
+        if (vid && vid.contains(e.target) && e.detail < 2) return;
+        if (aud && aud.contains(e.target) && e.detail < 2) return;
+        const idx = Number(slide.dataset.slideIndex || "0") || 0;
+        let urls = [];
+        let types = [];
+        try {
+          urls = JSON.parse(mediaHost.dataset.dewDetailMediaUrls || "[]");
+        } catch (_) {}
+        try {
+          types = JSON.parse(mediaHost.dataset.dewDetailMediaTypes || "[]");
+        } catch (_) {}
+        if (!urls.length) return;
+        openCommunityPostMediaLightboxFn(urls, types, idx);
+      });
     }
   }
 
@@ -4287,6 +4422,7 @@ async function openCommunityPostDetail(postId) {
       const replyBtn = ev.target.closest(".community-comment-reply-btn");
       if (replyBtn) {
         ev.preventDefault();
+        ensureCommunityPostDetailCommentsExpanded();
         const cid = replyBtn.dataset.replyCommentId;
         const parentIdEl = document.getElementById("communityCommentParentId");
         const bodyEl = document.getElementById("communityCommentBody");
@@ -4378,14 +4514,13 @@ async function openCommunityPostDetail(postId) {
         bodyEl.value = "";
         if (parentIdEl) parentIdEl.value = "";
         if (bodyEl) bodyEl.placeholder = communityCommentComposerDefaultPlaceholder();
+        if (j.comment_count != null) syncCommunityPostDetailCommentBadge(j.comment_count);
         await renderCommunityPostComments(communityPostDetailOpenPostId);
       } catch (e) {
         showToast(e?.message || "Could not comment.", "error");
       }
     });
   }
-
-  await renderCommunityPostComments(postId);
 }
 
 async function voteOnPostDetail(postId, delta) {
@@ -4613,6 +4748,7 @@ async function renderCommunityPostComments(postId, opts = {}) {
       countPill.hidden = true;
     }
   }
+  syncCommunityPostDetailCommentBadge(comments.length);
 
   const searchQ = document.getElementById("communityCommentsSearch")?.value ?? "";
   paintCommunityCommentsTree(comments, searchQ, communitySlugHint);
