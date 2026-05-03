@@ -4472,8 +4472,16 @@
               <video
                 id="communityPostMediaLightboxVideo"
                 controls
+                playsinline
                 style="display: none"
               ></video>
+              <p
+                id="communityPostMediaLightboxZoomHint"
+                class="community-post-media-lightbox-zoom-hint"
+                hidden
+              >
+                Scroll or pinch to zoom · drag to move · double-click to reset
+              </p>
             </div>
             <button
               type="button"
@@ -4630,30 +4638,32 @@
               role="group"
               aria-label="Post score"
             >
-              <button
-                type="button"
-                class="community-vote-btn"
-                id="communityPostDetailVoteUpBtn"
-                data-vote="up"
-                aria-label="Upvote"
-              >
-                <i class="ri-arrow-up-s-line"></i>
-              </button>
+            <button
+              type="button"
+              class="community-vote-btn"
+              id="communityPostDetailVoteUpBtn"
+              data-vote="up"
+              aria-label="Helpful — this adds value"
+              title="Helpful (upvote)"
+            >
+              <span class="community-vote-emoji" aria-hidden="true">👍</span>
+            </button>
               <div
                 class="community-post-detail-score"
                 id="communityPostDetailScore"
               >
                 0
               </div>
-              <button
-                type="button"
-                class="community-vote-btn"
-                id="communityPostDetailVoteDownBtn"
-                data-vote="down"
-                aria-label="Downvote"
-              >
-                <i class="ri-arrow-down-s-line"></i>
-              </button>
+            <button
+              type="button"
+              class="community-vote-btn"
+              id="communityPostDetailVoteDownBtn"
+              data-vote="down"
+              aria-label="Not helpful — off-topic or low quality"
+              title="Not helpful (downvote)"
+            >
+              <span class="community-vote-emoji" aria-hidden="true">👎</span>
+            </button>
             </div>
           </div>
         </div>
@@ -4771,7 +4781,8 @@
                     <i class="ri-image-add-line" aria-hidden="true"></i>
                   </button>
                 </div>
-                <span class="community-comment-format-hint">Markdown-style: **bold**, *italic*, [label](url), ![](image-url)</span>
+                <span class="community-comment-format-hint"
+                  >Use the buttons for bold, italic, links, and pictures—or paste a normal website or image link and it will usually work automatically.</span>
               </div>
               <textarea
                 id="communityCommentBody"
@@ -4838,7 +4849,7 @@
     <script type="module" src="/demo-mode-bootstrap.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/app-shell.js"></script>
-    <script type="module" src="/profile.js?v=comments-ui-10"></script>
+    <script type="module" src="/profile.js?v=comments-ui-11"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
