@@ -3723,6 +3723,19 @@ function safeToDate(iso) {
   }
 }
 
+/** Two-letter initials for comment avatars (Reddit/IG-style). */
+function getCommentInitials(displayName) {
+  const s = String(displayName || "").trim();
+  if (!s) return "?";
+  const parts = s.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0][0] || "";
+    const b = parts[1][0] || "";
+    return (a + b).toUpperCase().slice(0, 2);
+  }
+  return s.slice(0, 2).toUpperCase();
+}
+
 async function openCommunityPostDetail(postId) {
   if (!postId) return;
   if (!__communityPostDetail?.modal) bindCommunityPostDetailModal();
@@ -4057,6 +4070,11 @@ async function renderCommunityPostComments(postId) {
 
   listEl.innerHTML = "";
   if (emptyEl) emptyEl.style.display = "none";
+  const countPillReset = document.getElementById("communityPostCommentsCountPill");
+  if (countPillReset) {
+    countPillReset.textContent = "";
+    countPillReset.hidden = true;
+  }
 
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, { headers });
@@ -4067,6 +4085,17 @@ async function renderCommunityPostComments(postId) {
   }
 
   const comments = Array.isArray(data.comments) ? data.comments : [];
+  const countPill = document.getElementById("communityPostCommentsCountPill");
+  if (countPill) {
+    const n = comments.length;
+    if (n > 0) {
+      countPill.textContent = `${n} ${n === 1 ? "comment" : "comments"}`;
+      countPill.hidden = false;
+    } else {
+      countPill.textContent = "";
+      countPill.hidden = true;
+    }
+  }
   if (!comments.length) {
     if (emptyEl) emptyEl.style.display = "block";
     return;
@@ -4098,6 +4127,7 @@ async function renderCommunityPostComments(postId) {
     const created = safeToDate(c.created_at);
     const score = Number(c.score ?? 0);
     const myVote = Number(c.my_vote ?? 0);
+    const initials = getCommentInitials(authorName);
 
     const isCommentAuthor = !!(uid && String(c.uid) === String(uid));
     const isCommunityCreator = !!(
@@ -4112,36 +4142,47 @@ async function renderCommunityPostComments(postId) {
     );
     const canDeleteComment = isCommentAuthor || isCommunityCreator || isCommunityMod;
 
-    const replyBtn = `<button type="button" class="community-comment-reply-btn" data-reply-comment-id="${escapeHtml(commentId)}">
-        Reply</button>`;
+    const replyBtn = `<button type="button" class="community-comment-reply-btn" data-reply-comment-id="${escapeHtml(commentId)}"><i class="ri-chat-3-line" aria-hidden="true"></i> Reply</button>`;
     const deleteBtn = canDeleteComment
-      ? `<button type="button" class="community-comment-delete-btn" data-delete-comment-id="${escapeHtml(commentId)}">
-          Delete</button>`
+      ? `<button type="button" class="community-comment-delete-btn" data-delete-comment-id="${escapeHtml(commentId)}"><i class="ri-delete-bin-line" aria-hidden="true"></i> Delete</button>`
       : "";
+    const youBadge = isCommentAuthor ? `<span class="community-comment-you">You</span>` : "";
 
     const voteUpActive = myVote === 1;
     const voteDownActive = myVote === -1;
     const liClass = "community-comment" + (depth > 0 ? " community-comment--reply" : "");
 
     const children = childrenByParent.get(commentId) || [];
-    const childHtml = children.length ? `<ul class="community-post-comments-list" style="margin-top:10px">${children.map((ch) => renderNode(ch, depth + 1)).join("")}</ul>` : "";
+    const childHtml = children.length
+      ? `<ul class="community-post-comments-list community-post-comments-list--nested" role="group" aria-label="Replies">${children.map((ch) => renderNode(ch, depth + 1)).join("")}</ul>`
+      : "";
 
     return `
-      <li class="${liClass}">
-        <div class="community-comment-header">
-          <div><strong>${escapeHtml(authorName)}</strong> <span>• ${escapeHtml(created)}</span></div>
-          <div>${deleteBtn}</div>
-        </div>
-        <div class="community-comment-body">${escapeBody(c.body)}</div>
-        <div class="community-comment-actions">
-          <button type="button" class="community-comment-vote-btn" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Upvote" ${voteUpActive ? 'style="border-color: rgba(126,242,191,0.55)"' : ''}>
-            <i class="ri-arrow-up-s-line"></i>
-          </button>
-          <div class="community-comment-score">${score}</div>
-          <button type="button" class="community-comment-vote-btn" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Downvote" ${voteDownActive ? 'style="border-color: rgba(255,120,120,0.55)"' : ''}>
-            <i class="ri-arrow-down-s-line"></i>
-          </button>
-          ${replyBtn}
+      <li class="${liClass}" data-comment-depth="${depth}">
+        <div class="community-comment-row">
+          <div class="community-comment-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+          <div class="community-comment-main">
+            <div class="community-comment-header">
+              <div class="community-comment-meta">
+                <span class="community-comment-author">${escapeHtml(authorName)}</span>
+                ${youBadge}
+                <span class="community-comment-dot" aria-hidden="true">·</span>
+                <time class="community-comment-time" datetime="${escapeHtml(String(c.created_at || ""))}">${escapeHtml(created)}</time>
+              </div>
+              <div class="community-comment-header-actions">${deleteBtn}</div>
+            </div>
+            <div class="community-comment-body">${escapeBody(c.body)}</div>
+            <div class="community-comment-actions">
+              <button type="button" class="community-comment-vote-btn" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Upvote" ${voteUpActive ? 'style="border-color: rgba(126,242,191,0.55)"' : ''}>
+                <i class="ri-arrow-up-s-line"></i>
+              </button>
+              <div class="community-comment-score">${score}</div>
+              <button type="button" class="community-comment-vote-btn" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Downvote" ${voteDownActive ? 'style="border-color: rgba(255,120,120,0.55)"' : ''}>
+                <i class="ri-arrow-down-s-line"></i>
+              </button>
+              ${replyBtn}
+            </div>
+          </div>
         </div>
         ${childHtml}
       </li>

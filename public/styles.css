@@ -7285,15 +7285,76 @@ body.reduce-motion .card:hover {
   padding: 0 16px 16px;
   overflow: auto;
   flex: 1;
+  scrollbar-gutter: stable;
+}
+
+.community-comments-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+.community-comments-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.community-comments-count-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(126, 242, 191, 0.95);
+  background: rgba(126, 242, 191, 0.12);
+  border: 1px solid rgba(126, 242, 191, 0.22);
+}
+
+.community-comments-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-soft);
 }
 
 .community-comment-form {
-  margin: 8px 0 16px;
+  margin: 0 0 16px;
   border-top: 1px solid rgba(126, 242, 191, 0.12);
   padding-top: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.community-post-comments-empty {
+  padding: 20px 14px;
+  text-align: center;
+  border-radius: 14px;
+  border: 1px dashed rgba(126, 242, 191, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  margin-bottom: 12px;
+}
+
+.community-post-comments-empty-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.community-post-comments-empty-sub {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-soft);
 }
 
 .community-post-comments-list {
@@ -7302,60 +7363,159 @@ body.reduce-motion .card:hover {
   margin: 0;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.community-post-comments-list--nested {
+  margin-top: 10px;
+  margin-left: 0;
+  padding-left: 14px;
+  border-left: 2px solid rgba(126, 242, 191, 0.22);
   gap: 10px;
 }
 
 .community-comment {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.22);
-  border-radius: 14px;
-  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(165deg, rgba(18, 28, 24, 0.55) 0%, rgba(0, 0, 0, 0.35) 100%);
+  border-radius: 16px;
+  padding: 12px 12px 10px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
 }
 
 .community-comment--reply {
-  margin-left: 22px;
-  background: rgba(0, 0, 0, 0.18);
+  margin-left: 0;
+  background: linear-gradient(165deg, rgba(14, 22, 20, 0.5) 0%, rgba(0, 0, 0, 0.28) 100%);
+  box-shadow: none;
+}
+
+.community-comment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.community-comment-avatar {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.95);
+  background: linear-gradient(145deg, rgba(126, 242, 191, 0.35), rgba(68, 214, 255, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.community-comment--reply .community-comment-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+}
+
+.community-comment-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .community-comment-header {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  font-size: 12px;
-  color: var(--text-soft);
   margin-bottom: 8px;
 }
 
+.community-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.community-comment-author {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.community-comment-you {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: rgba(126, 242, 191, 0.98);
+  background: rgba(126, 242, 191, 0.14);
+  border: 1px solid rgba(126, 242, 191, 0.28);
+}
+
+.community-comment-dot {
+  color: rgba(255, 255, 255, 0.35);
+  user-select: none;
+}
+
+.community-comment-time {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.community-comment-header-actions {
+  flex-shrink: 0;
+}
+
 .community-comment-body {
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 14px;
+  line-height: 1.5;
   white-space: pre-wrap;
+  color: rgba(255, 255, 255, 0.88);
+  word-break: break-word;
 }
 
 .community-comment-actions {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 }
 
 .community-comment-vote-btn {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
-  border: 1px solid rgba(126, 242, 191, 0.18);
-  background: rgba(0, 0, 0, 0.30);
+  border: 1px solid rgba(126, 242, 191, 0.2);
+  background: rgba(0, 0, 0, 0.35);
   color: rgba(126, 242, 191, 0.95);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.community-comment-vote-btn:hover {
+  background: rgba(126, 242, 191, 0.12);
+  border-color: rgba(126, 242, 191, 0.35);
+}
+
+.community-comment-vote-btn:active {
+  transform: scale(0.96);
 }
 
 .community-comment-score {
   font-weight: 700;
   font-size: 12px;
+  min-width: 1.25rem;
+  text-align: center;
   color: rgba(255, 255, 255, 0.92);
 }
 
@@ -7366,11 +7526,25 @@ body.reduce-motion .card:hover {
   cursor: pointer;
   color: var(--accent-strong);
   font-size: 12px;
-  padding: 0;
+  font-weight: 600;
+  padding: 6px 8px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.community-comment-reply-btn:hover {
+  background: rgba(126, 242, 191, 0.1);
 }
 
 .community-comment-delete-btn {
   color: rgba(255, 120, 120, 0.95);
+}
+
+.community-comment-delete-btn:hover {
+  background: rgba(255, 120, 120, 0.12);
 }
 
 /* —— Bots: unified full-width page (/bots) —— */

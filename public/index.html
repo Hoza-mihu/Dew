@@ -2856,14 +2856,22 @@
         </div>
 
         <div class="community-post-detail-comments">
+          <div class="community-comments-section-head">
+            <h3 class="community-comments-title">Discussion</h3>
+            <span class="community-comments-count-pill" id="communityPostCommentsCountPill" hidden></span>
+          </div>
+          <p class="community-comments-hint">Be kind. Replies thread under each comment.</p>
           <form id="communityCommentForm" class="community-comment-form">
-            <textarea id="communityCommentBody" class="community-input" placeholder="Add a comment…" rows="3"></textarea>
+            <textarea id="communityCommentBody" class="community-input" placeholder="Join the conversation…" rows="3"></textarea>
             <input type="hidden" id="communityCommentParentId" value="" />
             <button type="submit" class="btn btn-primary btn-sm" id="communityCommentSubmitBtn">
               <i class="ri-send-plane-2-line"></i> Comment
             </button>
           </form>
-          <div class="community-post-comments-empty" id="communityPostCommentsEmpty" style="display:none">No comments yet.</div>
+          <div class="community-post-comments-empty" id="communityPostCommentsEmpty" style="display:none">
+            <p class="community-post-comments-empty-title">No comments yet</p>
+            <p class="community-post-comments-empty-sub">Start the thread—your comment will show here for everyone.</p>
+          </div>
           <ul class="community-post-comments-list" id="communityPostCommentsList"></ul>
         </div>
       </div>
@@ -2873,7 +2881,7 @@
     <script type="module" src="/demo-mode-bootstrap.js"></script>
     <script type="module" src="/auth-guard.js"></script>
     <script type="module" src="/app-shell.js"></script>
-    <script type="module" src="/profile.js?v=desk-about-3"></script>
+    <script type="module" src="/profile.js?v=comments-ui-1"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
