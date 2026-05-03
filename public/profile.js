@@ -3906,6 +3906,49 @@ function bindCommunityPostDetailModal() {
       }
     });
   }
+
+  const awardBtn = document.getElementById("communityPostDetailAwardBtn");
+  const shareBtn = document.getElementById("communityPostDetailShareBtn");
+  const reportBtn = document.getElementById("communityPostDetailReportBtn");
+  if (awardBtn && !awardBtn.__dewDetailBarBound) {
+    awardBtn.__dewDetailBarBound = true;
+    awardBtn.addEventListener("click", () => showToast("Awards are coming soon.", "info"));
+  }
+  if (shareBtn && !shareBtn.__dewDetailBarBound) {
+    shareBtn.__dewDetailBarBound = true;
+    shareBtn.addEventListener("click", async () => {
+      const pid = communityPostDetailOpenPostId;
+      const slug = String(communityPostDetailCommunitySlug || "").toLowerCase();
+      if (!pid || !slug) {
+        showToast("Could not share this post.", "error");
+        return;
+      }
+      try {
+        const auth = await authReady;
+        const token = await auth.currentUser?.getIdToken?.();
+        if (!token) {
+          showToast("Please log in to share.", "error");
+          return;
+        }
+        await fetch(`/api/posts/${encodeURIComponent(pid)}/share`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ communitySlug: slug }),
+        });
+        try {
+          await navigator.clipboard?.writeText?.(window.location.href);
+        } catch (_) {}
+        showToast("Link copied.", "success");
+        loadCommunityView();
+      } catch (_) {
+        showToast("Could not share.", "error");
+      }
+    });
+  }
+  if (reportBtn && !reportBtn.__dewDetailBarBound) {
+    reportBtn.__dewDetailBarBound = true;
+    reportBtn.addEventListener("click", () => showToast("Reporting will be available in a future update.", "info"));
+  }
 }
 
 function syncCommunityPostDetailCommentBadge(n) {
@@ -4485,6 +4528,22 @@ async function openCommunityPostDetail(postId) {
         return;
       }
 
+      const barAct = ev.target.closest("[data-comment-bar]");
+      if (barAct) {
+        ev.preventDefault();
+        const kind = String(barAct.getAttribute("data-comment-bar") || "");
+        if (kind === "award") showToast("Awards are coming soon.", "info");
+        else if (kind === "share") {
+          try {
+            await navigator.clipboard?.writeText?.(window.location.href);
+            showToast("Link copied.", "success");
+          } catch (_) {
+            showToast("Could not copy link.", "error");
+          }
+        } else if (kind === "more") showToast("More options are coming soon.", "info");
+        return;
+      }
+
       const delBtn = ev.target.closest(".community-comment-delete-btn");
       if (delBtn) {
         ev.preventDefault();
@@ -4717,7 +4776,16 @@ function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint
             commentId
           )}" title="Collapse replies" aria-label="Collapse ${subtreeTotal} repl${subtreeTotal === 1 ? "y" : "ies"}"><i class="ri-subtract-line" aria-hidden="true"></i></button>`
         : "";
-    const voteColClass = "community-comment-vote-col" + (collapseCtl ? " community-comment-vote-col--threaded" : "");
+    const threadGutterHtml = collapseCtl
+      ? `<div class="community-comment-thread-gutter" aria-hidden="false">${collapseCtl}</div>`
+      : "";
+
+    const voteUpCls =
+      "community-comment-vote-btn community-comment-vote-btn--inline community-vote-btn" +
+      (voteUpActive ? " community-vote-btn--active-up" : "");
+    const voteDownCls =
+      "community-comment-vote-btn community-comment-vote-btn--inline community-vote-btn" +
+      (voteDownActive ? " community-vote-btn--active-down" : "");
 
     const childHtml = children.length
       ? `<ul id="comment-subtree-${escapeHtml(commentId)}" class="${nestClass}" role="group" aria-label="Replies">${children.map((ch) => renderNode(ch, childDepth)).join("")}</ul>`
@@ -4726,16 +4794,7 @@ function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint
     return `
       <li class="${liClass}" data-comment-depth="${depth}" data-comment-id="${escapeHtml(commentId)}">
         <div class="community-comment-shell">
-          <div class="${voteColClass}" aria-label="Comment score">
-            ${collapseCtl}
-            <button type="button" class="community-comment-vote-btn community-comment-vote-btn--col" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Helpful — adds value" title="Helpful" ${voteUpActive ? 'style="border-color: rgba(126,242,191,0.55)"' : ''}>
-              <span class="community-comment-vote-emoji" aria-hidden="true">👍</span>
-            </button>
-            <div class="community-comment-score community-comment-score--col">${score}</div>
-            <button type="button" class="community-comment-vote-btn community-comment-vote-btn--col" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Not helpful — off-topic or low quality" title="Not helpful" ${voteDownActive ? 'style="border-color: rgba(255,120,120,0.55)"' : ''}>
-              <span class="community-comment-vote-emoji" aria-hidden="true">👎</span>
-            </button>
-          </div>
+          ${threadGutterHtml}
           <div class="community-comment-right">
             <div class="community-comment-row">
               <div class="community-comment-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
@@ -4755,7 +4814,25 @@ function paintCommunityCommentsTree(flatComments, searchQuery, communitySlugHint
                   <div class="community-comment-body">${formatCommentBodyToHtml(c.body)}</div>
                 </div>
                 <div class="community-comment-actions">
+                  <div class="community-comment-vote-inline" role="group" aria-label="Comment score">
+                    <button type="button" class="${voteUpCls}" data-comment-vote="1" data-comment-id="${escapeHtml(commentId)}" aria-label="Helpful — adds value" title="Helpful">
+                      <span class="community-comment-vote-emoji" aria-hidden="true">👍</span>
+                    </button>
+                    <span class="community-comment-score-inline">${score}</span>
+                    <button type="button" class="${voteDownCls}" data-comment-vote="-1" data-comment-id="${escapeHtml(commentId)}" aria-label="Not helpful — off-topic or low quality" title="Not helpful">
+                      <span class="community-comment-vote-emoji" aria-hidden="true">👎</span>
+                    </button>
+                  </div>
                   ${replyBtn}
+                  <button type="button" class="community-comment-bar-btn" data-comment-bar="award" aria-label="Give award">
+                    <i class="ri-medal-line" aria-hidden="true"></i> Award
+                  </button>
+                  <button type="button" class="community-comment-bar-btn" data-comment-bar="share" aria-label="Share comment">
+                    <i class="ri-share-forward-line" aria-hidden="true"></i> Share
+                  </button>
+                  <button type="button" class="community-comment-bar-btn community-comment-bar-btn--icon" data-comment-bar="more" aria-label="More options">
+                    <i class="ri-more-fill" aria-hidden="true"></i>
+                  </button>
                 </div>
               </div>
             </div>

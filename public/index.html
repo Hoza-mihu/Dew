@@ -4631,13 +4631,14 @@
             class="community-post-detail-media"
             id="communityPostDetailMedia"
           ></div>
+        </div>
 
-          <div class="community-post-detail-votes">
-            <div
-              class="community-post-detail-votes-pill"
-              role="group"
-              aria-label="Post score"
-            >
+        <div class="community-post-detail-actions-bar">
+          <div
+            class="community-post-detail-votes-pill"
+            role="group"
+            aria-label="Post score"
+          >
             <button
               type="button"
               class="community-vote-btn"
@@ -4648,12 +4649,12 @@
             >
               <span class="community-vote-emoji" aria-hidden="true">👍</span>
             </button>
-              <div
-                class="community-post-detail-score"
-                id="communityPostDetailScore"
-              >
-                0
-              </div>
+            <div
+              class="community-post-detail-score"
+              id="communityPostDetailScore"
+            >
+              0
+            </div>
             <button
               type="button"
               class="community-vote-btn"
@@ -4664,11 +4665,7 @@
             >
               <span class="community-vote-emoji" aria-hidden="true">👎</span>
             </button>
-            </div>
           </div>
-        </div>
-
-        <div class="community-post-detail-actions-bar">
           <button
             type="button"
             class="community-post-detail-comments-trigger"
@@ -4677,11 +4674,45 @@
             aria-controls="communityPostDetailCommentsRegion"
           >
             <i class="ri-chat-3-line" aria-hidden="true"></i>
-            <span class="community-post-detail-comments-trigger-label">Comments</span>
             <span
               class="community-post-detail-comments-badge"
               id="communityPostDetailCommentsBadge"
-              >0</span>
+              >0</span
+            >
+            <span class="community-post-detail-comments-trigger-suffix"
+              >comments</span
+            >
+          </button>
+          <button
+            type="button"
+            class="community-post-detail-bar-btn"
+            id="communityPostDetailAwardBtn"
+            aria-label="Give award"
+          >
+            <i class="ri-medal-line" aria-hidden="true"></i>
+            <span>Award</span>
+          </button>
+          <button
+            type="button"
+            class="community-post-detail-bar-btn"
+            id="communityPostDetailShareBtn"
+            aria-label="Share post"
+          >
+            <i class="ri-share-forward-line" aria-hidden="true"></i>
+            <span>Share</span>
+          </button>
+          <span
+            class="community-post-detail-actions-spacer"
+            aria-hidden="true"
+          ></span>
+          <button
+            type="button"
+            class="community-post-detail-bar-btn community-post-detail-bar-btn--report"
+            id="communityPostDetailReportBtn"
+            aria-label="Report post"
+          >
+            <i class="ri-flag-line" aria-hidden="true"></i>
+            <span>Report</span>
           </button>
         </div>
 
