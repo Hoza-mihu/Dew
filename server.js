@@ -2880,8 +2880,20 @@ app.get('/api/posts/:id', async (req, res) => {
     // Public is viewable by anyone; restricted/private requires membership/mod/creator.
     if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
 
-    // Prefer Supabase-backed counts when available (serverless-safe). Fallback to SQLite.
-    const postVotesRowP = dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]);
+    // Prefer Supabase-backed vote counts when available (cross-device persistence). Fallback to SQLite.
+    const postVotesRowP = (async () => {
+      try {
+        const resp = await supabaseAdmin
+          .from('post_votes')
+          .select('value')
+          .eq('post_id', postId);
+        if (resp.error) throw resp.error;
+        const score = (resp.data || []).reduce((acc, r) => acc + Number(r.value || 0), 0);
+        return { score };
+      } catch (_) {
+        return await dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]);
+      }
+    })();
     const commentCountRowP = (async () => {
       try {
         const resp = await supabaseAdmin
@@ -2899,8 +2911,13 @@ app.get('/api/posts/:id', async (req, res) => {
 
     let myVote = 0;
     if (uid) {
-      const mine = await dbGetAsync('SELECT value FROM post_votes WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
-      if (mine && mine.value != null) myVote = Number(mine.value);
+      try {
+        const mine = await supabaseAdmin.from('post_votes').select('value').eq('post_id', postId).eq('uid', uid).maybeSingle();
+        if (!mine.error && mine.data && mine.data.value != null) myVote = Number(mine.data.value);
+      } catch (_) {
+        const mine = await dbGetAsync('SELECT value FROM post_votes WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
+        if (mine && mine.value != null) myVote = Number(mine.value);
+      }
     }
 
     const myInteractions = uid ? await getUserPostInteractionState(postId, uid) : { following: false, saved: false, hidden: false };
@@ -2908,7 +2925,6 @@ app.get('/api/posts/:id', async (req, res) => {
     res.json({
       post: {
         ...post,
-        // prefer SQLite score/commentCount so votes/comments work immediately
         score: Number(postVotesRow?.score ?? 0),
         comment_count: Number(commentCountRow?.n ?? 0),
         my_vote: myVote,
@@ -2989,7 +3005,7 @@ app.get('/api/posts/:id/comments', async (req, res) => {
         try {
           const { data: vRows, error: vErr } = await supabaseAdmin
             .from('comment_votes')
-            .select('comment_id,value')
+            .select('comment_id,uid,value')
             .in('comment_id', ids);
           if (!vErr && Array.isArray(vRows)) {
             const scoreById = new Map();
@@ -3000,7 +3016,9 @@ app.get('/api/posts/:id/comments', async (req, res) => {
             comments.forEach((c) => (c.score = scoreById.get(String(c.id)) || 0));
           }
           if (uid && !vErr && Array.isArray(vRows)) {
-            // Can't compute my_vote without a user_id mapping; skip for now.
+            vRows.forEach((v) => {
+              if (String(v.uid || '') === String(uid)) myVotesByComment.set(String(v.comment_id), Number(v.value || 0));
+            });
           }
         } catch (_) {}
       }
@@ -3222,29 +3240,54 @@ app.post('/api/posts/:id/vote', async (req, res) => {
 
     if (!(await canViewCommunity(comm.slug, uid))) return res.status(403).json({ error: 'Not allowed' });
 
-    const existing = await dbGetAsync('SELECT value FROM post_votes WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
-    if (existing && Number(existing.value) === value) {
-      await dbRunAsync('DELETE FROM post_votes WHERE post_id = ? AND uid = ?', [postId, uid]);
+    // Persistent votes in Supabase (Firebase uid). Keep SQLite in sync for local fallback.
+    let toggledOff = false;
+    let existingValue = 0;
+    try {
+      const mine = await supabaseAdmin.from('post_votes').select('value').eq('post_id', postId).eq('uid', uid).maybeSingle();
+      if (!mine.error && mine.data && mine.data.value != null) existingValue = Number(mine.data.value);
+    } catch (_) {}
+
+    if (existingValue === value) {
+      toggledOff = true;
+      try {
+        await supabaseAdmin.from('post_votes').delete().eq('post_id', postId).eq('uid', uid);
+      } catch (_) {}
+      try {
+        await dbRunAsync('DELETE FROM post_votes WHERE post_id = ? AND uid = ?', [postId, uid]);
+      } catch (_) {}
     } else {
       const now = new Date().toISOString();
-      // SQLite UPSERT
-      await dbRunAsync(
-        `INSERT INTO post_votes (post_id, uid, value, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(post_id, uid) DO UPDATE SET
-           value = excluded.value,
-           updated_at = excluded.updated_at`,
-        [postId, uid, value, new Date().toISOString(), now]
-      );
+      try {
+        await supabaseAdmin
+          .from('post_votes')
+          .upsert({ post_id: postId, uid, value, updated_at: now }, { onConflict: 'post_id,uid' });
+      } catch (_) {}
+      try {
+        await dbRunAsync(
+          `INSERT INTO post_votes (post_id, uid, value, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(post_id, uid) DO UPDATE SET
+             value = excluded.value,
+             updated_at = excluded.updated_at`,
+          [postId, uid, value, now, now]
+        );
+      } catch (_) {}
     }
 
-    const scoreRow = await dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]);
-    const score = Number(scoreRow?.score ?? 0);
+    // Recompute score from Supabase when possible; fallback to SQLite.
+    let score = 0;
+    try {
+      const { data: vRows, error: vErr } = await supabaseAdmin.from('post_votes').select('value').eq('post_id', postId);
+      if (vErr) throw vErr;
+      score = (vRows || []).reduce((acc, r) => acc + Number(r.value || 0), 0);
+    } catch (_) {
+      const scoreRow = await dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM post_votes WHERE post_id = ?', [postId]);
+      score = Number(scoreRow?.score ?? 0);
+    }
     await supabaseAdmin.from('posts').update({ score }).eq('id', postId);
 
-    const mineAfter = await dbGetAsync('SELECT value FROM post_votes WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
-    const my_vote = mineAfter && mineAfter.value != null ? Number(mineAfter.value) : 0;
-
+    const my_vote = toggledOff ? 0 : value;
     res.json({ ok: true, score, my_vote });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to vote' });
@@ -3644,30 +3687,74 @@ app.post('/api/comments/:id/vote', async (req, res) => {
 
   try {
     const uid = await requireFirebaseUser(req);
-    const comment = await dbGetAsync('SELECT id,post_id,community_slug FROM post_comments WHERE id = ? LIMIT 1', [commentId]);
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase not configured' });
+
+    // Load comment from Supabase first (persistent), fallback to SQLite.
+    let comment = null;
+    try {
+      const { data, error } = await supabaseAdmin.from('post_comments').select('id,post_id,community_id').eq('id', commentId).maybeSingle();
+      if (!error && data) comment = data;
+    } catch (_) {}
+    if (!comment) {
+      comment = await dbGetAsync('SELECT id,post_id,community_slug FROM post_comments WHERE id = ? LIMIT 1', [commentId]);
+    }
     if (!comment) return res.status(404).json({ error: 'Comment not found' });
 
-    if (!(await canViewCommunity(comment.community_slug, uid))) return res.status(403).json({ error: 'Not allowed' });
-
-    const existing = await dbGetAsync('SELECT value FROM comment_votes WHERE comment_id = ? AND uid = ? LIMIT 1', [commentId, uid]);
-    if (existing && Number(existing.value) === value) {
-      await dbRunAsync('DELETE FROM comment_votes WHERE comment_id = ? AND uid = ?', [commentId, uid]);
-    } else {
-      const now = new Date().toISOString();
-      await dbRunAsync(
-        `INSERT INTO comment_votes (comment_id, uid, value, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(comment_id, uid) DO UPDATE SET
-           value = excluded.value,
-           updated_at = excluded.updated_at`,
-        [commentId, uid, value, now, now]
-      );
+    // Community visibility
+    if (comment.community_slug) {
+      if (!(await canViewCommunity(comment.community_slug, uid))) return res.status(403).json({ error: 'Not allowed' });
+    } else if (comment.community_id) {
+      const { data: comm } = await supabaseAdmin.from('communities').select('slug').eq('id', comment.community_id).maybeSingle();
+      if (!comm?.slug) return res.status(404).json({ error: 'Community not found' });
+      if (!(await canViewCommunity(String(comm.slug), uid))) return res.status(403).json({ error: 'Not allowed' });
     }
 
-    const scoreRow = await dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM comment_votes WHERE comment_id = ?', [commentId]);
-    const score = Number(scoreRow?.score ?? 0);
-    const mineAfter = await dbGetAsync('SELECT value FROM comment_votes WHERE comment_id = ? AND uid = ? LIMIT 1', [commentId, uid]);
-    const my_vote = mineAfter && mineAfter.value != null ? Number(mineAfter.value) : 0;
+    // Toggle/upsert vote in Supabase (Firebase uid), keep SQLite best-effort.
+    let toggledOff = false;
+    let existingValue = 0;
+    try {
+      const mine = await supabaseAdmin.from('comment_votes').select('value').eq('comment_id', commentId).eq('uid', uid).maybeSingle();
+      if (!mine.error && mine.data && mine.data.value != null) existingValue = Number(mine.data.value);
+    } catch (_) {}
+
+    if (existingValue === value) {
+      toggledOff = true;
+      try {
+        await supabaseAdmin.from('comment_votes').delete().eq('comment_id', commentId).eq('uid', uid);
+      } catch (_) {}
+      try {
+        await dbRunAsync('DELETE FROM comment_votes WHERE comment_id = ? AND uid = ?', [commentId, uid]);
+      } catch (_) {}
+    } else {
+      const now = new Date().toISOString();
+      try {
+        await supabaseAdmin
+          .from('comment_votes')
+          .upsert({ comment_id: commentId, uid, value, updated_at: now }, { onConflict: 'comment_id,uid' });
+      } catch (_) {}
+      try {
+        await dbRunAsync(
+          `INSERT INTO comment_votes (comment_id, uid, value, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(comment_id, uid) DO UPDATE SET
+             value = excluded.value,
+             updated_at = excluded.updated_at`,
+          [commentId, uid, value, now, now]
+        );
+      } catch (_) {}
+    }
+
+    let score = 0;
+    try {
+      const { data: vRows, error: vErr } = await supabaseAdmin.from('comment_votes').select('value').eq('comment_id', commentId);
+      if (vErr) throw vErr;
+      score = (vRows || []).reduce((acc, r) => acc + Number(r.value || 0), 0);
+    } catch (_) {
+      const scoreRow = await dbGetAsync('SELECT COALESCE(SUM(value), 0) AS score FROM comment_votes WHERE comment_id = ?', [commentId]);
+      score = Number(scoreRow?.score ?? 0);
+    }
+
+    const my_vote = toggledOff ? 0 : value;
     res.json({ ok: true, score, my_vote });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to vote' });
