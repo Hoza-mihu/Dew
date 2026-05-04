@@ -2884,7 +2884,7 @@ app.get('/api/posts/:id', async (req, res) => {
     const postVotesRowP = (async () => {
       try {
         const resp = await supabaseAdmin
-          .from('post_votes')
+          .from('post_votes_firebase')
           .select('value')
           .eq('post_id', postId);
         if (resp.error) throw resp.error;
@@ -2912,7 +2912,7 @@ app.get('/api/posts/:id', async (req, res) => {
     let myVote = 0;
     if (uid) {
       try {
-        const mine = await supabaseAdmin.from('post_votes').select('value').eq('post_id', postId).eq('uid', uid).maybeSingle();
+        const mine = await supabaseAdmin.from('post_votes_firebase').select('value').eq('post_id', postId).eq('uid', uid).maybeSingle();
         if (!mine.error && mine.data && mine.data.value != null) myVote = Number(mine.data.value);
       } catch (_) {
         const mine = await dbGetAsync('SELECT value FROM post_votes WHERE post_id = ? AND uid = ? LIMIT 1', [postId, uid]);
@@ -3004,7 +3004,7 @@ app.get('/api/posts/:id/comments', async (req, res) => {
       if (ids.length) {
         try {
           const { data: vRows, error: vErr } = await supabaseAdmin
-            .from('comment_votes')
+            .from('comment_votes_firebase')
             .select('comment_id,uid,value')
             .in('comment_id', ids);
           if (!vErr && Array.isArray(vRows)) {
@@ -3244,14 +3244,14 @@ app.post('/api/posts/:id/vote', async (req, res) => {
     let toggledOff = false;
     let existingValue = 0;
     try {
-      const mine = await supabaseAdmin.from('post_votes').select('value').eq('post_id', postId).eq('uid', uid).maybeSingle();
+      const mine = await supabaseAdmin.from('post_votes_firebase').select('value').eq('post_id', postId).eq('uid', uid).maybeSingle();
       if (!mine.error && mine.data && mine.data.value != null) existingValue = Number(mine.data.value);
     } catch (_) {}
 
     if (existingValue === value) {
       toggledOff = true;
       try {
-        await supabaseAdmin.from('post_votes').delete().eq('post_id', postId).eq('uid', uid);
+        await supabaseAdmin.from('post_votes_firebase').delete().eq('post_id', postId).eq('uid', uid);
       } catch (_) {}
       try {
         await dbRunAsync('DELETE FROM post_votes WHERE post_id = ? AND uid = ?', [postId, uid]);
@@ -3260,7 +3260,7 @@ app.post('/api/posts/:id/vote', async (req, res) => {
       const now = new Date().toISOString();
       try {
         await supabaseAdmin
-          .from('post_votes')
+          .from('post_votes_firebase')
           .upsert({ post_id: postId, uid, value, updated_at: now }, { onConflict: 'post_id,uid' });
       } catch (_) {}
       try {
@@ -3278,7 +3278,7 @@ app.post('/api/posts/:id/vote', async (req, res) => {
     // Recompute score from Supabase when possible; fallback to SQLite.
     let score = 0;
     try {
-      const { data: vRows, error: vErr } = await supabaseAdmin.from('post_votes').select('value').eq('post_id', postId);
+      const { data: vRows, error: vErr } = await supabaseAdmin.from('post_votes_firebase').select('value').eq('post_id', postId);
       if (vErr) throw vErr;
       score = (vRows || []).reduce((acc, r) => acc + Number(r.value || 0), 0);
     } catch (_) {
@@ -3713,14 +3713,14 @@ app.post('/api/comments/:id/vote', async (req, res) => {
     let toggledOff = false;
     let existingValue = 0;
     try {
-      const mine = await supabaseAdmin.from('comment_votes').select('value').eq('comment_id', commentId).eq('uid', uid).maybeSingle();
+      const mine = await supabaseAdmin.from('comment_votes_firebase').select('value').eq('comment_id', commentId).eq('uid', uid).maybeSingle();
       if (!mine.error && mine.data && mine.data.value != null) existingValue = Number(mine.data.value);
     } catch (_) {}
 
     if (existingValue === value) {
       toggledOff = true;
       try {
-        await supabaseAdmin.from('comment_votes').delete().eq('comment_id', commentId).eq('uid', uid);
+        await supabaseAdmin.from('comment_votes_firebase').delete().eq('comment_id', commentId).eq('uid', uid);
       } catch (_) {}
       try {
         await dbRunAsync('DELETE FROM comment_votes WHERE comment_id = ? AND uid = ?', [commentId, uid]);
@@ -3729,7 +3729,7 @@ app.post('/api/comments/:id/vote', async (req, res) => {
       const now = new Date().toISOString();
       try {
         await supabaseAdmin
-          .from('comment_votes')
+          .from('comment_votes_firebase')
           .upsert({ comment_id: commentId, uid, value, updated_at: now }, { onConflict: 'comment_id,uid' });
       } catch (_) {}
       try {
@@ -3746,7 +3746,7 @@ app.post('/api/comments/:id/vote', async (req, res) => {
 
     let score = 0;
     try {
-      const { data: vRows, error: vErr } = await supabaseAdmin.from('comment_votes').select('value').eq('comment_id', commentId);
+      const { data: vRows, error: vErr } = await supabaseAdmin.from('comment_votes_firebase').select('value').eq('comment_id', commentId);
       if (vErr) throw vErr;
       score = (vRows || []).reduce((acc, r) => acc + Number(r.value || 0), 0);
     } catch (_) {
