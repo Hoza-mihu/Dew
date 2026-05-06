@@ -20,7 +20,7 @@
     <!-- Allow scripts from self and CDNs; unsafe-eval needed by some SDKs (Supabase/Firebase). Remove unsafe-eval if you lock down CSP. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://vercel.live;"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://vercel.live https://my.spline.design https://*.spline.design;"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -32,7 +32,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css"
     />
-    <link rel="stylesheet" href="/styles.css?v=comments-ui-8" />
+    <link rel="stylesheet" href="/styles.css?v=comments-ui-11" />
   </head>
   <body>
     <div class="petal-layer" id="petalLayer"></div>
@@ -4000,6 +4000,41 @@
               noise.
             </p>
           </section>
+          <section
+            class="about-globe-2d about-reveal"
+            aria-label="DEW monitoring overview"
+          >
+            <div class="about-globe-2d__inner">
+              <div class="about-globe-2d__copy">
+                <h2 class="about-globe-2d__title">Realtime at a glance</h2>
+                <p class="about-globe-2d__sub">
+                  Soil, light, and temperature update continuously—clear
+                  signals on one calm dashboard.
+                </p>
+                <div class="about-globe-2d__grid">
+                  <div class="about-globe-2d__cell">
+                    <span class="about-globe-2d__metric">3-in-1</span>
+                    <span class="about-globe-2d__metric-label">Soil sensing</span>
+                  </div>
+                  <div class="about-globe-2d__cell">
+                    <span class="about-globe-2d__metric">24/7</span>
+                    <span class="about-globe-2d__metric-label">Monitoring</span>
+                  </div>
+                  <div class="about-globe-2d__cell">
+                    <span class="about-globe-2d__metric">Live</span>
+                    <span class="about-globe-2d__metric-label"
+                      >Sensor stream</span
+                    >
+                  </div>
+                  <div class="about-globe-2d__cell">
+                    <span class="about-globe-2d__metric">100%</span>
+                    <span class="about-globe-2d__metric-label">Your data</span>
+                  </div>
+                </div>
+              </div>
+              <div class="about-globe-2d__viz" aria-hidden="true"></div>
+            </div>
+          </section>
           <section class="about-stats about-reveal">
             <div class="about-stats-inner">
               <div class="about-stat">
@@ -4013,6 +4048,29 @@
               <div class="about-stat">
                 <span class="about-stat-value">100%</span
                 ><span class="about-stat-label">Your data</span>
+              </div>
+            </div>
+          </section>
+          <section
+            class="about-nexbot about-block about-block--dark about-reveal"
+            aria-label="NEXBOT interactive preview"
+          >
+            <div class="about-block-inner about-nexbot__inner">
+              <h2 class="about-block-title">NEXBOT</h2>
+              <p class="about-block-text about-nexbot__lead">
+                Interactive 3D character (Spline). Click the scene and drag to
+                explore—separate from the globe above so nothing covers it.
+              </p>
+              <div class="about-nexbot__frame">
+                <iframe
+                  title="NEXBOT - robot character concept"
+                  src="https://my.spline.design/nexbotrobotcharacterconcept-Vch1t24JqEGu2gWGueTHSIHC/"
+                  width="100%"
+                  height="100%"
+                  loading="lazy"
+                  allow="fullscreen; xr-spatial-tracking"
+                  referrerpolicy="strict-origin-when-cross-origin"
+                ></iframe>
               </div>
             </div>
           </section>
@@ -4962,5 +5020,6 @@
     <script type="module" src="/app-shell.js"></script>
     <script type="module" src="/profile.js?v=comments-ui-14"></script>
     <script type="module" src="/app.js"></script>
+    <script type="module" src="../src/about-globe-3d.js"></script>
   </body>
 </html>
