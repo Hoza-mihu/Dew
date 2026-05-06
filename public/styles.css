@@ -4685,7 +4685,7 @@ body.community-page .community-top-nav {
 }
 .btn-about-cta:hover { transform: translateY(-2px); opacity: 0.95; }
 
-/* 2D “line globe” hero — Spline-inspired split layout, no iframe */
+/* About hero — copy + procedural Three.js plant scene */
 .about-globe-2d {
   background: #000;
   color: #fff;
@@ -4755,9 +4755,10 @@ body.community-page .community-top-nav {
   touch-action: none;
   border-radius: 12px;
   background: radial-gradient(
-    ellipse 70% 60% at 50% 45%,
-    rgba(244, 63, 94, 0.07) 0%,
-    transparent 65%
+    ellipse 70% 60% at 50% 42%,
+    rgba(82, 183, 136, 0.12) 0%,
+    rgba(45, 106, 79, 0.05) 45%,
+    transparent 68%
   );
   isolation: isolate;
 }
@@ -4801,25 +4802,35 @@ body.community-page .community-top-nav {
   padding-bottom: 88px;
 }
 .about-nexbot__inner {
-  max-width: 1100px;
+  max-width: min(1280px, 100%);
 }
 .about-nexbot__lead {
-  margin-bottom: 24px !important;
-  max-width: 40rem;
+  margin-bottom: 28px !important;
+  max-width: 46rem;
+}
+.about-nexbot__lead em {
+  font-style: normal;
+  color: rgba(126, 242, 191, 0.95);
 }
 .about-nexbot__frame {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 1100px;
-  height: min(70vh, 560px);
-  min-height: 380px;
+  max-width: min(1280px, 100%);
+  height: min(85vh, 820px);
+  min-height: 520px;
   margin: 0 auto;
   border-radius: 18px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 600px) {
+  .about-nexbot__frame {
+    height: min(72vh, 640px);
+    min-height: 420px;
+  }
 }
 .about-nexbot__frame iframe {
   display: block;
