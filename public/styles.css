@@ -4952,7 +4952,7 @@ body.community-page .community-top-nav {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: clamp(56px, 6vw, 88px) 24px;
+  padding: 48px 24px;
   background:
     radial-gradient(1200px 700px at 18% 26%, rgba(255, 255, 255, 0.06), transparent 60%),
     radial-gradient(900px 600px at 72% 46%, rgba(126, 242, 191, 0.10), transparent 62%),
@@ -4960,10 +4960,10 @@ body.community-page .community-top-nav {
 }
 .notfound__inner {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1200px;
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
-  gap: clamp(42px, 4vw, 64px);
+  gap: 42px;
   align-items: center;
   border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -4972,7 +4972,7 @@ body.community-page .community-top-nav {
     linear-gradient(145deg, rgba(10, 10, 10, 0.98) 0%, rgba(2, 2, 2, 0.94) 100%);
   box-shadow: 0 40px 90px rgba(0, 0, 0, 0.65);
   overflow: hidden;
-  padding: clamp(32px, 4.5vw, 76px);
+  padding: clamp(28px, 4vw, 56px);
 }
 .notfound__kicker {
   margin: 0 0 10px;
@@ -5025,13 +5025,13 @@ body.community-page .community-top-nav {
   position: relative;
   display: grid;
   place-items: center;
-  min-height: 540px;
+  min-height: 440px;
 }
 .notfound__canvas {
-  width: min(680px, 100%);
+  width: min(520px, 100%);
   height: auto;
   aspect-ratio: 1 / 1;
-  border-radius: 24px;
+  border-radius: 20px;
   background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04), transparent 60%);
 }
 .notfound__hint {
@@ -5053,7 +5053,7 @@ body.community-page .community-top-nav {
   }
   .notfound__viz {
     order: -1;
-    min-height: 380px;
+    min-height: 320px;
   }
   .notfound__sub {
     max-width: 60ch;
