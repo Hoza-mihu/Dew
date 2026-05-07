@@ -3746,6 +3746,33 @@ body.about-page .about-view {
 }
 body.about-page .petal-layer { opacity: 0; pointer-events: none; }
 
+/* Mission full-page mode (match About Us layout) */
+body.mission-page .app {
+  grid-template-columns: 1fr; max-width: none; width: 100%; margin: 0; padding: 0; gap: 0;
+}
+body.mission-page {
+  display: block;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body.mission-page .sidebar { display: none; }
+body.mission-page .main {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+body.mission-page .dew-mission-view {
+  margin: 0;
+  width: 100%;
+  min-height: 100vh;
+}
+body.mission-page .petal-layer { opacity: 0; pointer-events: none; }
+
 /* Community full-page mode */
 body.community-page .app {
   grid-template-columns: 1fr;
@@ -5056,6 +5083,106 @@ body.community-page .community-top-nav {
     min-height: 320px;
   }
   .notfound__sub {
+    max-width: 60ch;
+  }
+}
+
+/* DEW Mission (in-app view) */
+.dew-mission-view {
+  background: #000;
+  color: #fff;
+}
+.dew-mission-hero {
+  padding: 72px 24px 84px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(1100px 700px at 18% 26%, rgba(255, 255, 255, 0.06), transparent 60%),
+    radial-gradient(900px 600px at 72% 46%, rgba(126, 242, 191, 0.10), transparent 62%),
+    linear-gradient(180deg, #000 0%, #020202 100%);
+}
+.dew-mission-hero__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 42px;
+  align-items: center;
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(120% 160% at 18% 22%, rgba(255, 255, 255, 0.06), transparent 54%),
+    linear-gradient(145deg, rgba(10, 10, 10, 0.98) 0%, rgba(2, 2, 2, 0.94) 100%);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  padding: clamp(28px, 4vw, 56px);
+}
+.dew-mission-hero__kicker {
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.68);
+}
+.dew-mission-hero__title {
+  margin: 0 0 14px;
+  font-size: clamp(36px, 5vw, 56px);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.dew-mission-hero__sub {
+  margin: 0;
+  max-width: 44ch;
+  font-size: clamp(16px, 1.7vw, 19px);
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.72);
+}
+.dew-mission-hero__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.dew-mission-hero__viz {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 440px;
+}
+.dew-mission-hero__canvas {
+  width: min(520px, 100%);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.045), transparent 62%),
+    radial-gradient(circle at 32% 30%, rgba(126, 242, 191, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.0));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.62);
+}
+.dew-mission-hero__hint {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 3;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+@media (max-width: 960px) {
+  .dew-mission-hero__inner {
+    grid-template-columns: 1fr;
+  }
+  .dew-mission-hero__viz {
+    order: -1;
+    min-height: 320px;
+  }
+  .dew-mission-hero__sub {
     max-width: 60ch;
   }
 }

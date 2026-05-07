@@ -55,6 +55,7 @@ const plantsCatalogView = document.getElementById("plantsCatalogView");
 const myPlantsView = document.getElementById("myPlantsView");
 const plantDetailView = document.getElementById("plantDetailView");
 const aboutView = document.getElementById("aboutView");
+const missionView = document.getElementById("missionView");
 const communityView = document.getElementById("communityView");
 const botsHubView = document.getElementById("botsHubView");
 const syncDataView = document.getElementById("syncDataView");
@@ -587,11 +588,13 @@ function showView(view) {
     if (v !== "plant") plantDetailView.classList.remove("plant-detail-enter");
   }
   if (aboutView) aboutView.style.display = v === "about" ? "block" : "none";
+  if (missionView) missionView.style.display = v === "mission" ? "block" : "none";
   if (communityView) communityView.style.display = v === "community" ? "block" : "none";
   if (botsHubView) botsHubView.style.display = v === "bots" || v === "bots-plant" || v === "bots-desk" ? "block" : "none";
   if (syncDataView) syncDataView.style.display = v === "syncdata" ? "block" : "none";
   if (iotSetupView) iotSetupView.style.display = v === "iot" ? "block" : "none";
   document.body.classList.toggle("about-page", v === "about");
+  document.body.classList.toggle("mission-page", v === "mission");
   document.body.classList.toggle("community-page", v === "community");
   document.body.classList.toggle("bots-subpage", v === "bots-plant" || v === "bots-desk");
   document.body.classList.toggle("syncdata-page", v === "syncdata");
@@ -640,6 +643,10 @@ function showView(view) {
     if (bp) {
       try {
         history.pushState({ view: v }, "", bp);
+      } catch (_) {}
+    } else if (v === "mission") {
+      try {
+        history.pushState({ view: v }, "", "/dashboard/mission");
       } catch (_) {}
     } else if (v === "syncdata") {
       try {
@@ -2043,6 +2050,14 @@ function initNav() {
     if (window.location.pathname === "/sync-data") {
       suppressSyncRoutePush = true;
       showView("syncdata");
+      suppressSyncRoutePush = false;
+      return;
+    }
+    if (String(window.location.pathname || "").startsWith("/dashboard/mission")) {
+      suppressBotsRoutePush = true;
+      suppressSyncRoutePush = true;
+      showView("mission");
+      suppressBotsRoutePush = false;
       suppressSyncRoutePush = false;
       return;
     }
@@ -7111,6 +7126,12 @@ authReady.then((auth) => {
   } else if (window.location.pathname === "/sync-data") {
     suppressSyncRoutePush = true;
     showView("syncdata");
+    suppressSyncRoutePush = false;
+  } else if (String(window.location.pathname || "").startsWith("/dashboard/mission")) {
+    suppressBotsRoutePush = true;
+    suppressSyncRoutePush = true;
+    showView("mission");
+    suppressBotsRoutePush = false;
     suppressSyncRoutePush = false;
   } else if (isReloadNavigation() && window.location.pathname.startsWith("/community")) {
     try {

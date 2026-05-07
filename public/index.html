@@ -138,7 +138,7 @@
                 <span>About Us</span>
               </div>
             </li>
-            <li class="nav-item" id="navGoLanding" role="button" tabindex="0">
+            <li class="nav-item" data-view="mission">
               <div class="nav-item-left">
                 <div class="nav-icon"><i class="ri-earth-line"></i></div>
                 <span>DEW Mission</span>
@@ -4504,6 +4504,53 @@
             >
           </footer>
         </div>
+        <div class="about-view dew-mission-view" id="missionView" style="display: none">
+          <header class="about-nav dew-mission-nav">
+            <a
+              href="#"
+              class="about-nav-logo"
+              data-view="dashboard"
+              aria-label="DEW Home"
+              ><img
+                src="/images/symbols/dew-logo.png"
+                alt=""
+                width="120"
+                height="40"
+                decoding="async"
+                class="dew-app-logo-img dew-app-logo-img--nav"
+            /></a>
+            <nav class="about-nav-links">
+              <a href="#" class="about-nav-link" data-view="dashboard"
+                >Dashboard</a
+              >
+              <a href="#" class="about-nav-link" data-view="about">About Us</a>
+              <a href="#" class="about-nav-link" data-view="community"
+                >Community</a
+              >
+            </nav>
+          </header>
+          <section class="dew-mission-hero">
+            <div class="dew-mission-hero__inner">
+              <div class="dew-mission-hero__copy">
+                <p class="dew-mission-hero__kicker">DEW Mission</p>
+                <h1 class="dew-mission-hero__title">Protect our Earth.</h1>
+                <p class="dew-mission-hero__sub">
+                  Digital Eco Warden helps communities plant more, waste less
+                  water, and reduce pollution—by turning real-time signals into
+                  clear next steps.
+                </p>
+                <div class="dew-mission-hero__actions">
+                  <a class="btn btn-primary" href="/login.html">Begin Journey</a>
+                  <a class="btn btn-ghost" href="/login.html">Learn More</a>
+                </div>
+              </div>
+              <div class="dew-mission-hero__viz" aria-hidden="true">
+                <canvas id="missionGlobe" class="dew-mission-hero__canvas" width="700" height="700"></canvas>
+                <div class="dew-mission-hero__hint">Drag to rotate • Scroll to zoom</div>
+              </div>
+            </div>
+          </section>
+        </div>
         <div
           class="plant-image-lightbox"
           id="plantImageLightbox"
@@ -5065,5 +5112,6 @@
     <script type="module" src="/app.js"></script>
     <script type="module" src="/about-card-spotlight.js"></script>
     <script type="module" src="/about-earth-dots.js"></script>
+    <script type="module" src="/dew-mission-globe.js"></script>
   </body>
 </html>
