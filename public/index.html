@@ -4056,23 +4056,33 @@
             class="about-globe-2d about-reveal"
             aria-label="Interactive 3D NEXBOT preview"
           >
-            <div class="about-globe-2d__inner">
-              <div class="about-globe-2d__copy">
-                <h2 class="about-globe-2d__title">Interactive 3D</h2>
-                <p class="about-globe-2d__sub">
-                  Meet your desk guardian. NEXBOT gives DEW a face—ambient cues,
-                  clear status, and a bit of personality. Click and drag to
-                  explore the concept in 3D.
-                </p>
-              </div>
-              <div class="about-globe-2d__viz about-globe-2d__viz--spline">
-                <iframe
-                  title="NEXBOT desk guardian concept (3D preview)"
-                  src="https://my.spline.design/nexbotrobotcharacterconcept-Vch1t24JqEGu2gWGueTHSIHC/"
-                  loading="lazy"
-                  allow="fullscreen; xr-spatial-tracking"
-                  referrerpolicy="strict-origin-when-cross-origin"
-                ></iframe>
+            <div class="about-globe-2d__shell">
+              <div class="about-globe-2d__card" data-spotlight="true">
+                <div class="about-globe-2d__spotlight" aria-hidden="true"></div>
+                <div class="about-globe-2d__inner">
+                  <div class="about-globe-2d__copy">
+                    <h2 class="about-globe-2d__title">Your garden, at a glance.</h2>
+                    <p class="about-globe-2d__sub">
+                      DEW turns moisture, light, and temperature into a simple
+                      status you can trust. Get calm alerts, clear next steps,
+                      and a desk guardian that keeps you in sync—without the
+                      noise.
+                    </p>
+                    <p class="about-globe-2d__punch">
+                      <span>Measure.</span> <span>Understand.</span>
+                      <span>Grow.</span>
+                    </p>
+                  </div>
+                  <div class="about-globe-2d__viz about-globe-2d__viz--spline">
+                    <iframe
+                      title="DEW desk guardian concept (3D preview)"
+                      src="https://my.spline.design/nexbotrobotcharacterconcept-Vch1t24JqEGu2gWGueTHSIHC/"
+                      loading="lazy"
+                      allow="fullscreen; xr-spatial-tracking"
+                      referrerpolicy="strict-origin-when-cross-origin"
+                    ></iframe>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -5022,6 +5032,7 @@
     <script type="module" src="/app-shell.js"></script>
     <script type="module" src="/profile.js?v=comments-ui-14"></script>
     <script type="module" src="/app.js"></script>
+    <script type="module" src="/about-card-spotlight.js"></script>
     <script type="module" src="../src/about-globe-3d.js"></script>
   </body>
 </html>
