@@ -647,11 +647,11 @@ function showView(view) {
       } catch (_) {}
     } else if (window.location.pathname.startsWith("/bots")) {
       try {
-        history.replaceState({ view: v }, "", "/dashboard");
+        history.replaceState({ view: v }, "", "/");
       } catch (_) {}
     } else if (window.location.pathname === "/sync-data") {
       try {
-        history.replaceState({ view: v }, "", "/dashboard");
+        history.replaceState({ view: v }, "", "/");
       } catch (_) {}
     }
   }
@@ -7114,7 +7114,7 @@ authReady.then((auth) => {
     suppressSyncRoutePush = false;
   } else if (isReloadNavigation() && window.location.pathname.startsWith("/community")) {
     try {
-      history.replaceState({ view: "dashboard" }, "", "/dashboard");
+      history.replaceState({ view: "dashboard" }, "", "/");
     } catch (_) {}
     showView("dashboard");
   } else if (window.location.pathname.startsWith("/community") && initialSlug) {
