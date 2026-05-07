@@ -1,4 +1,4 @@
-import createGlobe from "https://esm.sh/cobe@0.6.3";
+import createGlobe from "cobe";
 
 const CANVAS_ID = "notfoundGlobe";
 
