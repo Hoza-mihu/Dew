@@ -214,7 +214,7 @@ form.addEventListener("submit", async (e) => {
       localStorage.removeItem(DEW_PASSWORD);
     }
     await signInWithEmailAndPassword(auth, email, password);
-    window.location.href = "/";
+    window.location.href = "/dashboard";
   } catch (err) {
     showError(getAuthErrorMessage(err));
   } finally {
@@ -241,7 +241,7 @@ async function signInWithProvider(providerName, provider) {
     await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
     try {
       await signInWithPopup(auth, provider);
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     } catch (popupErr) {
       if (popupErr.code === "auth/popup-blocked") {
         await signInWithRedirect(auth, provider);

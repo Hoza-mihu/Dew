@@ -119,7 +119,7 @@ form.addEventListener("submit", async (e) => {
   try {
     const auth = await authReady;
     await createUserWithEmailAndPassword(auth, email, password);
-    window.location.href = "/";
+    window.location.href = "/dashboard";
   } catch (err) {
     showError(getAuthErrorMessage(err));
   } finally {
@@ -165,7 +165,7 @@ async function signInWithProvider(providerName, provider) {
     const auth = await authReady;
     try {
       await signInWithPopup(auth, provider);
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     } catch (popupErr) {
       if (popupErr.code === "auth/popup-blocked") {
         await signInWithRedirect(auth, provider);
