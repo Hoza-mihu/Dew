@@ -4761,9 +4761,23 @@ body.community-page .community-top-nav {
     transparent 68%
   );
   isolation: isolate;
+  overflow: hidden;
 }
 .about-globe-2d__viz:active {
   cursor: grabbing;
+}
+.about-globe-2d__viz iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.about-globe-2d__viz--spline {
+  cursor: default;
+  touch-action: manipulation;
+}
+.about-globe-2d__viz--spline:active {
+  cursor: default;
 }
 .about-globe-3d__canvas {
   width: 100%;
