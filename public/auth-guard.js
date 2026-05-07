@@ -33,7 +33,7 @@ function exitDemoToLogin() {
   } catch (_) {}
   window.__dewDemoMode = false;
   window.isDemoMode = false;
-  window.location.replace("/");
+  window.location.href = "/";
 }
 
 function wireSignOut(auth) {
@@ -52,7 +52,7 @@ function wireSignOut(auth) {
       sessionStorage.setItem(POST_SIGNOUT_KEY, "1");
     } catch (_) {}
     signOut(auth).then(() => {
-      window.location.replace("/");
+      window.location.href = "/";
     });
   });
 }
@@ -92,7 +92,7 @@ authReady
       if (!demo) {
         // Landing page is always first; login is only via landing CTAs.
         consumePostSignOutRedirect();
-        window.location.replace("/");
+        window.location.href = "/";
       }
     });
 
@@ -107,5 +107,5 @@ authReady
       return;
     }
     consumePostSignOutRedirect();
-    window.location.replace("/");
+    window.location.href = "/";
   });
