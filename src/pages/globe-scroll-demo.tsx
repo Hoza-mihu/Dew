@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Globe from "@/components/ui/globe";
+import RotatingEarth from "@/components/ui/rotating-earth";
 import { cn } from "@/lib/utils";
 
 interface ScrollGlobeProps {
@@ -172,14 +172,14 @@ function ScrollGlobe({ sections, globeConfig = defaultGlobeConfig, className }: 
       </div>
 
       <div
-        className="fixed z-10 pointer-events-none will-change-transform transition-all duration-[1400ms] ease-[cubic-bezier(0.23,1,0.32,1)]"
+        className="fixed z-10 pointer-events-auto will-change-transform transition-all duration-[1400ms] ease-[cubic-bezier(0.23,1,0.32,1)]"
         style={{
           transform: globeTransform,
-          filter: `drop-shadow(0 36px 120px rgba(0,0,0,0.72)) opacity(${activeSection === 3 ? 0.42 : 0.88})`,
+          filter: `drop-shadow(0 36px 120px rgba(0,0,0,0.72)) opacity(${activeSection === 3 ? 0.38 : 0.84})`,
         }}
       >
-        <div className="scale-75 sm:scale-90 lg:scale-100">
-          <Globe />
+        <div className="scale-[0.68] sm:scale-[0.78] lg:scale-[0.9]">
+          <RotatingEarth className="select-none" maxWidth={860} aspect={1} />
         </div>
       </div>
 
