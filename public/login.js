@@ -269,7 +269,8 @@ document.getElementById("btnTryDemo")?.addEventListener("click", () => {
   try {
     sessionStorage.setItem("dewDemoMode", "1");
   } catch (_) {}
-  window.location.href = "/?mode=demo";
+  // Root path is routed to landing.html on Vercel; ensure demo opens the dashboard shell.
+  window.location.href = "/dashboard?mode=demo";
 });
 
 // Petals
