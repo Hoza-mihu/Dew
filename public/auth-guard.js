@@ -33,7 +33,7 @@ function exitDemoToLogin() {
   } catch (_) {}
   window.__dewDemoMode = false;
   window.isDemoMode = false;
-  window.location.href = "/";
+  window.location.href = "/login.html";
 }
 
 function wireSignOut(auth) {
@@ -90,9 +90,11 @@ authReady
         return;
       }
       if (!demo) {
-        // Landing page is always first; login is only via landing CTAs.
-        consumePostSignOutRedirect();
-        window.location.href = "/";
+        if (consumePostSignOutRedirect()) {
+          window.location.href = "/";
+          return;
+        }
+        window.location.href = "/login.html";
       }
     });
 
@@ -106,6 +108,9 @@ authReady
       wireSignOut(null);
       return;
     }
-    consumePostSignOutRedirect();
-    window.location.href = "/";
+    if (consumePostSignOutRedirect()) {
+      window.location.href = "/";
+      return;
+    }
+    window.location.href = "/login.html";
   });
