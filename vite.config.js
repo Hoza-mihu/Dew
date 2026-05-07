@@ -43,6 +43,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, "public/index.html"),
+          landing: path.resolve(__dirname, "public/landing.html"),
           login: path.resolve(__dirname, "public/login.html"),
           signup: path.resolve(__dirname, "public/signup.html"),
           scrollSequence: path.resolve(
@@ -50,6 +51,7 @@ export default defineConfig(({ mode }) => {
             "public/scroll-sequence.html",
           ),
           splineDemo: path.resolve(__dirname, "public/spline-demo.html"),
+          notFound: path.resolve(__dirname, "public/404.html"),
         },
       },
     },
