@@ -4689,7 +4689,7 @@ body.community-page .community-top-nav {
 .about-globe-2d {
   background: #000;
   color: #fff;
-  padding: 56px 24px 64px;
+  padding: 72px 24px 84px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   overflow-x: hidden;
   overflow-y: visible;
@@ -4697,12 +4697,12 @@ body.community-page .community-top-nav {
   z-index: 0;
 }
 .about-globe-2d__shell {
-  max-width: min(1280px, 100%);
+  max-width: min(1440px, 100%);
   margin: 0 auto;
 }
 .about-globe-2d__card {
   position: relative;
-  border-radius: 22px;
+  border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(10, 10, 10, 0.92);
   box-shadow:
@@ -4731,18 +4731,19 @@ body.community-page .community-top-nav {
   transform: translateZ(0);
 }
 .about-globe-2d__inner {
-  max-width: 1120px;
+  max-width: 1320px;
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 32px 24px;
+  gap: 42px 48px;
   align-items: center;
   position: relative;
   z-index: 1;
-  padding: 28px;
+  padding: clamp(32px, 4.2vw, 56px);
+  min-height: min(560px, 66vh);
 }
 .about-globe-2d__title {
-  font-size: clamp(28px, 4.2vw, 44px);
+  font-size: clamp(32px, 4.8vw, 56px);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -4750,10 +4751,10 @@ body.community-page .community-top-nav {
   color: #fff;
 }
 .about-globe-2d__sub {
-  margin: 0 0 28px;
-  max-width: 28rem;
-  font-size: clamp(15px, 1.9vw, 18px);
-  line-height: 1.55;
+  margin: 0 0 22px;
+  max-width: 34rem;
+  font-size: clamp(16px, 1.85vw, 19px);
+  line-height: 1.65;
   color: rgba(255, 255, 255, 0.62);
 }
 .about-globe-2d__punch {
@@ -4798,15 +4799,15 @@ body.community-page .community-top-nav {
 .about-globe-2d__viz {
   position: relative;
   z-index: 1;
-  min-height: 300px;
-  height: min(42vw, 420px);
-  max-height: 440px;
+  min-height: 380px;
+  height: min(52vw, 560px);
+  max-height: 620px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: grab;
   touch-action: none;
-  border-radius: 12px;
+  border-radius: 16px;
   background: radial-gradient(
     ellipse 70% 60% at 50% 42%,
     rgba(82, 183, 136, 0.12) 0%,
@@ -4842,7 +4843,8 @@ body.community-page .community-top-nav {
   .about-globe-2d__inner {
     grid-template-columns: 1fr;
     text-align: center;
-    padding: 22px;
+    min-height: auto;
+    padding: 26px;
   }
   .about-globe-2d__sub {
     margin-left: auto;
@@ -4857,6 +4859,12 @@ body.community-page .community-top-nav {
   }
   .about-globe-2d__viz {
     min-height: 240px;
+    order: -1;
+  }
+  .about-globe-2d__viz {
+    min-height: 300px;
+    height: min(70vw, 440px);
+    max-height: 520px;
     order: -1;
   }
 }
