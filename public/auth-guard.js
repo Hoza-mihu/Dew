@@ -13,6 +13,10 @@ function isDemoMode() {
 }
 
 function consumePostSignOutRedirect() {
+  if (window.__dewSigningOut === true) {
+    window.__dewSigningOut = false;
+    return true;
+  }
   try {
     if (sessionStorage.getItem(POST_SIGNOUT_KEY) === "1") {
       sessionStorage.removeItem(POST_SIGNOUT_KEY);
@@ -42,6 +46,8 @@ function wireSignOut(auth) {
       exitDemoToLogin();
       return;
     }
+    // Prevent auth listener from racing us to /login.html.
+    window.__dewSigningOut = true;
     try {
       sessionStorage.setItem(POST_SIGNOUT_KEY, "1");
     } catch (_) {}
