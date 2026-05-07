@@ -44,16 +44,20 @@ function start() {
 
   // Improve canvas crispness and pointer feel
   canvas.style.cursor = "grab";
-  canvas.addEventListener("pointerdown", () => {
+  const onPointerDown = () => {
     canvas.style.cursor = "grabbing";
-  });
-  window.addEventListener("pointerup", () => {
+  };
+  const onPointerUp = () => {
     canvas.style.cursor = "grab";
-  });
+  };
+  canvas.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("pointerup", onPointerUp);
 
   return () => {
     globe.destroy();
     window.removeEventListener("resize", onResize);
+    canvas.removeEventListener("pointerdown", onPointerDown);
+    window.removeEventListener("pointerup", onPointerUp);
   };
 }
 
