@@ -14,16 +14,12 @@ const DEFAULT_CONFIG: COBEOptions = {
   dark: 1,
   diffuse: 0.55,
   mapSamples: 16000,
-  mapBrightness: 1.2,
-  baseColor: [0.95, 0.95, 0.95],
+  mapBrightness: 1.35,
+  baseColor: [0.88, 0.92, 1],
   markerColor: [0.49, 0.95, 0.74],
-  glowColor: [1, 1, 1],
-  markers: [
-    { location: [41.0082, 28.9784], size: 0.06 },
-    { location: [40.7128, -74.006], size: 0.1 },
-    { location: [34.6937, 135.5022], size: 0.05 },
-    { location: [-23.5505, -46.6333], size: 0.1 },
-  ],
+  glowColor: [0.72, 0.86, 1],
+  // Keep the globe clean like the reference (no marker dots by default).
+  markers: [],
 };
 
 export interface GlobeProps {

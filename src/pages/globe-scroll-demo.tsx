@@ -111,6 +111,13 @@ function ScrollGlobe({ sections, globeConfig = defaultGlobeConfig, className }: 
         className
       )}
     >
+      {/* Background: soft vignette + subtle glow (matches reference) */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-[radial-gradient(1100px_700px_at_20%_24%,rgba(255,255,255,0.07),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(900px_600px_at_72%_48%,rgba(126,242,191,0.10),transparent_62%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(1200px_900px_at_50%_50%,rgba(0,0,0,0.0),rgba(0,0,0,0.55)_68%,rgba(0,0,0,0.82)_100%)]" />
+      </div>
+
       <div className="fixed top-0 left-0 w-full h-0.5 bg-gradient-to-r from-border/20 via-border/40 to-border/20 z-50">
         <div
           className="h-full bg-gradient-to-r from-primary via-blue-600 to-blue-900 will-change-transform shadow-sm"
@@ -168,7 +175,7 @@ function ScrollGlobe({ sections, globeConfig = defaultGlobeConfig, className }: 
         className="fixed z-10 pointer-events-none will-change-transform transition-all duration-[1400ms] ease-[cubic-bezier(0.23,1,0.32,1)]"
         style={{
           transform: globeTransform,
-          filter: `opacity(${activeSection === 3 ? 0.4 : 0.85})`,
+          filter: `drop-shadow(0 36px 120px rgba(0,0,0,0.72)) opacity(${activeSection === 3 ? 0.42 : 0.88})`,
         }}
       >
         <div className="scale-75 sm:scale-90 lg:scale-100">
