@@ -17,7 +17,7 @@ function exitDemoToLogin() {
   } catch (_) {}
   window.__dewDemoMode = false;
   window.isDemoMode = false;
-  window.location.href = "/login.html";
+  window.location.href = "/";
 }
 
 function wireSignOut(auth) {
@@ -31,7 +31,7 @@ function wireSignOut(auth) {
       return;
     }
     signOut(auth).then(() => {
-      window.location.href = "/login.html";
+      window.location.href = "/";
     });
   });
 }
