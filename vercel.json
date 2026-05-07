@@ -10,8 +10,12 @@
     },
     { "handle": "filesystem" },
     {
-      "src": "/.*",
+      "src": "^/(?:$|community(?:/.*)?$|profile(?:/.*)?$|dashboard(?:/.*)?$)",
       "dest": "/index.html"
+    },
+    {
+      "src": "/.*",
+      "dest": "/404.html"
     }
   ]
 }

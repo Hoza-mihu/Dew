@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>404 · DEW</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://vercel.live https://my.spline.design https://*.spline.design;"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=notfound-1" />
+  </head>
+  <body class="notfound-page">
+    <main class="notfound">
+      <div class="notfound__inner">
+        <div class="notfound__copy">
+          <p class="notfound__kicker">404</p>
+          <h1 class="notfound__title">Lost in the ecosystem.</h1>
+          <p class="notfound__sub">
+            The page you’re looking for isn’t here. Head back home—or jump into
+            your dashboard to keep your plants on track.
+          </p>
+          <div class="notfound__actions">
+            <a class="notfound__btn notfound__btn--primary" href="/"
+              >Go Home</a
+            >
+            <button class="notfound__btn" type="button" id="notfoundBackBtn">
+              Go Back
+            </button>
+          </div>
+        </div>
+
+        <div class="notfound__viz" aria-hidden="true">
+          <canvas
+            class="notfound__canvas"
+            id="notfoundGlobe"
+            width="600"
+            height="600"
+          ></canvas>
+          <div class="notfound__hint">Drag to rotate • Scroll to zoom</div>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="/404-globe.js"></script>
+    <script>
+      const btn = document.getElementById("notfoundBackBtn");
+      if (btn) btn.addEventListener("click", () => history.back());
+    </script>
+  </body>
+</html>
+
