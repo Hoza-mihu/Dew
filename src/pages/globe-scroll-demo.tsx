@@ -107,14 +107,16 @@ function ScrollGlobe({ sections, globeConfig = defaultGlobeConfig, className }: 
   return (
     <div
       className={cn(
-        "relative w-full max-w-screen overflow-x-hidden min-h-screen bg-background text-foreground",
+        // Force true near-black base to avoid theme's bluish bg-background tint
+        "relative w-full max-w-screen overflow-x-hidden min-h-screen bg-[#050607] text-foreground",
         className
       )}
     >
       {/* Background: soft vignette + subtle glow (matches reference) */}
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute inset-0 bg-[radial-gradient(1100px_700px_at_20%_24%,rgba(255,255,255,0.06),transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(900px_600px_at_72%_48%,rgba(255,255,255,0.03),transparent_62%)]" />
+        {/* tiny DEW green hint (kept very dark so it doesn't read as teal/blue) */}
+        <div className="absolute inset-0 bg-[radial-gradient(900px_600px_at_72%_48%,rgba(16,185,129,0.055),transparent_62%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(1200px_900px_at_50%_50%,rgba(0,0,0,0.0),rgba(0,0,0,0.55)_68%,rgba(0,0,0,0.82)_100%)]" />
       </div>
 
