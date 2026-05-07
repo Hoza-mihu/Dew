@@ -69,7 +69,7 @@ authReady
         return;
       }
       if (!demo) {
-        window.location.href = "/";
+        window.location.href = "/login.html";
       }
     });
 
@@ -83,5 +83,5 @@ authReady
       wireSignOut(null);
       return;
     }
-    window.location.href = "/";
+    window.location.href = "/login.html";
   });
