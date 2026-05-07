@@ -4740,7 +4740,7 @@ body.community-page .community-top-nav {
   position: relative;
   z-index: 1;
   padding: clamp(32px, 4.2vw, 56px);
-  min-height: min(560px, 66vh);
+  min-height: min(620px, 72vh);
 }
 .about-globe-2d__title {
   font-size: clamp(32px, 4.8vw, 56px);
@@ -4799,9 +4799,9 @@ body.community-page .community-top-nav {
 .about-globe-2d__viz {
   position: relative;
   z-index: 1;
-  min-height: 380px;
-  height: min(52vw, 560px);
-  max-height: 620px;
+  min-height: 420px;
+  height: min(56vw, 620px);
+  max-height: 700px;
   display: flex;
   align-items: center;
   justify-content: center;
