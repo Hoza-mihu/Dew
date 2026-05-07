@@ -2,12 +2,24 @@
 import { authReady } from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
+const POST_SIGNOUT_KEY = "dewPostSignOutRedirect";
+
 function isDemoMode() {
   try {
     return sessionStorage.getItem("dewDemoMode") === "1";
   } catch {
     return false;
   }
+}
+
+function consumePostSignOutRedirect() {
+  try {
+    if (sessionStorage.getItem(POST_SIGNOUT_KEY) === "1") {
+      sessionStorage.removeItem(POST_SIGNOUT_KEY);
+      return true;
+    }
+  } catch (_) {}
+  return false;
 }
 
 function exitDemoToLogin() {
@@ -30,8 +42,11 @@ function wireSignOut(auth) {
       exitDemoToLogin();
       return;
     }
+    try {
+      sessionStorage.setItem(POST_SIGNOUT_KEY, "1");
+    } catch (_) {}
     signOut(auth).then(() => {
-      window.location.href = "/login.html";
+      window.location.href = "/";
     });
   });
 }
@@ -69,6 +84,10 @@ authReady
         return;
       }
       if (!demo) {
+        if (consumePostSignOutRedirect()) {
+          window.location.href = "/";
+          return;
+        }
         window.location.href = "/login.html";
       }
     });
@@ -81,6 +100,10 @@ authReady
       window.isDemoMode = true;
       dispatchDemoAuth();
       wireSignOut(null);
+      return;
+    }
+    if (consumePostSignOutRedirect()) {
+      window.location.href = "/";
       return;
     }
     window.location.href = "/login.html";
