@@ -270,6 +270,19 @@ function wire() {
     if (isDrawerMode()) closeDrawer();
   });
 
+  const goLanding = () => {
+    if (isDrawerMode()) closeDrawer();
+    window.location.href = "/";
+  };
+  const landingBtn = document.getElementById("navGoLanding");
+  landingBtn?.addEventListener("click", goLanding);
+  landingBtn?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      goLanding();
+    }
+  });
+
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (isLogoModalOpen()) {

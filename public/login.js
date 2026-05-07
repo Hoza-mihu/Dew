@@ -18,7 +18,7 @@ authReady.then(async (auth) => {
   try {
     const result = await getRedirectResult(auth);
     if (result?.user) {
-      window.location.href = "/";
+      window.location.href = "/dashboard";
       return;
     }
     if (result?.error) {
@@ -31,7 +31,7 @@ authReady.then(async (auth) => {
   } catch (_) { /* no redirect pending */ }
 
   onAuthStateChanged(auth, (user) => {
-    if (user) window.location.href = "/";
+    if (user) window.location.href = "/dashboard";
   });
 }).catch((err) => {
   const errorEl = document.getElementById("loginError");

@@ -69,7 +69,8 @@ authReady
         return;
       }
       if (!demo) {
-        window.location.href = "/login.html";
+        // Landing is the first page; login is only via landing CTAs.
+        window.location.href = "/";
       }
     });
 
