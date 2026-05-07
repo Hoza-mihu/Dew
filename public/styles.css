@@ -4707,16 +4707,16 @@ body.community-page .community-top-nav {
   background:
     radial-gradient(
       120% 160% at 18% 22%,
-      rgba(255, 255, 255, 0.08) 0%,
-      rgba(255, 255, 255, 0.02) 26%,
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(255, 255, 255, 0.015) 26%,
       transparent 54%
     ),
     radial-gradient(
       140% 180% at 72% 48%,
-      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.035) 0%,
       transparent 56%
     ),
-    linear-gradient(145deg, rgba(14, 14, 14, 0.98) 0%, rgba(6, 6, 6, 0.92) 100%);
+    linear-gradient(145deg, rgba(10, 10, 10, 0.98) 0%, rgba(2, 2, 2, 0.94) 100%);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.55) inset,
@@ -4850,16 +4850,16 @@ body.community-page .community-top-nav {
   background:
     radial-gradient(
       ellipse 78% 70% at 30% 34%,
-      rgba(255, 255, 255, 0.06) 0%,
-      rgba(255, 255, 255, 0.02) 36%,
+      rgba(255, 255, 255, 0.045) 0%,
+      rgba(255, 255, 255, 0.015) 36%,
       transparent 64%
     ),
     radial-gradient(
       ellipse 80% 80% at 72% 52%,
-      rgba(82, 183, 136, 0.10) 0%,
+      rgba(82, 183, 136, 0.085) 0%,
       transparent 58%
     ),
-    linear-gradient(145deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.25) 100%);
+    linear-gradient(145deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.36) 100%);
   isolation: isolate;
   overflow: hidden;
 }
