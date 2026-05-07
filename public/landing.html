@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <title>DEW · Eco Warden</title>
@@ -8,6 +8,12 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://vercel.live 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://vercel.live https://my.spline.design https://*.spline.design;"
     />
+    <script>
+      // Force dark theme for the ScrollGlobe experience (matches DEW design).
+      try {
+        document.documentElement.classList.add("dark");
+      } catch (_) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -5093,9 +5093,9 @@ body.community-page .community-top-nav {
   color: #fff;
 }
 .dew-mission-embed {
-  height: calc(100vh - 72px);
-  height: calc(100dvh - 72px);
-  min-height: 640px;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 680px;
   background: #000;
 }
 .dew-mission-embed__frame {
@@ -5107,9 +5107,9 @@ body.community-page .community-top-nav {
 }
 @media (max-width: 720px) {
   .dew-mission-embed {
-    height: calc(100vh - 64px);
-    height: calc(100dvh - 64px);
-    min-height: 620px;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 640px;
   }
 }
 .about-globe-3d__canvas {
