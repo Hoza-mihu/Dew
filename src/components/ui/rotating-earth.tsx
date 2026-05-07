@@ -287,12 +287,9 @@ export default function RotatingEarth({ maxWidth = 780, aspect = 1, className }:
 
   return (
     <div ref={hostRef} className={cn("relative", className)} style={sizeStyle}>
-      <canvas ref={canvasRef} className="block w-full rounded-2xl bg-black" />
-      <div className="pointer-events-none absolute bottom-4 left-4 text-xs text-white/70 bg-black/60 border border-white/10 px-2 py-1 rounded-md backdrop-blur">
-        Drag to rotate • Scroll to zoom
-      </div>
+      <canvas ref={canvasRef} className="block w-full bg-transparent" />
       {error && (
-        <div className="absolute inset-0 grid place-items-center rounded-2xl bg-black/80">
+        <div className="absolute inset-0 grid place-items-center bg-black/80">
           <div className="text-center">
             <p className="text-white font-semibold">Error loading Earth visualization</p>
             <p className="text-white/60 text-sm mt-1">{error}</p>
