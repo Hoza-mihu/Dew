@@ -10,11 +10,7 @@
     },
     { "handle": "filesystem" },
     {
-      "src": "^/$",
-      "dest": "/landing.html"
-    },
-    {
-      "src": "^/(?:community(?:/.*)?$|profile(?:/.*)?$|dashboard(?:/.*)?$)",
+      "src": "^/(?:$|community(?:/.*)?$|profile(?:/.*)?$|dashboard(?:/.*)?$)",
       "dest": "/index.html"
     },
     {
