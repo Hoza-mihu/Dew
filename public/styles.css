@@ -4703,15 +4703,42 @@ body.community-page .community-top-nav {
 .about-globe-2d__card {
   position: relative;
   border-radius: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(10, 10, 10, 0.92);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.45),
-    0 28px 56px rgba(0, 0, 0, 0.55);
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(0, 0, 0, 0.55) inset,
+    0 40px 84px rgba(0, 0, 0, 0.62);
   overflow: hidden;
   --spotlight-x: 40%;
   --spotlight-y: 45%;
   --spotlight-a: 0;
+}
+.about-globe-2d__card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* subtle top-left highlight so the card edge is always visible */
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.03) 22%,
+    transparent 52%
+  );
+  opacity: 0.85;
+  z-index: 0;
+}
+.about-globe-2d__card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* inner ring to sharpen the box edge on dark backgrounds */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  z-index: 0;
 }
 .about-globe-2d__spotlight {
   position: absolute;
