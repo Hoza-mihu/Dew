@@ -52,6 +52,42 @@ const OPTIMAL_DEFAULT = {
   lux: { min: 200, max: 1500 },
 };
 
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function pickRangeForLightCategory(lightCategory) {
+  const lc = String(lightCategory || "medium").toLowerCase();
+  if (lc === "low") return { min: 150, max: 900 };
+  if (lc === "bright") return { min: 700, max: 2400 };
+  return { min: 350, max: 1600 };
+}
+
+function pickMoistureRangeForCategory(lightCategory) {
+  // Heuristic: bright light tends to dry faster; low light stays moist longer.
+  const lc = String(lightCategory || "medium").toLowerCase();
+  if (lc === "bright") return { min: 22, max: 48 };
+  if (lc === "low") return { min: 35, max: 62 };
+  return { min: 28, max: 56 };
+}
+
+function buildOptimalForCatalog(cat) {
+  const lux = pickRangeForLightCategory(cat?.lightCategory);
+  const moisture = pickMoistureRangeForCategory(cat?.lightCategory);
+  // Keep temp/humidity within common indoor plant comfort bands but slightly vary by difficulty.
+  const diff = Math.max(1, Math.min(5, Number(cat?.difficulty || 2)));
+  const tempMin = lerp(17, 20, (diff - 1) / 4);
+  const tempMax = lerp(31, 27.5, (diff - 1) / 4);
+  const humidityMin = lerp(35, 45, (diff - 1) / 4);
+  const humidityMax = lerp(75, 65, (diff - 1) / 4);
+  return {
+    temp: { min: Math.round(tempMin), max: Math.round(tempMax) },
+    humidity: { min: Math.round(humidityMin), max: Math.round(humidityMax) },
+    moisture,
+    lux,
+  };
+}
+
 /**
  * Random demo “saved map” location + matching weather (new pick each full page load).
  * Shape matches server GET /api/weather payload.
@@ -283,7 +319,7 @@ function fleetPlantFromCatalog(cat, index) {
     humidity: Math.round(humidity),
     status,
     updatedAt: now,
-    optimal: OPTIMAL_DEFAULT,
+    optimal: buildOptimalForCatalog(cat) || OPTIMAL_DEFAULT,
     usage: {
       first_used_at: new Date(Date.now() - 86400000 * (8 + (index % 30))).toISOString(),
       last_used_at: now,
@@ -337,15 +373,91 @@ function generateTelemetry(plantId, hoursParam) {
   const seed = hashStr(plantId + String(hours));
   const out = [];
   const b = plant;
+  const opt = (plant && plant.optimal) || OPTIMAL_DEFAULT;
+  const rnd = mulberry32(seed ^ hashStr(sessionStorage.getItem("dewDemoSeed") || "0"));
+
+  // Build a few realistic "events": waterings (moisture spikes) and a midday light peak.
+  // Watering count scales with range (1–5 events).
+  const wateringCount = Math.max(1, Math.min(5, Math.round(lerp(1, 5, Math.min(1, hours / 720)))));
+  const wateringAt = Array.from({ length: wateringCount }, (_, i) => {
+    const t = (i + 1) / (wateringCount + 1);
+    // jitter within +/- 6% of the span
+    const jit = (rnd() - 0.5) * 0.12;
+    return clamp(t + jit, 0.06, 0.94);
+  }).sort((a, b) => a - b);
+
+  function dayFraction(tsMs) {
+    const d = new Date(tsMs);
+    const mins = d.getHours() * 60 + d.getMinutes();
+    return mins / (24 * 60);
+  }
+
+  function daylightCurve(frac) {
+    // 0 at night, peaks around mid-day.
+    // Shift peak slightly per plant for variation.
+    const shift = (smoothWave(seed + 777, 3, 10) * 0.06);
+    let x = frac + shift;
+    x = x - Math.floor(x);
+    // day window ~ 6:00–19:30
+    const sunrise = 6 / 24;
+    const sunset = 19.5 / 24;
+    if (x < sunrise || x > sunset) return 0;
+    const t = (x - sunrise) / (sunset - sunrise);
+    // smooth bell
+    return Math.sin(Math.PI * t) ** 1.4;
+  }
+
+  function wateringBoost(tNorm) {
+    // Sum of short gaussian-ish bumps around watering events.
+    let sum = 0;
+    for (const w of wateringAt) {
+      const d = Math.abs(tNorm - w);
+      const width = 0.03 + rnd() * 0.02; // narrower for short windows
+      const bump = Math.exp(-(d * d) / (2 * width * width));
+      sum += bump;
+    }
+    return clamp(sum, 0, 2.2);
+  }
+
+  // Baselines anchored on current plant snapshot
+  const mBase = Number(b.moisture || 50);
+  const tBase = Number(b.temp || 22);
+  const hBase = Number(b.humidity || 55);
+  const lBase = Number(b.lux || 900);
+
   for (let i = 0; i < n; i++) {
     const t = now - spanMs + (spanMs * i) / (n - 1);
+    const tNorm = i / Math.max(1, n - 1);
     const w = smoothWave(seed, i, n);
+    const df = dayFraction(t);
+    const sun = daylightCurve(df);
+    const water = wateringBoost(tNorm);
+
+    // Moisture: gradual dry-down with occasional watering spikes.
+    const dryDown = -lerp(2, 10, Math.min(1, hours / 720)) * tNorm;
+    const waterSpike = water * lerp(6, 12, rnd());
+    const m = clamp(mBase + dryDown + waterSpike + w * 2.2, 10, 95);
+
+    // Temperature: daily cycle + small drift.
+    const tempCycle = (sun * 2.2) - 0.7; // warmer mid-day, cooler night
+    const tempDrift = (w * 0.7) + (rnd() - 0.5) * 0.25;
+    const tVal = clamp(tBase + tempCycle + tempDrift, 12, 35);
+
+    // Lux: strong day/night + plant category scaling.
+    const luxTarget = opt?.lux ? lerp(opt.lux.min, opt.lux.max, 0.72) : 1400;
+    const nightLux = lerp(20, 120, rnd());
+    const luxVal = clamp(nightLux + sun * (luxTarget + (rnd() - 0.5) * 450) + w * 90, 0, 5000);
+
+    // Humidity: tends to be a bit higher at night, lower in afternoon.
+    const humCycle = (1 - sun) * 4 - 2.5;
+    const humVal = clamp(hBase + humCycle + w * 1.8 + (rnd() - 0.5) * 1.2, 25, 92);
+
     out.push({
       at: new Date(t).toISOString(),
-      moisture: clamp(b.moisture + w * 8, 15, 95),
-      temp: clamp(b.temp + w * 1.5, 16, 32),
-      lux: clamp(b.lux + w * 500, 0, 4000),
-      humidity: clamp((b.humidity || 55) + w * 6, 28, 88),
+      moisture: m,
+      temp: tVal,
+      lux: luxVal,
+      humidity: humVal,
     });
   }
   return out;
@@ -467,14 +579,6 @@ export function installDemoFetch() {
 
     const base = path.split("?")[0];
 
-    if (
-      base === "/api/config/firebase" ||
-      base === "/api/config/weather" ||
-      base === "/api/config/supabase"
-    ) {
-      return orig(input, init);
-    }
-
     if (!base.startsWith("/api/")) return orig(input, init);
 
     const mock = routeDemoApi(base, path, method, init, orig, input);
@@ -496,6 +600,19 @@ export function invalidateDemoFleetCache() {
 
 function routeDemoApi(base, fullPath, method, init, orig, input) {
   const { searchParams } = parsePath(fullPath);
+
+  // Config endpoints: in demo mode, prefer live API if available, else return safe stubs.
+  if (method === "GET" && base === "/api/config/firebase") {
+    // Let firebase-config.js fall back to its embedded DEMO_FIREBASE_CONFIG if needed;
+    // returning 503 here triggers that path without breaking demo mode.
+    return jsonResponse({ ok: false, demo: true }, 503);
+  }
+  if (method === "GET" && base === "/api/config/supabase") {
+    return jsonResponse({ url: "", anonKey: "", ok: true, demo: true });
+  }
+  if (method === "GET" && base === "/api/config/weather") {
+    return jsonResponse({ openWeatherApiKey: "", ok: true, demo: true });
+  }
 
   if (method === "GET" && base.match(/^\/api\/users\/[^/]+\/plant-fleet$/)) {
     return jsonResponse(getDemoFleet());

@@ -3754,7 +3754,9 @@ body.mission-page {
   display: block;
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-body.mission-page .sidebar { display: none; }
+/* Desktop mission view is immersive (no sidebar), but on mobile/tablet keep the drawer usable. */
+body.mission-page:not(.drawer-mode) .sidebar { display: none; }
+body.mission-page.drawer-mode .sidebar { display: block; }
 body.mission-page .main {
   max-width: none;
   padding: 0;
@@ -3782,7 +3784,9 @@ body.community-page .app {
   padding: 0;
   gap: 0;
 }
-body.community-page .sidebar { display: none; }
+/* Community view is full-width on desktop, but on mobile/tablet keep drawer navigation accessible. */
+body.community-page:not(.drawer-mode) .sidebar { display: none; }
+body.community-page.drawer-mode .sidebar { display: block; }
 body.community-page .main {
   max-width: none;
   width: 100%;
