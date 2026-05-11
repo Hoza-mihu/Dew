@@ -23,6 +23,32 @@ On the **login** page, **Try Demo** opens the full dashboard with **simulated** 
 
 ---
 
+## New laptop / teammate setup
+
+**Sharing only `package.json` is not enough.** Whoever runs the app needs the **full repository** (clone from GitHub or a zip of the project **excluding** `node_modules`). The folder you open in VS Code must contain **`package.json`** next to `server.js`.
+
+1. **Install [Node.js LTS](https://nodejs.org)** (includes `npm`). Restart the terminal after installing.
+2. **Clone or copy the whole project**, then open that folder in VS Code:
+   ```bash
+   git clone <YOUR_GITHUB_REPO_URL>.git
+   cd <repo-folder>
+   ```
+3. **Install dependencies** (must be run in the same directory as `package.json`):
+   ```bash
+   npm install
+   ```
+4. **Environment file:** copy `.env.example` to `.env`. Fill in Firebase and Supabase values. Get real secrets from the team lead over a **private** channel (not WhatsApp class groups)—**never commit `.env`**.
+5. **Firebase Admin (optional but common):** place the service account JSON in the project root (or another path) and set `GOOGLE_APPLICATION_CREDENTIALS` in `.env` to point to it. Do **not** commit that JSON file.
+6. **Windows PowerShell:** if `npm` errors with *running scripts is disabled*, run once:
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+   Or use **Command Prompt** / run `npm.cmd install` instead of `npm install`.
+
+**If `npm install` says it cannot find `package.json`:** you are in the wrong folder (e.g. only `.env` was copied). Open the repo root that contains `package.json`, or clone again from GitHub.
+
+---
+
 ## Quick start
 
 1. Clone the repo and install dependencies:
